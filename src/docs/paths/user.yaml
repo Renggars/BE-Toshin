@@ -1,0 +1,170 @@
+/users:
+  post:
+    summary: Create a new user
+    tags:
+      - User
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/user.schema.yaml#/User"
+    responses:
+      201:
+        description: Success create user
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
+  get:
+    summary: Get list of users
+    tags:
+      - User
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          default: 10
+    responses:
+      200:
+        description: Success get users
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/UserList"
+
+/users/searchByEmail:
+  get:
+    summary: Get user by email
+    tags:
+      - User
+    parameters:
+      - in: query
+        name: email
+        schema:
+          type: string
+        required: true
+    responses:
+      200:
+        description: Success get user
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
+
+/users/upload-photo:
+  post:
+    summary: Upload user photo
+    tags:
+      - User
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+    responses:
+      200:
+        description: Success upload photo
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/UploadPhotoResponse"
+
+/users/{userId}/update-photo:
+  put:
+    summary: Update user photo
+    tags:
+      - User
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+    responses:
+      200:
+        description: Success update photo
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
+
+/users/{userId}:
+  get:
+    summary: Get user by ID
+    tags:
+      - User
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Success get user
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
+  put:
+    summary: Update user
+    tags:
+      - User
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/user.schema.yaml#/User"
+    responses:
+      200:
+        description: Success update user
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
+  delete:
+    summary: Delete user
+    tags:
+      - User
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Success delete user
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"

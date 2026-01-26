@@ -1,0 +1,26 @@
+Kode,Pelanggaran,Potong
+P01,Terlambat / Tidak Mengikuti Standing Meeting,10
+P02,Meninggalkan Area Kerja Tanpa Izin Atau Sepengetahuan Shift Leader,5
+P03,Bekerja Tidak Sesuai Intruksi atau Perintah Shift Leader,10
+P04,Bekerja Tidak Mencapai Target (Main Press / Secondary),15
+P05,Tidak Ada QPoint & Limit Sample,5
+P06,Tidak Mengisi Form Daily Maintenance,5
+P07,Tidak Mengisi Form Daily Kanagata Saat Setup Kanagata,10
+P08,Tidak Melakukan Initial dan Periodik Check Sesuai Jumlah Part yang Dikerjakan,10
+P09,Tidak Memakai APD atau Memakai APD Tidak Sesuai Dengan Area Kerja,10
+P10,Bekerja Tidak Sesuai Dengan Layout Input & Output,10
+P11,Menghasilkan Barang Rework Wajib Menuntaskan Part Sampai Selesai Diluar Jam Kerja,20
+P12,Menghasilkan Barang NG Lebih Dari 10pcs Karena Tidak Kontrolnya Opt Bukan Karena Mesin dan Dies Wajib Sortir Diluar Jam Kerja,20
+P13,Tidak Melakukan Pengisian Pada Tag Kontrol dan Tidak Memberi Tag Kontrol Pada Produk,10
+P14,Tidak Melaksanakan 5R Area Kerja,5
+P15,Penggantian Jam Diluar Jam Kerja Apabila Terdapat Kecerobohan dan Mengakibatkan Kerugian Sesuai Harga Material / Produk,25
+P16,Membuat dan Menulis LRP Tidak Lengkap Atau Tidak Sesuai,5
+P17,Membuat dan Menulis IRS Tidak Lengkap Atau Tidak Sesuai,5
+P18,Meja Kerja Tidak Rapi,5
+P19,"Tidak Memakai Atribut Kerja (Topi, ID Card, Ikat Pinggang)",5
+P20,Meloloskan atau Meneruskan Produk Defect,35
+P21,Jumping Proses Ke Next Proses,25
+P22,Jumping Proses Ke Kensa,35
+P23,Jumping Proses Ke Customer,50
+P24,Tidak Melakukan Cek Pitch Saat Maspro,10
+P25,Bekerja Tidak Sesuai WI / SOP,10

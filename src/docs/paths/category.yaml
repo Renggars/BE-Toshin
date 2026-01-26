@@ -1,0 +1,141 @@
+/kategori:
+  post:
+    summary: Create a new category
+    tags:
+      - Kategori
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - nama
+            properties:
+              nama:
+                type: string
+    responses:
+      201:
+        description: Success create category
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                status: true
+                statusCode: 201
+                message: Success create category
+                data:
+                  id: 13
+                  nama: tes
+  get:
+    summary: Get all categories
+    tags:
+      - Kategori
+    responses:
+      200:
+        description: Success get categorys
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                status: true
+                statusCode: 200
+                message: Success get categorys
+                data:
+                  - id: 1
+                    nama: Breakfast
+                    resep: []
+
+/kategori/{kategoriId}:
+  get:
+    summary: Get category by ID
+    tags:
+      - Kategori
+    parameters:
+      - name: kategoriId
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Success get category
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                status: true
+                statusCode: 200
+                message: Success get category
+                data:
+                  id: 2
+                  nama: Lunch
+                  resep: []
+  put:
+    summary: Update category
+    tags:
+      - Kategori
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: kategoriId
+        in: path
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - nama
+            properties:
+              nama:
+                type: string
+    responses:
+      200:
+        description: Success update category
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                status: true
+                statusCode: 200
+                message: Success update category
+                data:
+                  id: 13
+                  nama: Main Course
+  delete:
+    summary: Delete category
+    tags:
+      - Kategori
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: kategoriId
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Success delete category
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                status: true
+                statusCode: 200
+                message: Success delete category
+                data:
+                  id: 13
+                  nama: Main Course

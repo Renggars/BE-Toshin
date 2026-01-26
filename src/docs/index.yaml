@@ -1,0 +1,198 @@
+openapi: 3.0.0
+info:
+  title: API BE DiaryFood
+  version: 1.0.0
+  description: Dokumentasi API DiaryFood
+servers:
+  - url: http://localhost:3000/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Login user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Login success
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 4
+                          name:
+                            type: string
+                            example: admin
+                          email:
+                            type: string
+                            example: admin@example.com
+                          role:
+                            type: string
+                            example: admin
+                          photo:
+                            type: string
+                            format: uri
+                            example: https://yaoxcisksxcoidwuqurx.supabase.co/storage/object/public/photo-user/2234d0f1-2dbe-4cde-af16-37d743a69c27.png
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: 2025-05-22T06:40:14.007Z
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: 2025-05-23T09:59:30.965Z
+                      tokens:
+                        type: object
+                        properties:
+                          access:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                              expires:
+                                type: string
+                                format: date-time
+                                example: 2025-05-23T13:37:41.719Z
+                          refresh:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                              expires:
+                                type: string
+                                format: date-time
+                                example: 2025-05-30T12:52:41.719Z
+
+  /user:
+    post:
+      summary: Create a new user
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [user, admin]
+                  default: user
+                photo:
+                  type: string
+                  nullable: true
+      responses:
+        201:
+          description: Success create user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+                      photo:
+                        type: string
+                        nullable: true
+
+    get:
+      summary: Get list of users
+      tags:
+        - User
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Success get users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        email:
+                          type: string
+                        role:
+                          type: string
+                        photo:
+                          type: string
+                          nullable: true

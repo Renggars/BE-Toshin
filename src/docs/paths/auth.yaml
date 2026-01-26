@@ -1,0 +1,85 @@
+paths:
+  /v1/auth/login:
+    post:
+      summary: Login user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Login success
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 4
+                          name:
+                            type: string
+                            example: admin
+                          email:
+                            type: string
+                            example: admin@example.com
+                          role:
+                            type: string
+                            example: admin
+                          photo:
+                            type: string
+                            format: uri
+                            example: https://yaoxcisksxcoidwuqurx.supabase.co/storage/v1/object/public/photo-user/2234d0f1-2dbe-4cde-af16-37d743a69c27.png
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: 2025-05-22T06:40:14.007Z
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: 2025-05-23T09:59:30.965Z
+                      tokens:
+                        type: object
+                        properties:
+                          access:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                              expires:
+                                type: string
+                                format: date-time
+                                example: 2025-05-23T13:37:41.719Z
+                          refresh:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                              expires:
+                                type: string
+                                format: date-time
+                                example: 2025-05-30T12:52:41.719Z

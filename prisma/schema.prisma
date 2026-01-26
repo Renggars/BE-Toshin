@@ -1,0 +1,163 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Divisi {
+  id          Int    @id @default(autoincrement())
+  nama_divisi String @unique
+  users       User[]
+
+  @@map("divisi")
+}
+
+enum Role {
+  OPERATOR
+  SUPERVISOR
+  ENGINEERING
+  MAINTENANCE
+}
+
+model User {
+  id           Int     @id @default(autoincrement())
+  nama         String
+  uid_nfc      String? @unique
+  foto_profile String?
+  role         Role    @default(OPERATOR)
+
+  // Field khusus Operator
+  status            String?   @default("active")
+  suspended_until   DateTime?
+  point_cycle_start DateTime?
+
+  fk_id_divisi Int
+  divisi       Divisi @relation(fields: [fk_id_divisi], references: [id])
+
+  // Relasi
+  attendances       Attendance[]
+  rencana_produksis RencanaProduksi[]
+
+  // Named Relations untuk PoinDisiplin
+  poin_disiplins_diterima  PoinDisiplin[] @relation("OperatorPoin")
+  poin_disiplins_diberikan PoinDisiplin[] @relation("StaffPemberiPoin")
+
+  @@map("user")
+}
+
+model Attendance {
+  id                     Int      @id @default(autoincrement())
+  fk_id_user             Int
+  fk_id_rencana_produksi Int
+  jam_tap                DateTime
+  tanggal                DateTime @db.Date
+  is_terlambat           Boolean  @default(false)
+
+  user             User            @relation(fields: [fk_id_user], references: [id])
+  rencana_produksi RencanaProduksi @relation(fields: [fk_id_rencana_produksi], references: [id])
+
+  @@map("attendance")
+}
+
+model Mesin {
+  id                Int               @id @default(autoincrement())
+  nama_mesin        String            @unique
+  rencana_produksis RencanaProduksi[]
+
+  @@map("mesin")
+}
+
+model Produk {
+  id                Int               @id @default(autoincrement())
+  nama_produk       String            @unique
+  rencana_produksis RencanaProduksi[]
+  targets           Target[]
+
+  @@map("produk")
+}
+
+model JenisPekerjaan {
+  id             Int      @id @default(autoincrement())
+  nama_pekerjaan String   @unique
+  targets        Target[]
+
+  @@map("jenis_pekerjaan")
+}
+
+model Target {
+  id                 Int @id @default(autoincrement())
+  fk_jenis_pekerjaan Int
+  fk_produk          Int
+  total_target       Int
+
+  produk            Produk            @relation(fields: [fk_produk], references: [id])
+  jenis_pekerjaan   JenisPekerjaan    @relation(fields: [fk_jenis_pekerjaan], references: [id])
+  rencana_produksis RencanaProduksi[]
+
+  @@map("target")
+}
+
+model Shift {
+  id                Int               @id @default(autoincrement())
+  tipe_shift        String
+  nama_shift        String            @unique
+  jam_masuk         String
+  jam_keluar        String
+  rencana_produksis RencanaProduksi[]
+
+  @@map("shift")
+}
+
+model RencanaProduksi {
+  id            Int      @id @default(autoincrement())
+  fk_id_user    Int
+  fk_id_mesin   Int
+  fk_id_produk  Int
+  fk_id_shift   Int
+  fk_id_target  Int
+  is_lembur     Boolean  @default(false)
+  target_lembur Int?
+  tanggal       DateTime @db.Date
+  keterangan    String?  @db.Text
+
+  user        User         @relation(fields: [fk_id_user], references: [id])
+  mesin       Mesin        @relation(fields: [fk_id_mesin], references: [id])
+  produk      Produk       @relation(fields: [fk_id_produk], references: [id])
+  shift       Shift        @relation(fields: [fk_id_shift], references: [id])
+  target      Target       @relation(fields: [fk_id_target], references: [id])
+  attendances Attendance[]
+
+  @@map("rencana_produksi")
+}
+
+model TipeDisiplin {
+  id                 Int     @id @default(autoincrement())
+  kode               String  @unique
+  nama_tipe_disiplin String  @unique
+  poin               Int
+  kategori           String?
+
+  poin_disiplins PoinDisiplin[]
+
+  @@map("tipe_disiplin")
+}
+
+model PoinDisiplin {
+  id               Int      @id @default(autoincrement())
+  poin_berubah     Int
+  status_level     String
+  fk_id_operator   Int
+  fk_id_staff      Int
+  fk_tipe_disiplin Int
+  tanggal          DateTime @default(now())
+
+  // Gunakan label relasi yang berbeda agar Prisma tidak bingung
+  operator      User         @relation("OperatorPoin", fields: [fk_id_operator], references: [id])
+  staff         User         @relation("StaffPemberiPoin", fields: [fk_id_staff], references: [id])
+  tipe_disiplin TipeDisiplin @relation(fields: [fk_tipe_disiplin], references: [id])
+
+  @@map("poin_disiplin")
+}
