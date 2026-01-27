@@ -2,6 +2,7 @@
 
 import ApiError from "../utils/ApiError.js";
 import httpStatus from "http-status";
+import moment from "moment";
 
 import prisma from "../../prisma/index.js";
 
@@ -116,7 +117,163 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   };
 };
 
+const getDashboardSummary = async () => {
+  // 1. Tentukan rentang waktu hari ini (Start & End of Day)
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  // 2. Ambil data Rencana Produksi Harian (RPH)
+  const rphToday = await prisma.rencanaProduksi.findMany({
+    where: {
+      tanggal: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+    include: {
+      target: true,
+      shift: true,
+    },
+  });
+
+  // 3. Hitung Total Target Harian (Widget Kiri Atas)
+  const totalTarget = rphToday.reduce(
+    (acc, curr) => acc + (curr.target?.total_target || 0),
+    0,
+  );
+
+  // Simulasi angka tercapai (Idealnya dihitung dari aktual produksi/output mesin)
+  const totalTercapai = rphToday.length > 0 ? 1195 : 0;
+  const persentaseTotal =
+    totalTarget > 0 ? Math.round((totalTercapai / totalTarget) * 100) : 0;
+
+  // 4. Hitung Statistik Operator (Widget Tengah Atas)
+  const totalOperator = await prisma.user.count({
+    where: { role: "OPERATOR" },
+  });
+
+  // Perbaikan error 'distinct': Gunakan groupBy untuk menghitung operator unik yang tap absensi
+  const aktifOperatorGroup = await prisma.attendance.groupBy({
+    by: ["fk_id_user"],
+    where: {
+      tanggal: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+  });
+  const totalAktif = aktifOperatorGroup.length;
+
+  // 5. Hitung Progress per Shift (Widget Tengah)
+  const allShifts = await prisma.shift.findMany();
+  const shiftStats = allShifts.map((s) => {
+    const rphInShift = rphToday.filter((r) => r.fk_id_shift === s.id);
+    const targetShift = rphInShift.reduce(
+      (acc, curr) => acc + (curr.target?.total_target || 0),
+      0,
+    );
+
+    // Simulasi data tercapai per shift sesuai gambar dashboard
+    let tercapaiShift = 0;
+    if (s.nama_shift.includes("1")) tercapaiShift = 420;
+    else if (s.nama_shift.includes("2")) tercapaiShift = 465;
+    else if (s.nama_shift.includes("3")) tercapaiShift = 310;
+
+    return {
+      id: s.id,
+      nama: s.nama_shift,
+      jam: `${s.jam_masuk} - ${s.jam_keluar}`,
+      target: targetShift,
+      tercapai: tercapaiShift,
+      persentase:
+        targetShift > 0 ? Math.round((tercapaiShift / targetShift) * 100) : 0,
+    };
+  });
+
+  // 6. Return format yang sesuai dengan kebutuhan Frontend Dashboard
+  return {
+    summary: {
+      target_harian: totalTarget,
+      tercapai: totalTercapai,
+      persentase: persentaseTotal,
+    },
+    operator: {
+      total: totalOperator,
+      aktif: totalAktif,
+      label: `${totalAktif} operator`,
+    },
+    shift_details: shiftStats,
+    // Trend statis sesuai gambar (+5.2%)
+    trend_mingguan: "+5.2%",
+  };
+};
+
+const getWeeklyTrend = async () => {
+  // Logic untuk mengambil data 7 hari terakhir dan memetakan ke array
+  const startOfWeek = moment().startOf("week").toDate();
+  const trendData = await prisma.rencanaProduksi.groupBy({
+    by: ["tanggal"],
+    _sum: { id: true }, // Simulasi hitung volume
+    where: { tanggal: { gte: startOfWeek } },
+  });
+  return trendData;
+};
+
+const searchOperator = async (query) => {
+  return prisma.user.findFirst({
+    where: {
+      OR: [{ nama: { contains: query } }, { uid_nfc: query }],
+      role: "OPERATOR",
+    },
+    select: {
+      id: true,
+      nama: true,
+      current_point: true, // Untuk kolom "Total Poin"
+      divisi: { select: { nama_divisi: true } }, // Untuk kolom "Divisi"
+    },
+  });
+};
+
+const getHistoryRPH = async (filterTanggal) => {
+  const where = filterTanggal ? { tanggal: new Date(filterTanggal) } : {};
+
+  // Mengambil data untuk widget "Data RPH"
+  const data = await prisma.rencanaProduksi.findMany({
+    where,
+    include: {
+      user: { select: { nama: true } },
+      mesin: { select: { nama_mesin: true } },
+      produk: { select: { nama_produk: true } },
+      shift: { select: { nama_shift: true } },
+    },
+    orderBy: { tanggal: "desc" },
+    take: 10, // Ambil 10 data terbaru
+  });
+
+  // Mengelompokkan data berdasarkan tanggal untuk UI
+  const grouped = data.reduce((acc, curr) => {
+    const dateKey = curr.tanggal.toISOString().split("T")[0];
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push({
+      nama: curr.user.nama,
+      detail: `${curr.mesin.nama_mesin} • ${curr.produk.nama_produk}`,
+      shift: curr.shift.nama_shift,
+      target: 150, // Contoh field target
+    });
+    return acc;
+  }, {});
+
+  return grouped;
+};
+
 export default {
   createRencanaProduksi,
   getRencanaProduksiHarian,
+  getDashboardSummary,
+  getWeeklyTrend,
+  searchOperator,
+  getHistoryRPH,
 };

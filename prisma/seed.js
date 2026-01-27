@@ -297,6 +297,53 @@ async function main() {
     }
     console.log(`✅ Data Operator disinkronkan.`);
   }
+
+  // ==========================================
+  // 8. SIMULASI DATA DASHBOARD (TANGGAL HARI INI)
+  // ==========================================
+  console.log("📊 Membuat data simulasi dashboard...");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Ambil data pendukung yang sudah diinsert sebelumnya
+  const [operator, mesin, produk, shifts, targets] = await Promise.all([
+    prisma.user.findFirst({ where: { role: "OPERATOR" } }),
+    prisma.mesin.findFirst(),
+    prisma.produk.findFirst(),
+    prisma.shift.findMany(),
+    prisma.target.findMany({ take: 3 }),
+  ]);
+
+  if (operator && targets.length >= 3) {
+    for (let i = 0; i < 3; i++) {
+      // 1. Buat Rencana Produksi untuk tiap Shift
+      const rph = await prisma.rencanaProduksi.create({
+        data: {
+          fk_id_user: operator.id,
+          fk_id_mesin: mesin.id,
+          fk_id_produk: produk.id,
+          fk_id_shift: shifts[i].id,
+          fk_id_target: targets[i].id,
+          tanggal: today,
+          keterangan: `Simulasi Produksi Shift ${i + 1}`,
+        },
+      });
+
+      // 2. Buat Data Absensi (Attendance) untuk simulasi "Operator Aktif"
+      await prisma.attendance.create({
+        data: {
+          fk_id_user: operator.id,
+          fk_id_rencana_produksi: rph.id,
+          jam_tap: new Date(),
+          tanggal: today,
+          is_terlambat: false,
+        },
+      });
+    }
+    console.log(
+      "✅ Data simulasi Dashboard (RPH & Attendance) berhasil dibuat.",
+    );
+  }
 }
 
 main()

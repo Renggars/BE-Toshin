@@ -14,6 +14,32 @@ const createRencanaProduksi = catchAsync(async (req, res) => {
   });
 });
 
+const getDashboardSummary = catchAsync(async (req, res) => {
+  const summary = await rencanaProduksiService.getDashboardSummary();
+  res.send(summary);
+});
+
+const getWeeklyTrend = catchAsync(async (req, res) => {
+  const trend = await rencanaProduksiService.getWeeklyTrend();
+  res.send(trend);
+});
+
+const getHistoryRPH = catchAsync(async (req, res) => {
+  const { tanggal } = req.query; // Opsional: filter per tanggal
+  const history = await rencanaProduksiService.getHistoryRPH(tanggal);
+  res.send({ status: true, data: history });
+});
+
+const searchOperator = catchAsync(async (req, res) => {
+  const { q } = req.query; // Query nama atau UID
+  const operator = await rencanaProduksiService.searchOperator(q);
+  res.send(operator);
+});
+
 export default {
   createRencanaProduksi,
+  getDashboardSummary,
+  getWeeklyTrend,
+  searchOperator,
+  getHistoryRPH,
 };

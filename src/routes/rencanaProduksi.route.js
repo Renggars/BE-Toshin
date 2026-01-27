@@ -13,4 +13,24 @@ router.post(
   rencanaProduksiController.createRencanaProduksi,
 );
 
+router.get(
+  "/dashboard/summary",
+  authAdmin(),
+  rencanaProduksiController.getDashboardSummary,
+);
+router.get(
+  "/dashboard/weekly-trend",
+  authAdmin(),
+  rencanaProduksiController.getWeeklyTrend,
+);
+
+router.get("/list", authAdmin(), rencanaProduksiController.getHistoryRPH);
+
+// Endpoint pendukung Form Input RPH
+router.get(
+  "/search-operator",
+  authAdmin(),
+  rencanaProduksiController.searchOperator,
+);
+
 export default router;
