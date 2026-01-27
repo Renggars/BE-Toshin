@@ -2,6 +2,8 @@ import express from "express";
 import authRoute from "./auth.route.js";
 import userRoute from "./user.route.js";
 import rencanaProduksiRoute from "./rencanaProduksi.route.js";
+import masterRoute from "./master.route.js";
+import poinRoute from "./poin.route.js";
 
 const router = express.Router();
 
@@ -17,6 +19,14 @@ const defaultRoutes = [
   {
     path: "/rencana-produksi",
     route: rencanaProduksiRoute,
+  },
+  {
+    path: "/master",
+    route: masterRoute,
+  },
+  {
+    path: "/poin",
+    route: poinRoute,
   },
 ];
 

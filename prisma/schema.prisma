@@ -30,6 +30,9 @@ model User {
   role         Role    @default(OPERATOR)
 
   // Field khusus Operator
+  plant         String?
+  current_point Int     @default(100)
+
   status            String?   @default("active")
   suspended_until   DateTime?
   point_cycle_start DateTime?
@@ -112,16 +115,14 @@ model Shift {
 }
 
 model RencanaProduksi {
-  id            Int      @id @default(autoincrement())
-  fk_id_user    Int
-  fk_id_mesin   Int
-  fk_id_produk  Int
-  fk_id_shift   Int
-  fk_id_target  Int
-  is_lembur     Boolean  @default(false)
-  target_lembur Int?
-  tanggal       DateTime @db.Date
-  keterangan    String?  @db.Text
+  id           Int      @id @default(autoincrement())
+  fk_id_user   Int
+  fk_id_mesin  Int
+  fk_id_produk Int
+  fk_id_shift  Int
+  fk_id_target Int
+  tanggal      DateTime @db.Date
+  keterangan   String?  @db.Text
 
   user        User         @relation(fields: [fk_id_user], references: [id])
   mesin       Mesin        @relation(fields: [fk_id_mesin], references: [id])

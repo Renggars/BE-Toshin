@@ -1,3 +1,5 @@
+// src/controllers/rencanaProduksi.controller.js
+
 import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import rencanaProduksiService from "../services/rencanaProduksi.service.js";

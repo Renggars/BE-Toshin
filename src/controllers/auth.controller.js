@@ -33,31 +33,10 @@ const login = catchAsync(async (req, res) => {
 
   if (user.role === "OPERATOR") {
     const today = new Date().toISOString().split("T")[0];
-    const rp = await rencanaProduksiService.getRencanaProduksiHarian(
+    dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
       user.id,
       today,
     );
-
-    if (rp) {
-      dashboardData = {
-        rencana_kerja: {
-          mesin: rp.mesin.nama_mesin,
-          produk: rp.produk.nama_produk,
-          shift: `${rp.shift.nama_shift} (${rp.shift.jam_masuk} - ${rp.shift.jam_keluar})`,
-
-          // Target dari Master Data (Sebelum lembur)
-          target_regular: rp.target.total_target,
-
-          lembur: rp.is_lembur ? "Ya" : "Tidak",
-          target_lembur: rp.target_lembur || 0,
-
-          total_target: rp.target.total_target + (rp.target_lembur || 0),
-
-          jenis_pekerjaan: rp.target.jenis_pekerjaan.nama_pekerjaan,
-          catatan_produksi: rp.keterangan || "Tidak ada catatan untuk hari ini",
-        },
-      };
-    }
   }
 
   res.send({
