@@ -41,15 +41,43 @@ app.use(sanitize);
 // gzip compression
 app.use(compression());
 
-app.use(
-  cors({
-    origin: config.clientUrl,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }),
-);
-app.options("*", cors());
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       // allow server-to-server / Postman
+//       if (!origin) return callback(null, true);
+
+//       if (config.clientUrls.includes(origin)) {
+//         return callback(null, true);
+//       }
+
+//       return callback(new Error(`CORS blocked: ${origin} not allowed`));
+//     },
+//     credentials: true,
+//     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   }),
+// );
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+  );
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  );
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
+// app.options("*", cors());
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 

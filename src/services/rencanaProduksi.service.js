@@ -71,6 +71,7 @@ const createRencanaProduksi = async (payload) => {
     },
   });
 };
+
 /**
  * Mendapatkan rencana produksi harian untuk operator tertentu
  * @param {number} userId
@@ -98,11 +99,15 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   let baseTarget = rp.target.total_target;
   let finalTarget = baseTarget;
 
-  // Aturan: Long Shift +30%, Group +15%
-  if (rp.shift.tipe_shift === "Long Shift") {
-    finalTarget = Math.round(baseTarget * 1.3);
-  } else if (rp.shift.tipe_shift === "Group") {
-    finalTarget = Math.round(baseTarget * 1.15);
+  switch (rp.shift.tipe_shift) {
+    case "Long Shift":
+      finalTarget = Math.round(baseTarget * 1.3);
+      break;
+    case "Group":
+      finalTarget = Math.round(baseTarget * 1.15);
+      break;
+    default:
+      finalTarget = baseTarget;
   }
 
   return {
@@ -110,8 +115,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     produk: rp.produk.nama_produk,
     shift: `${rp.shift.nama_shift} (${rp.shift.jam_masuk} - ${rp.shift.jam_keluar})`,
     tipe_shift: rp.shift.tipe_shift,
-    target_database: baseTarget,
-    total_target: finalTarget, // Target yang sudah dikalkulasi
+    target: finalTarget,
     jenis_pekerjaan: rp.target.jenis_pekerjaan.nama_pekerjaan,
     catatan_produksi: rp.keterangan || "Tidak ada catatan untuk hari ini",
   };

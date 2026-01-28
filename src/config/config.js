@@ -18,7 +18,11 @@ const config = {
     accessExpirationMinutes: process.env.JWT_ACCESS_EXPIRATION_MINUTES,
     refreshExpirationDays: process.env.JWT_REFRESH_EXPIRATION_DAYS,
   },
-  clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
+  clientUrls: [
+    "http://localhost:3000",
+    "http://localhost:61909",
+    "https://lesli-thorny-bunny.ngrok-free.dev",
+  ],
 };
 
 export default config;

@@ -1,36 +1,146 @@
 import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
+import { responseApiSuccess } from "../utils/responseApi.js";
 import masterService from "../services/master.service.js";
 
+// --- Mesin ---
 const getMesin = catchAsync(async (req, res) => {
   const result = await masterService.getMesin();
-  res.send(result);
+  responseApiSuccess(res, "Success get mesin", result);
 });
 
+const createMesin = catchAsync(async (req, res) => {
+  const result = await masterService.createMesin(req.body);
+  responseApiSuccess(res, "Success create mesin", result, httpStatus.CREATED);
+});
+
+const updateMesin = catchAsync(async (req, res) => {
+  const result = await masterService.updateMesin(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update mesin", result);
+});
+
+const deleteMesin = catchAsync(async (req, res) => {
+  await masterService.deleteMesin(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete mesin", null);
+});
+
+// --- Produk ---
 const getProduk = catchAsync(async (req, res) => {
   const result = await masterService.getProduk();
-  res.send(result);
+  responseApiSuccess(res, "Success get produk", result);
 });
 
+const createProduk = catchAsync(async (req, res) => {
+  const result = await masterService.createProduk(req.body);
+  responseApiSuccess(res, "Success create produk", result, httpStatus.CREATED);
+});
+
+const updateProduk = catchAsync(async (req, res) => {
+  const result = await masterService.updateProduk(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update produk", result);
+});
+
+const deleteProduk = catchAsync(async (req, res) => {
+  await masterService.deleteProduk(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete produk", null);
+});
+
+// --- Shift ---
 const getShift = catchAsync(async (req, res) => {
   const result = await masterService.getShift();
-  res.send(result);
+  responseApiSuccess(res, "Success get shift", result);
 });
 
+const createShift = catchAsync(async (req, res) => {
+  const result = await masterService.createShift(req.body);
+  responseApiSuccess(res, "Success create shift", result, httpStatus.CREATED);
+});
+
+const updateShift = catchAsync(async (req, res) => {
+  const result = await masterService.updateShift(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update shift", result);
+});
+
+const deleteShift = catchAsync(async (req, res) => {
+  await masterService.deleteShift(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete shift", null);
+});
+
+// --- Target ---
 const getTarget = catchAsync(async (req, res) => {
   const filter = {};
-
   if (req.query.fk_produk) filter.fk_produk = parseInt(req.query.fk_produk);
   if (req.query.fk_jenis_pekerjaan)
     filter.fk_jenis_pekerjaan = parseInt(req.query.fk_jenis_pekerjaan);
-
   const result = await masterService.getTarget(filter);
-  res.send(result);
+  responseApiSuccess(res, "Success get target", result);
 });
 
 const createTarget = catchAsync(async (req, res) => {
   const result = await masterService.createTarget(req.body);
-  res.status(httpStatus.CREATED).send(result);
+  responseApiSuccess(res, "Success create target", result, httpStatus.CREATED);
 });
 
-export default { getMesin, getProduk, getShift, getTarget, createTarget };
+// --- Masalah Andon ---
+const getMasalahAndon = catchAsync(async (req, res) => {
+  const result = await masterService.getMasalahAndon();
+  responseApiSuccess(res, "Success get master masalah andon", result);
+});
+
+const createMasalahAndon = catchAsync(async (req, res) => {
+  const result = await masterService.createMasalahAndon(req.body);
+  responseApiSuccess(
+    res,
+    "Success create masalah andon",
+    result,
+    httpStatus.CREATED,
+  );
+});
+
+const updateMasalahAndon = catchAsync(async (req, res) => {
+  const result = await masterService.updateMasalahAndon(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update masalah andon", result);
+});
+
+const deleteMasalahAndon = catchAsync(async (req, res) => {
+  await masterService.deleteMasalahAndon(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete masalah andon", null);
+});
+
+export default {
+  // Mesin
+  getMesin,
+  createMesin,
+  updateMesin,
+  deleteMesin,
+  // Produk
+  getProduk,
+  createProduk,
+  updateProduk,
+  deleteProduk,
+  // Shift
+  getShift,
+  createShift,
+  updateShift,
+  deleteShift,
+  // Target
+  getTarget,
+  createTarget,
+  // Andon
+  getMasalahAndon,
+  createMasalahAndon,
+  updateMasalahAndon,
+  deleteMasalahAndon,
+};

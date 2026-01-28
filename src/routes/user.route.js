@@ -22,11 +22,13 @@ router
     authAdmin(),
     validate(userValidation.updateUser),
     userController.updateUser,
-  )
-  .delete(
-    authAdmin(),
-    validate(userValidation.deleteUser),
-    userController.deleteUser,
   );
+
+router.patch(
+  "/:userId/deactivate",
+  authAdmin(),
+  validate(userValidation.deactivateUser),
+  userController.deactivateUser,
+);
 
 export default router;

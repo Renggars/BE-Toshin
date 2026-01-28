@@ -1,25 +1,253 @@
 openapi: 3.0.0
 info:
-  title: API BE DiaryFood
-  version: 1.0.0
-  description: Dokumentasi API DiaryFood
+  title: Toshin Production Management API
+  version: 1.7.0
+  description: API Backend untuk Sistem Manajemen Produksi Toshin - Attendance, Production Planning, dan Discipline Points Management
+  contact:
+    name: Rengga Rendi Saputra
+    email: renggarendy22@gmail.com
+
 servers:
-  - url: http://localhost:3000/v1
+  - url: http://localhost:4001
+    description: Development Server
+  - url: https://lesli-thorny-bunny.ngrok-free.dev/
+    description: Production Server
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: "JWT token untuk autentikasi. Format: Bearer {token}"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: integer
+        stack:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        nama:
+          type: string
+        email:
+          type: string
+        uid_nfc:
+          type: string
+        foto_profile:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
+        plant:
+          type: string
+          nullable: true
+        current_point:
+          type: integer
+        status:
+          type: string
+        fk_id_divisi:
+          type: integer
+        divisi:
+          type: object
+          properties:
+            id:
+              type: integer
+            nama_divisi:
+              type: string
+
 security:
   - bearerAuth: []
 
+tags:
+  - name: Auth
+    description: Authentication endpoints (Login & Register)
+  - name: User
+    description: User management endpoints
+  - name: Poin
+    description: Discipline points management
+  - name: Rencana Produksi
+    description: Production planning endpoints
+  - name: Master
+    description: Master data endpoints (Mesin, Produk, Shift, Target)
+  - name: Andon
+    description: Real-time Andon system endpoints (Socket.io event 'update-monitor')
+  - name: OEE
+    description: Overall Equipment Effectiveness endpoints (Socket.io event 'oee-updated')
+  - name: Produksi
+    description: Production logging endpoints
+
 paths:
-  /auth/login:
+  /andon/trigger:
     post:
-      summary: Login user
+      summary: Trigger Andon Event
+      description: Trigger event andon baru (dari ESP32 atau Operator)
+      tags: [Andon]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fk_id_mesin, fk_id_masalah]
+              properties:
+                fk_id_mesin:
+                  type: integer
+                fk_id_masalah:
+                  type: integer
+                fk_id_operator:
+                  type: integer
+                  nullable: true
+      responses:
+        '201':
+          description: Andon triggered successfully
+
+  /andon/resolve/{eventId}:
+    patch:
+      summary: Resolve Andon Event
+      description: Resolve event andon dan hitung downtime
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                catatan:
+                  type: string
+      responses:
+        '200':
+          description: Andon resolved successfully
+
+  /andon/active:
+    get:
+      summary: Get Active Andon Events
+      tags: [Andon]
+      responses:
+        '200':
+          description: Success
+
+  /andon/history:
+    get:
+      summary: Get Andon History
+      tags: [Andon]
+      parameters:
+        - in: query
+          name: mesinId
+          schema: { type: integer }
+        - in: query
+          name: startDate
+          schema: { type: string, format: date }
+        - in: query
+          name: endDate
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Success
+
+  /produksi/log:
+    post:
+      summary: Create Production Log
+      description: Input data produksi (Target, OK, NG)
+      tags: [Produksi]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fk_id_mesin, fk_id_shift, total_target, total_ok, total_ng, jam_mulai, jam_selesai, tanggal]
+              properties:
+                fk_id_mesin: { type: integer }
+                fk_id_shift: { type: integer }
+                fk_id_operator: { type: integer }
+                total_target: { type: integer }
+                total_ok: { type: integer }
+                total_ng: { type: integer }
+                jam_mulai: { type: string, format: date-time }
+                jam_selesai: { type: string, format: date-time }
+                tanggal: { type: string, format: date }
+      responses:
+        '201':
+          description: Log created successfully
+
+    get:
+      summary: Get Production Logs
+      tags: [Produksi]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: mesinId
+          schema: { type: integer }
+        - in: query
+          name: startDate
+          schema: { type: string, format: date }
+        - in: query
+          name: endDate
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Success
+
+  /oee/mesin/{id}:
+    get:
+      summary: Get OEE Statistics
+      description: Get OEE score (Availability, Performance, Quality)
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Success
+
+  /oee/dashboard:
+    get:
+      summary: Get OEE Dashboard Summary
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Register user baru dengan uid_nfc, email, dan password (semua wajib)
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -27,16 +255,97 @@ paths:
             schema:
               type: object
               required:
+                - nama
                 - email
                 - password
+                - uid_nfc
+                - fk_id_divisi
+                - role
               properties:
+                nama:
+                  type: string
+                  example: John Doe
                 email:
                   type: string
                   format: email
+                  example: john@example.com
                 password:
                   type: string
+                  format: password
+                  minLength: 8
+                  example: password123
+                uid_nfc:
+                  type: string
+                  example: ABC123456
+                fk_id_divisi:
+                  type: integer
+                  example: 1
+                role:
+                  type: string
+                  enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
+                  example: OPERATOR
+                foto_profile:
+                  type: string
+                  format: uri
+                  nullable: true
+                plant:
+                  type: string
+                  nullable: true
+                  example: Plant A
       responses:
-        "200":
+        '201':
+          description: Registrasi berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registrasi berhasil
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request (email/uid_nfc sudah terdaftar)
+
+  /auth/login:
+    post:
+      summary: Login user
+      description: Login menggunakan NFC card ATAU email+password
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required:
+                    - uid_nfc
+                  properties:
+                    uid_nfc:
+                      type: string
+                      example: ABC123456
+                - type: object
+                  required:
+                    - email
+                    - password
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      example: john@example.com
+                    password:
+                      type: string
+                      format: password
+                      example: password123
+      responses:
+        '200':
           description: Login success
           content:
             application/json:
@@ -50,32 +359,7 @@ paths:
                     type: object
                     properties:
                       user:
-                        type: object
-                        properties:
-                          id:
-                            type: integer
-                            example: 4
-                          name:
-                            type: string
-                            example: admin
-                          email:
-                            type: string
-                            example: admin@example.com
-                          role:
-                            type: string
-                            example: admin
-                          photo:
-                            type: string
-                            format: uri
-                            example: https://yaoxcisksxcoidwuqurx.supabase.co/storage/object/public/photo-user/2234d0f1-2dbe-4cde-af16-37d743a69c27.png
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: 2025-05-22T06:40:14.007Z
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: 2025-05-23T09:59:30.965Z
+                        $ref: '#/components/schemas/User'
                       tokens:
                         type: object
                         properties:
@@ -84,79 +368,30 @@ paths:
                             properties:
                               token:
                                 type: string
-                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                               expires:
                                 type: string
                                 format: date-time
-                                example: 2025-05-23T13:37:41.719Z
                           refresh:
                             type: object
                             properties:
                               token:
                                 type: string
-                                example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                               expires:
                                 type: string
                                 format: date-time
-                                example: 2025-05-30T12:52:41.719Z
+                      dashboard:
+                        type: object
+                        nullable: true
+                        description: Data dashboard untuk OPERATOR
+        '401':
+          description: Unauthorized (credentials salah)
+        '403':
+          description: Forbidden (akun suspended)
 
   /user:
-    post:
-      summary: Create a new user
-      tags:
-        - User
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-                - email
-                - password
-              properties:
-                name:
-                  type: string
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                role:
-                  type: string
-                  enum: [user, admin]
-                  default: user
-                photo:
-                  type: string
-                  nullable: true
-      responses:
-        201:
-          description: Success create user
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                      name:
-                        type: string
-                      email:
-                        type: string
-                      role:
-                        type: string
-                      photo:
-                        type: string
-                        nullable: true
-
     get:
-      summary: Get list of users
+      summary: Get all users
+      description: Mendapatkan daftar semua user dengan pagination
       tags:
         - User
       parameters:
@@ -171,7 +406,7 @@ paths:
             type: integer
             default: 10
       responses:
-        200:
+        '200':
           description: Success get users
           content:
             application/json:
@@ -181,18 +416,684 @@ paths:
                   message:
                     type: string
                   data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        type: object
+                        properties:
+                          totalItems:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          currentPage:
+                            type: integer
+
+  /user/searchByEmail:
+    get:
+      summary: Search user by email
+      tags:
+        - User
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: Success get user
+
+  /user/{userId}:
+    get:
+      summary: Get user by ID
+      tags:
+        - User
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success get user
+        '404':
+          description: User not found
+
+    put:
+      summary: Update user
+      tags:
+        - User
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                uid_nfc:
+                  type: string
+                foto_profile:
+                  type: string
+                role:
+                  type: string
+                plant:
+                  type: string
+      responses:
+        '200':
+          description: Success update user
+
+  /user/{userId}/deactivate:
+    patch:
+      summary: Deactivate user
+      description: Soft delete - mengubah status user menjadi inactive tanpa menghapus data dari database
+      tags:
+        - User
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success deactivate user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success deactivate user
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+
+  /poin/my-poin:
+    get:
+      summary: Get my discipline points
+      description: Operator cek poin disiplin sendiri
+      tags:
+        - Poin
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  total_poin:
+                    type: integer
+                    example: 85
+
+  /poin/user/{userId}:
+    get:
+      summary: Get user discipline points by ID
+      description: Admin/Supervisor cek poin user tertentu
+      tags:
+        - Poin
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  total_poin:
+                    type: integer
+
+  /poin/pelanggaran:
+    post:
+      summary: Create violation record
+      description: Input pelanggaran untuk mengurangi poin operator
+      tags:
+        - Poin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fk_id_operator
+                - fk_tipe_disiplin
+              properties:
+                fk_id_operator:
+                  type: integer
+                  example: 5
+                fk_tipe_disiplin:
+                  type: integer
+                  example: 1
+      responses:
+        '201':
+          description: Pelanggaran berhasil dicatat
+
+  /poin/dashboard/stats:
+    get:
+      summary: Get discipline points dashboard stats
+      description: Statistik poin disiplin untuk dashboard admin
+      tags:
+        - Poin
+      parameters:
+        - in: query
+          name: plant
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+
+  /poin/dashboard/rankings:
+    get:
+      summary: Get discipline points rankings
+      description: Ranking operator berdasarkan poin disiplin
+      tags:
+        - Poin
+      parameters:
+        - in: query
+          name: plant
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /rencana-produksi:
+    post:
+      summary: Create production plan
+      description: Buat rencana produksi harian (RPH)
+      tags:
+        - Rencana Produksi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fk_id_user
+                - fk_id_mesin
+                - fk_id_produk
+                - fk_id_shift
+                - fk_id_target
+                - tanggal
+              properties:
+                fk_id_user:
+                  type: integer
+                fk_id_mesin:
+                  type: integer
+                fk_id_produk:
+                  type: integer
+                fk_id_shift:
+                  type: integer
+                fk_id_target:
+                  type: integer
+                tanggal:
+                  type: string
+                  format: date
+                keterangan:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Rencana produksi berhasil dibuat
+
+  /rencana-produksi/dashboard/summary:
+    get:
+      summary: Get production dashboard summary
+      tags:
+        - Rencana Produksi
+      responses:
+        '200':
+          description: Success
+
+  /rencana-produksi/dashboard/weekly-trend:
+    get:
+      summary: Get weekly production trend
+      tags:
+        - Rencana Produksi
+      responses:
+        '200':
+          description: Success
+
+  /rencana-produksi/list:
+    get:
+      summary: Get production plan history
+      description: Daftar history rencana produksi harian
+      tags:
+        - Rencana Produksi
+      parameters:
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Success
+
+  /rencana-produksi/search-operator:
+    get:
+      summary: Search operator
+      description: Cari operator berdasarkan nama atau UID
+      tags:
+        - Rencana Produksi
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+
+  /master/mesin:
+    get:
+      summary: Get all machines
+      description: Dropdown data mesin
+      tags:
+        - Master
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    nama_mesin:
+                      type: string
+
+    post:
+      summary: Create new machine
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_mesin, ideal_cycle_time]
+              properties:
+                nama_mesin:
+                  type: string
+                ideal_cycle_time:
+                  type: number
+      responses:
+        '201':
+          description: Created
+
+  /master/mesin/{id}:
+    patch:
+      summary: Update machine
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama_mesin: { type: string }
+                ideal_cycle_time: { type: number }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete machine
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+
+  /master/produk:
+    get:
+      summary: Get all products
+      description: Dropdown data produk
+      tags:
+        - Master
+      responses:
+        '200':
+          description: Success
+
+    post:
+      summary: Create new product
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_produk]
+              properties:
+                nama_produk: { type: string }
+      responses:
+        '201':
+          description: Created
+
+  /master/produk/{id}:
+    patch:
+      summary: Update product
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama_produk: { type: string }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete product
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+
+  /master/shift:
+    get:
+      summary: Get all shifts
+      description: Dropdown data shift
+      tags:
+        - Master
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    tipe_shift:
+                      type: string
+                    nama_shift:
+                      type: string
+                    jam_masuk:
+                      type: string
+                    jam_keluar:
+                      type: string
+
+    post:
+      summary: Create new shift
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_shift, tipe_shift, jam_masuk, jam_keluar]
+              properties:
+                nama_shift: { type: string }
+                tipe_shift: { type: string }
+                jam_masuk: { type: string, example: "07:30" }
+                jam_keluar: { type: string, example: "15:30" }
+      responses:
+        '201':
+          description: Created
+
+  /master/shift/{id}:
+    patch:
+      summary: Update shift
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama_shift: { type: string }
+                tipe_shift: { type: string }
+                jam_masuk: { type: string }
+                jam_keluar: { type: string }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete shift
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+
+  /master/target:
+    get:
+      summary: Get all targets
+      description: Dropdown data target (bisa difilter berdasarkan produk/jenis pekerjaan)
+      tags:
+        - Master
+      parameters:
+        - in: query
+          name: fk_produk
+          schema:
+            type: integer
+        - in: query
+          name: fk_jenis_pekerjaan
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+
+    post:
+      summary: Create new target
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fk_jenis_pekerjaan, fk_produk, total_target]
+              properties:
+                fk_jenis_pekerjaan: { type: integer }
+                fk_produk: { type: integer }
+                total_target: { type: integer }
+      responses:
+        '201':
+          description: Created
+
+  /master/masalah-andon:
+    get:
+      summary: Get all andon problems
+      description: Get master data masalah andon (termasuk waktu_perbaikan untuk countdown IoT)
+      tags:
+        - Master
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
                     type: array
                     items:
                       type: object
                       properties:
                         id:
                           type: integer
-                        name:
+                        nama_masalah:
                           type: string
-                        email:
+                        waktu_perbaikan:
                           type: string
-                        role:
-                          type: string
-                        photo:
-                          type: string
-                          nullable: true
+                          description: Format HH:mm:ss
+
+    post:
+      summary: Create new andon problem
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_masalah, kategori]
+              properties:
+                kode_masalah: { type: string }
+                nama_masalah: { type: string }
+                kategori: { type: string }
+                is_downtime: { type: boolean }
+                waktu_perbaikan: { type: integer }
+                deskripsi: { type: string }
+      responses:
+        '201':
+          description: Created
+
+  /master/masalah-andon/{id}:
+    patch:
+      summary: Update andon problem
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kode_masalah: { type: string }
+                nama_masalah: { type: string }
+                kategori: { type: string }
+                is_downtime: { type: boolean }
+                waktu_perbaikan: { type: integer }
+                deskripsi: { type: string }
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: Delete andon problem
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+
+

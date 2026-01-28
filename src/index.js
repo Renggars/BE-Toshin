@@ -3,6 +3,8 @@ import app from "./app.js";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
 
+import { initSocket } from "./config/socket.js";
+
 let server;
 
 if (prisma) {
@@ -10,6 +12,9 @@ if (prisma) {
   server = app.listen(config.port, () => {
     logger.info(`Server is running on http://localhost:${config.port}`);
     console.log(`Docs available at http://localhost:${config.port}/api-docs`);
+
+    // Initialize Socket.io
+    initSocket(server);
   });
 }
 

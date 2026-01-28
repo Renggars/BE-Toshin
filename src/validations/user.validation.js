@@ -42,7 +42,7 @@ const updateUser = {
     .min(1), // Minimal harus ada satu field yang diupdate
 };
 
-const deleteUser = {
+const deactivateUser = {
   params: Joi.object().keys({
     userId: Joi.number().integer().required(),
   }),
@@ -53,5 +53,5 @@ export default {
   login,
   getUser,
   updateUser,
-  deleteUser,
+  deactivateUser,
 };

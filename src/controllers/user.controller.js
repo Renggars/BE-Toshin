@@ -52,7 +52,7 @@ const updateUser = async (req, res) => {
   try {
     const result = await userService.updateUserById(
       req.params.userId,
-      req.body
+      req.body,
     );
 
     responseApiSuccess(res, "Success update user", result);
@@ -62,13 +62,14 @@ const updateUser = async (req, res) => {
   }
 };
 
-const deleteUser = async (req, res) => {
+const deactivateUser = async (req, res) => {
   try {
-    const result = await userService.deleteUserById(req.params.userId);
-    responseApiSuccess(res, "Success delete user", result);
+    const result = await userService.deactivateUserById(req.params.userId);
+
+    responseApiSuccess(res, "Success deactivate user", result);
   } catch (err) {
     console.log(err);
-    responseApiFailed(res, `Failed delete user ${err}`);
+    responseApiFailed(res, `Failed deactivate user ${err}`);
   }
 };
 
@@ -92,6 +93,6 @@ export default {
   getUserByEmail,
   createUser,
   updateUser,
-  deleteUser,
   getCurrentUser,
+  deactivateUser,
 };

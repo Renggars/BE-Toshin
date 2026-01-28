@@ -20,11 +20,14 @@ enum Role {
   SUPERVISOR
   ENGINEERING
   MAINTENANCE
+  ADMIN
 }
 
 model User {
   id           Int     @id @default(autoincrement())
   nama         String
+  email        String? @unique
+  password     String?
   uid_nfc      String? @unique
   foto_profile String?
   role         Role    @default(OPERATOR)
@@ -35,7 +38,7 @@ model User {
 
   status            String?   @default("active")
   suspended_until   DateTime?
-  point_cycle_start DateTime?
+  point_cycle_start DateTime? @default(now())
 
   fk_id_divisi Int
   divisi       Divisi @relation(fields: [fk_id_divisi], references: [id])
@@ -47,6 +50,11 @@ model User {
   // Named Relations untuk PoinDisiplin
   poin_disiplins_diterima  PoinDisiplin[] @relation("OperatorPoin")
   poin_disiplins_diberikan PoinDisiplin[] @relation("StaffPemberiPoin")
+
+  // Relasi Andon & Produksi
+  andon_events_triggered AndonEvent[]  @relation("AndonOperator")
+  andon_events_resolved  AndonEvent[]  @relation("AndonResolver")
+  produksi_logs          ProduksiLog[] @relation("ProduksiOperator")
 
   @@map("user")
 }
@@ -66,9 +74,14 @@ model Attendance {
 }
 
 model Mesin {
-  id                Int               @id @default(autoincrement())
-  nama_mesin        String            @unique
+  id               Int    @id @default(autoincrement())
+  nama_mesin       String @unique
+  ideal_cycle_time Float? // Dalam detik per unit
+
   rencana_produksis RencanaProduksi[]
+  andon_events      AndonEvent[]
+  produksi_logs     ProduksiLog[]
+  oee_records       OEE[]
 
   @@map("mesin")
 }
@@ -104,12 +117,16 @@ model Target {
 }
 
 model Shift {
-  id                Int               @id @default(autoincrement())
-  tipe_shift        String
-  nama_shift        String            @unique
-  jam_masuk         String
-  jam_keluar        String
+  id         Int    @id @default(autoincrement())
+  tipe_shift String
+  nama_shift String @unique
+  jam_masuk  String
+  jam_keluar String
+
   rencana_produksis RencanaProduksi[]
+  produksi_logs     ProduksiLog[]
+  oee_records       OEE[]
+  poinDisiplins     PoinDisiplin[]
 
   @@map("shift")
 }
@@ -153,12 +170,99 @@ model PoinDisiplin {
   fk_id_operator   Int
   fk_id_staff      Int
   fk_tipe_disiplin Int
+  fk_id_shift      Int?
   tanggal          DateTime @default(now())
 
   // Gunakan label relasi yang berbeda agar Prisma tidak bingung
   operator      User         @relation("OperatorPoin", fields: [fk_id_operator], references: [id])
   staff         User         @relation("StaffPemberiPoin", fields: [fk_id_staff], references: [id])
   tipe_disiplin TipeDisiplin @relation(fields: [fk_tipe_disiplin], references: [id])
+  shift         Shift?       @relation(fields: [fk_id_shift], references: [id])
 
   @@map("poin_disiplin")
+}
+
+// ==========================================
+// ANDON & OEE SYSTEM MODELS
+// ==========================================
+
+model MasterMasalahAndon {
+  id              Int     @id @default(autoincrement())
+  nama_masalah    String
+  kategori        String // Mechanical, Electrical, Quality, Material, etc.
+  waktu_perbaikan String? // Format "HH:mm:ss"
+
+  andon_events AndonEvent[]
+
+  @@map("master_masalah_andon")
+}
+
+model AndonEvent {
+  id             Int  @id @default(autoincrement())
+  fk_id_mesin    Int
+  fk_id_masalah  Int
+  fk_id_operator Int? // Operator yang trigger (optional)
+
+  status          String    @default("ACTIVE") // ACTIVE, RESOLVED
+  waktu_trigger   DateTime  @default(now())
+  waktu_resolved  DateTime?
+  durasi_downtime Int? // Dalam menit, dihitung saat resolved
+
+  catatan     String? @db.Text
+  resolved_by Int? // User ID yang resolve
+
+  mesin    Mesin              @relation(fields: [fk_id_mesin], references: [id])
+  masalah  MasterMasalahAndon @relation(fields: [fk_id_masalah], references: [id])
+  operator User?              @relation("AndonOperator", fields: [fk_id_operator], references: [id])
+  resolver User?              @relation("AndonResolver", fields: [resolved_by], references: [id])
+
+  @@map("andon_event")
+}
+
+model ProduksiLog {
+  id             Int  @id @default(autoincrement())
+  fk_id_mesin    Int
+  fk_id_shift    Int
+  fk_id_operator Int?
+
+  total_target Int
+  total_ok     Int @default(0)
+  total_ng     Int @default(0)
+
+  jam_mulai   DateTime
+  jam_selesai DateTime
+  tanggal     DateTime @db.Date
+
+  mesin    Mesin @relation(fields: [fk_id_mesin], references: [id])
+  shift    Shift @relation(fields: [fk_id_shift], references: [id])
+  operator User? @relation("ProduksiOperator", fields: [fk_id_operator], references: [id])
+
+  @@map("produksi_log")
+}
+
+model OEE {
+  id          Int  @id @default(autoincrement())
+  fk_id_mesin Int
+  fk_id_shift Int?
+
+  // OEE Metrics (dalam persentase 0-100)
+  availability Float @default(0)
+  performance  Float @default(0)
+  quality      Float @default(0)
+  oee_score    Float @default(0)
+
+  // Supporting Data
+  loading_time Int // Dalam menit
+  downtime     Int @default(0) // Dalam menit
+  total_output Int @default(0)
+  total_ok     Int @default(0)
+
+  tanggal    DateTime @db.Date
+  created_at DateTime @default(now())
+
+  mesin Mesin  @relation(fields: [fk_id_mesin], references: [id])
+  shift Shift? @relation(fields: [fk_id_shift], references: [id])
+
+  @@unique([fk_id_mesin, tanggal, fk_id_shift])
+  @@map("oee")
 }

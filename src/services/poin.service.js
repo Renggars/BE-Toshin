@@ -15,6 +15,8 @@ const getUserCurrentPoin = async (userId) => {
     (sekarang - user.point_cycle_start) / (1000 * 60 * 60 * 24),
   );
 
+  console.log(user.point_cycle_start);
+
   // Ambil total perubahan dari history
   const history = await prisma.poinDisiplin.aggregate({
     _sum: { poin_berubah: true },
@@ -40,12 +42,18 @@ const getUserCurrentPoin = async (userId) => {
 
 const createPelanggaran = async (payload, staffId) => {
   const { fk_id_operator, fk_tipe_disiplin } = payload;
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
 
-  const [tipe, operator] = await Promise.all([
+  const [tipe, operator, rph] = await Promise.all([
     prisma.tipeDisiplin.findUnique({ where: { id: fk_tipe_disiplin } }),
     prisma.user.findUnique({
       where: { id: fk_id_operator },
       include: { divisi: true },
+    }),
+    prisma.rencanaProduksi.findFirst({
+      where: { fk_id_user: fk_id_operator, tanggal: hariIni },
+      select: { fk_id_shift: true },
     }),
   ]);
 
@@ -89,6 +97,7 @@ const createPelanggaran = async (payload, staffId) => {
         fk_id_operator,
         fk_id_staff: staffId,
         fk_tipe_disiplin,
+        fk_id_shift: rph ? rph.fk_id_shift : null,
         poin_berubah: -poinPotong,
         status_level,
         tanggal: new Date(),
@@ -131,4 +140,127 @@ const createPelanggaran = async (payload, staffId) => {
   return result;
 };
 
-export default { getUserCurrentPoin, createPelanggaran };
+const getPoinDashboardStats = async (plant) => {
+  const whereOperator = {
+    role: "OPERATOR",
+    ...(plant && { plant: String(plant) }),
+  };
+
+  // 1. Ambil Summary - PASTIKAN 'id' juga di-select
+  const users = await prisma.user.findMany({
+    where: whereOperator,
+    select: {
+      id: true, // WAJIB ADA agar targetUserIds tidak undefined
+      current_point: true,
+    },
+  });
+
+  const summary = {
+    total_operator: users.length,
+    aman: users.filter((u) => u.current_point >= 70).length,
+    peringatan: users.filter(
+      (u) => u.current_point >= 50 && u.current_point < 70,
+    ).length,
+    kritis: users.filter((u) => u.current_point < 50).length,
+  };
+
+  // Jika tidak ada user di plant tersebut, kembalikan response kosong lebih awal
+  if (users.length === 0) {
+    return {
+      summary,
+      shift_stats: [],
+      top_violations: [],
+    };
+  }
+
+  // 2. Ambil List ID (Sekarang sudah aman, tidak akan undefined)
+  const targetUserIds = users.map((u) => u.id);
+
+  // 3. GroupBy Shift
+  const shiftStatsRaw = await prisma.poinDisiplin.groupBy({
+    by: ["fk_id_shift"],
+    _count: { id: true },
+    where: {
+      fk_id_operator: { in: targetUserIds },
+    },
+  });
+
+  const masterShift = await prisma.shift.findMany();
+  const shift_stats = shiftStatsRaw.map((stat) => ({
+    label:
+      masterShift.find((s) => s.id === stat.fk_id_shift)?.nama_shift ||
+      "Tanpa Shift",
+    value: stat._count.id,
+  }));
+
+  // 4. Top Violations
+  const topViolationsRaw = await prisma.poinDisiplin.groupBy({
+    by: ["fk_tipe_disiplin"],
+    _count: { id: true },
+    where: { fk_id_operator: { in: targetUserIds } },
+    orderBy: { _count: { id: "desc" } },
+    take: 4,
+  });
+
+  const masterTipe = await prisma.tipeDisiplin.findMany({
+    where: { id: { in: topViolationsRaw.map((v) => v.fk_tipe_disiplin) } },
+  });
+
+  const top_violations = topViolationsRaw.map((v) => ({
+    label:
+      masterTipe.find((t) => t.id === v.fk_tipe_disiplin)?.nama_tipe_disiplin ||
+      "Lainnya",
+    value: v._count.id,
+  }));
+
+  return { summary, shift_stats, top_violations };
+};
+
+const getPoinRankings = async (plant) => {
+  const whereClause = {
+    role: "OPERATOR",
+    ...(plant && { plant: String(plant) }),
+  };
+
+  const [worstUsers, bestUsers] = await Promise.all([
+    prisma.user.findMany({
+      where: whereClause,
+      orderBy: { current_point: "asc" },
+      take: 3,
+      include: {
+        _count: {
+          select: { poin_disiplins_diterima: true },
+        },
+      },
+    }),
+    prisma.user.findMany({
+      where: whereClause,
+      orderBy: { current_point: "desc" },
+      take: 3,
+      include: {
+        _count: {
+          select: { poin_disiplins_diterima: true },
+        },
+      },
+    }),
+  ]);
+
+  const formatUser = (user) => ({
+    nama: user.nama,
+    poin: user.current_point,
+    total_pelanggaran: user._count?.poin_disiplins_diterima ?? 0,
+    uid_nfc: user.uid_nfc, // Tambahan informasi untuk dashboard
+  });
+
+  return {
+    worst: worstUsers.map(formatUser),
+    best: bestUsers.map(formatUser),
+  };
+};
+
+export default {
+  getUserCurrentPoin,
+  createPelanggaran,
+  getPoinDashboardStats,
+  getPoinRankings,
+};
