@@ -16,95 +16,74 @@ import path from "path";
 
 const app = express();
 
-// Logging middleware untuk debugging
+// 1. MATIKAN ETAG (Sangat Penting untuk Flutter Web)
+// Ini mencegah status 304 yang membuat browser salah ambil cache index.html
+app.set("etag", false);
+
+// Logging middleware
 if (config.env !== "test") {
   app.use(morgan.successHandler);
   app.use(morgan.errorHandler);
 }
 
-// set security HTTP headers
+// 2. SETUP CORS (Menggunakan library agar lebih stabil)
+app.use(
+  cors({
+    origin: "*", // Mengizinkan semua origin
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "ngrok-skip-browser-warning",
+    ],
+    credentials: true,
+  }),
+);
+app.options("*", cors()); // Handle pre-flight untuk semua route
+
+// 3. SET SECURITY HEADERS
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false, // Dimatikan agar tidak bentrok dengan Flutter Web
   }),
 );
 
-// Parse JSON request body
+// Parse JSON & URL Encoded
 app.use(express.json());
-
-// parse urlencoded request body
 app.use(express.urlencoded({ extended: true }));
 
-// sanitize request data
+// Sanitize & Compression
 app.use(sanitize);
-
-// gzip compression
 app.use(compression());
 
-// app.use(
-//   cors({
-//     origin: function (origin, callback) {
-//       // allow server-to-server / Postman
-//       if (!origin) return callback(null, true);
-
-//       if (config.clientUrls.includes(origin)) {
-//         return callback(null, true);
-//       }
-
-//       return callback(new Error(`CORS blocked: ${origin} not allowed`));
-//     },
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization"],
-//   }),
-// );
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization",
-  );
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  );
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
-// app.options("*", cors());
-
+// Static Files
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 
-// Route dasar untuk testing
+// Route dasar
 app.get("/", (req, res) => {
-  res.send("hello world");
+  res.send("API Server is Running...");
 });
 
-// jwt authentication
+// Authentication
 app.use(passport.initialize());
 passport.use("jwt", jwtStrategy);
 
-// Setup Swagger
+// Swagger
 setupSwagger(app);
 
-// v1 api routes
+// 4. API ROUTES
+// Pastikan rute ini benar. Jika routes berisi rute master,
+// panggilannya akan menjadi: http://localhost:4001/master/shift
 app.use("/", routes);
 
-// Handle 404
+// --- Error Handling ---
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, "Not found"));
 });
 
-// convert error to ApiError, if needed
 app.use(errorConverter);
-
-// handle error
 app.use(errorHandler);
 
 export default app;

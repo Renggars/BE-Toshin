@@ -12,6 +12,7 @@ const createTarget = {
 const createMesin = {
   body: Joi.object().keys({
     nama_mesin: Joi.string().required(),
+    kategori: Joi.string().required().valid("PRESS", "SECONDARY"),
     ideal_cycle_time: Joi.number().required().min(0),
   }),
 };
@@ -23,6 +24,7 @@ const updateMesin = {
   body: Joi.object()
     .keys({
       nama_mesin: Joi.string(),
+      kategori: Joi.string().valid("PRESS", "SECONDARY"),
       ideal_cycle_time: Joi.number().min(0),
     })
     .min(1),
@@ -95,8 +97,54 @@ const updateMasalahAndon = {
     .min(1),
 };
 
+// --- Tipe Disiplin ---
+const createTipeDisiplin = {
+  body: Joi.object().keys({
+    kode: Joi.string().required(),
+    nama_tipe_disiplin: Joi.string().required(),
+    poin: Joi.number().integer().required(),
+    kategori: Joi.string().required().valid("PELANGGARAN", "PENGHARGAAN"),
+  }),
+};
+
+const updateTarget = {
+  params: Joi.object().keys({
+    id: Joi.number().required(),
+  }),
+  body: Joi.object()
+    .keys({
+      fk_jenis_pekerjaan: Joi.number(),
+      fk_produk: Joi.number(),
+      total_target: Joi.number().min(1),
+      ideal_cycle_time: Joi.number().min(0),
+    })
+    .min(1),
+};
+
+const deleteTarget = {
+  params: Joi.object().keys({
+    id: Joi.number().required(),
+  }),
+};
+
+const updateTipeDisiplin = {
+  params: Joi.object().keys({
+    id: Joi.number().required(),
+  }),
+  body: Joi.object()
+    .keys({
+      kode: Joi.string(),
+      nama_tipe_disiplin: Joi.string(),
+      poin: Joi.number().integer(),
+      kategori: Joi.string().valid("PELANGGARAN", "PENGHARGAAN"),
+    })
+    .min(1),
+};
+
 export default {
   createTarget,
+  updateTarget,
+  deleteTarget,
   createMesin,
   updateMesin,
   createProduk,
@@ -105,4 +153,6 @@ export default {
   updateShift,
   createMasalahAndon,
   updateMasalahAndon,
+  createTipeDisiplin,
+  updateTipeDisiplin,
 };

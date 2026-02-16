@@ -1,23 +1,49 @@
-// src/routes/poin.route.js
 import express from "express";
 import poinController from "../controllers/poin.controller.js";
-import { auth, authAdmin } from "../middlewares/auth.js";
+import { auth } from "../middlewares/auth.js";
+import validate from "../middlewares/validate.js";
+import poinValidation from "../validations/poin.validation.js";
 
 const router = express.Router();
 
-router.get(
-  "/dashboard/stats",
-  authAdmin(),
-  poinController.getPoinDashboardStats,
+const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+
+// Untuk Supervisor (Input Pelanggaran via NFC atau Manual)
+router.post(
+  "/",
+  auth("SUPERVISOR"),
+  validate(poinValidation.createPelanggaran),
+  poinController.postPelanggaran,
 );
-router.get("/dashboard/rankings", authAdmin(), poinController.getPoinRankings);
 
-// Untuk Operator (Cek diri sendiri)
-router.get("/my-poin", auth(), poinController.getMyPoin);
+// Get form data for dropdown (operators, discipline types, shifts)
+router.get("/form-data", auth("SUPERVISOR"), poinController.getFormData);
 
-// Untuk Supervisor (Input Pelanggaran)
-router.post("/pelanggaran", authAdmin(), poinController.postPelanggaran);
+router.get("/dashboard/stats", allRoles, poinController.getPoinDashboardStats);
+router.get("/dashboard/weekly-stats", allRoles, poinController.getWeeklyStats);
+router.get(
+  "/dashboard/monthly-stats",
+  allRoles,
+  poinController.getMonthlyStats,
+);
+router.get("/dashboard/rankings", allRoles, poinController.getPoinRankings);
 
-router.get("/user/:userId", authAdmin(), poinController.getPoinByUserId);
+// History endpoint
+router.get(
+  "/history",
+  auth("SUPERVISOR"),
+  validate(poinValidation.getHistory),
+  poinController.getPoinHistory,
+);
+
+// Untuk Operator
+router.get("/my-poin", allRoles, poinController.getMyPoin);
+
+router.get("/user/:userId", auth("SUPERVISOR"), poinController.getPoinByUserId);
+router.get(
+  "/user/by-nfc/:uid_nfc",
+  auth("SUPERVISOR"),
+  poinController.getUserByNfc,
+);
 
 export default router;

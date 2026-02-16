@@ -48,10 +48,11 @@ components:
           nullable: true
         role:
           type: string
-          enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
+          enum: [PRODUKSI, SUPERVISOR, ENGINEERING, MAINTENANCE]
         plant:
           type: string
-          nullable: true
+        line:
+          type: string
         current_point:
           type: integer
         status:
@@ -65,6 +66,96 @@ components:
               type: integer
             nama_divisi:
               type: string
+
+    TipeDisiplin:
+      type: object
+      properties:
+        id:
+          type: integer
+        kode:
+          type: string
+        nama_tipe_disiplin:
+          type: string
+        poin:
+          type: integer
+        kategori:
+          type: string
+          enum: [PELANGGARAN, PENGHARGAAN]
+
+    Divisi:
+      type: object
+      properties:
+        id:
+          type: integer
+        nama_divisi:
+          type: string
+
+    AndonEventCompact:
+       type: object
+       properties:
+         id: { type: integer }
+         mesin: { type: string }
+         masalah: { type: string }
+         kategori: { type: string }
+         waktu_trigger: { type: string, format: date-time }
+         waktu_resolved: { type: string, format: date-time, nullable: true }
+         durasi: { type: number }
+         status: { type: string, enum: [ACTIVE, IN_REPAIR, RESOLVED] }
+
+    AndonCall:
+      type: object
+      properties:
+        id: { type: integer }
+        fk_id_mesin: { type: integer }
+        fk_id_operator: { type: integer }
+        fk_id_shift: { type: integer, nullable: true }
+        fk_id_target_divisi: { type: integer }
+        target_divisi: { type: string, enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT] }
+        waktu_call: { type: string, format: date-time }
+        status: { type: string, enum: [WAITING, CONVERTED, CANCELLED] }
+        tanggal: { type: string, format: date }
+        plant: { type: string, nullable: true }
+
+    AndonEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        fk_id_mesin: { type: integer }
+        fk_id_operator: { type: integer }
+        fk_id_shift: { type: integer, nullable: true }
+        fk_id_masalah: { type: integer }
+        waktu_trigger: { type: string, format: date-time }
+        waktu_start_perbaikan: { type: string, format: date-time, nullable: true }
+        waktu_resolved: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [ACTIVE, IN_REPAIR, RESOLVED] }
+        catatan: { type: string, nullable: true }
+        durasi_downtime: { type: number, nullable: true }
+        mesin:
+          type: object
+          properties:
+            nama_mesin: { type: string }
+        masalah:
+          type: object
+          properties:
+            nama_masalah: { type: string }
+            kategori: { type: string }
+            waktu_perbaikan_menit: { type: integer }
+        operator:
+          type: object
+          properties:
+            nama: { type: string }
+        shift:
+          type: object
+          properties:
+            nama_shift: { type: string }
+
+    JenisPekerjaan:
+      type: object
+      properties:
+        id:
+          type: integer
+        nama_pekerjaan:
+          type: string
 
 security:
   - bearerAuth: []
@@ -80,19 +171,202 @@ tags:
     description: Production planning endpoints
   - name: Master
     description: Master data endpoints (Mesin, Produk, Shift, Target)
+  - name: Divisi
+    description: Division management endpoints (CRUD operations)
+  - name: Jenis Pekerjaan
+    description: Jenis Pekerjaan management endpoints (CRUD operations)
   - name: Andon
-    description: Real-time Andon system endpoints (Socket.io event 'update-monitor')
+    description: |
+      Real-time Andon system endpoints with WebSocket events.
+      
+      **WebSocket Events Emitted:**
+      - `andon-created` - Saat Andon di-trigger
+      - `andon-resolved` - Saat Andon di-resolve
+      - `andon-summary-updated` - Update dashboard summary
+      - `andon-metric-changed` - Update metrics (avg downtime)
+      
+      **Legacy Events (Backward Compatible):**
+      - `update-monitor` - Generic Andon updates
+      - `andon-dashboard-updated` - Dashboard refresh signal
   - name: OEE
     description: Overall Equipment Effectiveness endpoints (Socket.io event 'oee-updated')
   - name: Produksi
     description: Production logging endpoints
+  - name: LRP
+    description: Laporan Realisasi Produksi (LRP) endpoints
+  - name: Attendance
+    description: Attendance management endpoints
+  - name: LRP Dashboard
+    description: Reporting endpoints for LRP (Supervisor/Admin)
 
 paths:
+  /auth/register:
+    post:
+      summary: Register New User
+      description: |
+        Register a new user account with email and password.
+        - Email and password are required
+        - uid_nfc is not required during registration (will be added separately)
+        - Returns user data without password
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama, email, password, fk_id_divisi, role, plant, line]
+              properties:
+                nama:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  format: email
+                  example: "john.doe@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "Password123!"
+                  description: "Minimum 8 characters, must contain at least one letter and one number"
+                fk_id_divisi:
+                  type: integer
+                  example: 1
+                role:
+                  type: string
+                  enum: [PRODUKSI, QUALITY, MAINTENANCE, DIE_MAINT, ENGINEERING, MARKETING, COMMERCIAL, PPIC, HCPGA, WRH_CIBITUNG, GA, WAREHOUSE, PURCHASING, HC, ACCOUNTING, FINANCE, SUPERVISOR, ADMIN]
+                  example: "PRODUKSI"
+                foto_profile:
+                  type: string
+                  format: uri
+                  nullable: true
+                  example: "https://example.com/profile.jpg"
+                plant:
+                  type: string
+                  enum: ["1", "2", "3"]
+                  example: "1"
+                line:
+                  type: string
+                  example: "Line A"
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Registrasi berhasil"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - Email already registered or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      summary: User Login
+      description: |
+        Login with either NFC card or email/password combination.
+        - NFC Login: Provide uid_nfc only
+        - Email Login: Provide email and password
+        - Returns user data, JWT tokens, and dashboard data (for PRODUKSI role)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [uid_nfc]
+                  properties:
+                    uid_nfc:
+                      type: string
+                      example: "ABC123DEF456"
+                - type: object
+                  required: [email, password]
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      example: "john.doe@example.com"
+                    password:
+                      type: string
+                      format: password
+                      example: "Password123!"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Login success"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      tokens:
+                        type: object
+                        properties:
+                          access:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                              expires:
+                                type: string
+                                format: date-time
+                          refresh:
+                            type: object
+                            properties:
+                              token:
+                                type: string
+                              expires:
+                                type: string
+                                format: date-time
+                      dashboard:
+                        type: object
+                        nullable: true
+                        description: "Dashboard data for PRODUKSI role only"
+        '401':
+          description: Unauthorized - Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Account suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /andon/trigger:
     post:
-      summary: Trigger Andon Event
-      description: Trigger event andon baru (dari ESP32 atau Operator)
+      summary: Trigger Andon (Smart RPH-Based - PLAN_DOWNTIME only)
+      description: |
+        Trigger Andon event directly. 
+        **IMPORTANT:** This endpoint only allows `PLAN_DOWNTIME` category.
+        For other categories (BREAKDOWN, etc.), use `POST /andon/call`.
       tags: [Andon]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -101,67 +375,585 @@ paths:
               type: object
               required: [fk_id_mesin, fk_id_masalah]
               properties:
-                fk_id_mesin:
-                  type: integer
-                fk_id_masalah:
-                  type: integer
-                fk_id_operator:
-                  type: integer
-                  nullable: true
+                fk_id_mesin: { type: integer, example: 1 }
+                fk_id_masalah: { type: integer, example: 1 }
+                fk_id_operator: { type: integer, nullable: true }
       responses:
         '201':
           description: Andon triggered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Success trigger andon" }
+                  data: { $ref: '#/components/schemas/AndonEvent' }
+        '400':
+          description: Bad Request - Category must be PLAN_DOWNTIME or missing call flow
 
-  /andon/resolve/{eventId}:
+  /andon/call:
+    post:
+      summary: Call Maintenance/Andon (New Flow)
+      description: |
+        Production operator calls for help. This creates an `AndonCall` record with status `WAITING`.
+        No `AndonEvent` is created at this stage.
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fk_id_mesin, target_divisi]
+              properties:
+                fk_id_mesin: { type: integer, example: 1 }
+                target_divisi:
+                  type: string
+                  enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT]
+                  example: MAINTENANCE
+      responses:
+        '201':
+          description: Call created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Success call andon" }
+                  data: { $ref: '#/components/schemas/AndonCall' }
+
+  /andon/{id}/start-repair:
     patch:
-      summary: Resolve Andon Event
-      description: Resolve event andon dan hitung downtime
+      summary: Start Andon Repair / Convert Call to Event
+      description: |
+        Maintenance arrives and starts repair.
+        - If `id` is an **AndonCall ID**: Converts the call into an `AndonEvent` (status: ACTIVE) and updates call status to `CONVERTED`.
+        - If `id` is an **AndonEvent ID**: Used for `PLAN_DOWNTIME` flow to change status from ACTIVE to IN_REPAIR.
       tags: [Andon]
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: eventId
+          name: id
           required: true
-          schema:
-            type: integer
+          schema: { type: integer }
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                catatan:
-                  type: string
+                fk_id_masalah: { type: integer, description: "Optionally update the problem type" }
       responses:
         '200':
-          description: Andon resolved successfully
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Success start repair andon" }
+                  data: { $ref: '#/components/schemas/AndonEvent' }
+
+  /andon/{id}/resolve:
+    patch:
+      summary: Resolve Andon
+      description: |
+        Complete the Andon repair.
+        - Plan Downtime: Can resolve directly from ACTIVE.
+        - Others: Must be IN_REPAIR before resolving.
+        - Calculates total downtime and maintenance wait time.
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Success resolve andon" }
+                  data:
+                    type: object
+                    properties:
+                      andon_event: { $ref: '#/components/schemas/AndonEvent' }
+                      durasi_downtime: { type: number }
+                      affected_shift: { type: array, items: { type: object } }
 
   /andon/active:
     get:
       summary: Get Active Andon Events
+      description: |
+        Mengambil daftar semua Andon yang statusnya sedang **ACTIVE**.
+        Digunakan untuk monitoring real-time dan sinkronisasi awal saat dashboard dibuka.
       tags: [Andon]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Success get active andon
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 13
+                        fk_id_mesin:
+                          type: integer
+                          example: 1
+                        status:
+                          type: string
+                          example: ACTIVE
+                        waktu_trigger:
+                          type: string
+                          format: date-time
+                        mesin:
+                          type: object
+                          properties:
+                            nama_mesin:
+                              type: string
+                              example: CNC-01
+                        masalah:
+                          type: object
+                          properties:
+                            nama_masalah:
+                              type: string
+                              example: Motor Rusak
+                            kategori:
+                              type: string
+                              example: BREAKDOWN
+                            waktu_perbaikan_menit:
+                              type: integer
+                              example: 30
+                        operator:
+                          type: object
+                          properties:
+                            nama:
+                              type: string
+                              example: Operator 1
+                        shift:
+                          type: object
+                          properties:
+                            nama_shift:
+                              type: string
+                              example: Shift 1
 
-  /andon/history:
+  /andon/shift:
     get:
-      summary: Get Andon History
+      summary: Get Active Andon Events (Compact)
+      description: |
+        Alias untuk /andon/active, mengembalikan daftar semua Andon yang statusnya sedang **ACTIVE**.
       tags: [Andon]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Success get active andon
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        status: { type: string, example: ACTIVE }
+                        waktu_trigger: { type: string, format: date-time }
+                        mesin:
+                          type: object
+                          properties:
+                            nama_mesin: { type: string }
+
+  /andon/dashboard:
+    get:
+      summary: Get Unified Andon Dashboard Data
+      description: |
+        Endpoint tunggal untuk semua kebutuhan dashboard Andon.
+        Mengembalikan summary, status per plant, active events, dan history dalam satu request.
+        
+        **Features:**
+        - Summary statistics (total active, resolved today, avg downtime, machines affected)
+        - Active events per plant
+        - Real-time active events dengan elapsed time
+        - Paginated history dengan filter dinamis (date/shift/plant/mesin/status)
+        
+        **Default Values:**
+        - plantId: "3" (Plant 3)
+        - date: "Today's date" (WIB)
+        - page: 1
+        - limit: 20
+        
+        **Dynamic Filters:**
+        - Menggunakan kolom `tanggal` (exact date) untuk filtering yang lebih cepat.
+        - History table menampilkan ACTIVE dan RESOLVED berdasarkan filter "status"
+        - Gunakan "status=Semua Status" atau kosongkan untuk menampilkan semua status
+        - Gunakan "mesinId=Semua Mesin" atau kosongkan untuk menampilkan semua mesin
+        
+        **Optimization:** Gunakan parameter `onlyHistory=true` untuk pagination history tanpa re-fetch summary/active data.
+        
+        **Timezone:** Semua operasi waktu menggunakan WIB (Asia/Jakarta)
+      tags: [Andon]
+      security:
+        - bearerAuth: []
       parameters:
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+          description: Filter by operational date (YYYY-MM-DD). Default today WIB.
+        - in: query
+          name: shiftId
+          schema: { type: integer }
+          description: Filter by shift ID
+        - in: query
+          name: plantId
+          schema: { type: string, default: "3" }
+          example: "3"
+          description: Filter by plant ID/name. Default "3". Menggunakan field denormalized `plant`.
         - in: query
           name: mesinId
           schema: { type: integer }
+          description: Filter by machine ID. Use "Semua Mesin" or omit for all machines
         - in: query
-          name: startDate
-          schema: { type: string, format: date }
+          name: status
+          schema: { type: string, enum: [ACTIVE, RESOLVED, "Semua Status"] }
+          description: Filter history by status. Use "Semua Status" or omit for all statuses
         - in: query
-          name: endDate
-          schema: { type: string, format: date }
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number for history pagination
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+          description: Items per page (max 100)
+        - in: query
+          name: onlyHistory
+          schema: { type: boolean }
+          description: "Optimization: Set true to only fetch history (summary/plants/activeEvents will be null)"
+        - in: query
+          name: kategori
+          schema: { type: string, default: "Semua Kategori" }
+          description: "Filter by problem category (MAINTENANCE, QUALITY_CONTROL, DIE_MAINTENANCE, PRODUCTION, PLAN_DOWNTIME). Default Semua Kategori."
       responses:
         '200':
           description: Success
+          content:
+            application/json:
+              example:
+                summary:
+                  totalActive: 1
+                  resolvedToday: 12
+                  avgDowntime: 18
+                  totalMesinBermasalah: 1
+                plants:
+                  - id: 1
+                    name: "Plant 1"
+                    activeCount: 1
+                  - id: 2
+                    name: "Plant 2"
+                    activeCount: 0
+                  - id: 3
+                    name: "Plant 3"
+                    activeCount: 0
+                activeEvents:
+                  - id: 550
+                    status: "ACTIVE"
+                    waktu_trigger: "2026-02-04T10:30:00.000Z"
+                    elapsed_minutes: 5.5
+                    live_sla_status: "ON_TIME"
+                    estimasi_menit: 30
+                    mesin:
+                      id: 1
+                      nama_mesin: "CNC-01"
+                    masalah:
+                      nama_masalah: "Motor Rusak"
+                      kategori: "BREAKDOWN"
+                    operator:
+                      nama: "Budi"
+                    shift:
+                      nama_shift: "Shift 1"
+                history:
+                  data:
+                    - id: 549
+                      tanggal: "2026-02-04T09:00:00.000Z"
+                      mesin: "CNC-02"
+                      plant: "Plant 1"
+                      shift: "Shift 1"
+                      masalah: "Sensor Error"
+                      kategori: "ELECTRICAL"
+                      operator: "Andi"
+                      resolver: "Supervisor"
+                      downtime: 15.25
+                      status: "RESOLVED"
+                      respon_status: "ON_TIME"
+                      estimasi_menit: 20
+                      waktu_resolved: "2026-02-04T09:15:00.000Z"
+                  meta:
+                    totalItems: 1
+                    totalPages: 1
+                    currentPage: 1
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                    nullable: true
+                    description: "Null if onlyHistory=true"
+                    properties:
+                      totalActive: { type: integer, description: "Jumlah event ACTIVE saat ini" }
+                      resolvedToday: { type: integer, description: "Jumlah event resolved pada tanggal terpilih" }
+                      avgDowntime: { type: number, description: "Rata-rata downtime dalam menit" }
+                      totalMesinBermasalah: { type: integer, description: "Jumlah unique mesin dengan status ACTIVE" }
+                  plants:
+                    type: array
+                    nullable: true
+                    description: "Status active events per plant. Null if onlyHistory=true"
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        activeCount: { type: integer }
+                  activeEvents:
+                    type: array
+                    nullable: true
+                    description: "List event yang sedang ACTIVE. Null if onlyHistory=true"
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        status: { type: string }
+                        waktu_trigger: { type: string, format: date-time }
+                        elapsed_minutes: { type: number, description: "Durasi sejak trigger (menit)" }
+                        live_sla_status: { type: string, enum: [ON_TIME, OVER_TIME], description: "Status SLA real-time" }
+                        estimasi_menit: { type: integer, description: "Estimasi waktu perbaikan (menit)" }
+                        mesin:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_mesin: { type: string }
+                        masalah:
+                          type: object
+                          properties:
+                            nama_masalah: { type: string }
+                            kategori: { type: string }
+                        operator:
+                          type: object
+                          properties:
+                            nama: { type: string }
+                        shift:
+                          type: object
+                          properties:
+                            nama_shift: { type: string }
+                  history:
+                    type: object
+                    description: "History events (RESOLVED & ACTIVE based on status filter)"
+                    properties:
+                      data:
+                        type: array
+                        description: "Flattened history events for UI table"
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            tanggal: { type: string, format: date-time }
+                            mesin: { type: string }
+                            plant: { type: string }
+                            shift: { type: string }
+                            masalah: { type: string }
+                            kategori: { type: string }
+                            operator: { type: string }
+                            resolver: { type: string }
+                            downtime: { type: number, description: "Durasi dalam menit" }
+                            status: { type: string }
+                            respon_status: { type: string, enum: [ON_TIME, OVER_TIME], description: "Status ketepatan waktu perbaikan" }
+                            estimasi_menit: { type: integer, description: "Estimasi waktu perbaikan (menit)" }
+                            waktu_resolved: { type: string, format: date-time, nullable: true }
+                      meta:
+                        type: object
+                        properties:
+                          totalItems: { type: integer }
+                          totalPages: { type: integer }
+                          currentPage: { type: integer }
+
+  /andon/filters:
+    get:
+      summary: Get Master Data for Andon Filters
+      description: |
+        Mengambil data master (Shift & Kategori Andon) untuk mengisi dropdown filter di dashboard.
+        Endpoint ini dioptimalkan karena data ini jarang berubah.
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  message: { type: string, example: "Success get andon filters" }
+                  data:
+                    type: object
+                    properties:
+                      shifts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_shift: { type: string }
+                      categories:
+                        type: array
+                        items:
+                          type: string
+                        example: ["MAINTENANCE", "QUALITY_CONTROL", "DIE_MAINTENANCE", "PRODUCTION", "PLAN_DOWNTIME"]
+                      machines:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_mesin: { type: string }
+
+  /andon/trigger-master:
+    get:
+      summary: Get Master Data for Andon Trigger
+      description: |
+        Mengambil data master kategori dan masalah untuk dropdown form trigger Andon.
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  message: { type: string, example: "Success get trigger master data" }
+                  data:
+                    type: object
+                    properties:
+                      categories:
+                        type: array
+                        items: { type: string }
+                        example: ["MAINTENANCE", "QUALITY_CONTROL", "DIE_MAINTENANCE", "PRODUCTION", "PLAN_DOWNTIME"]
+                      problems:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_masalah: { type: string }
+                            kategori: { type: string }
+                            waktu_perbaikan_menit: { type: integer }
+
+  /andon/history:
+    get:
+      summary: Get Personal History Andon (Today)
+      description: |
+        Mengambil history downtime operator untuk **HARI INI SAJA**.
+        
+        **Authentication Required:** Endpoint ini menggunakan ID user dari token JWT yang terautentikasi.
+        
+        **New Logic (Static Shift Duration):**
+        - **Normal / Group**: Total Shift = 420 menit (7 jam)
+        - **Long Shift**: Total Shift = 600 menit (10 jam)
+        
+        **Limits:**
+        - **Plan Downtime**: Max 10% dari durasi shift
+        - **Breakdown**: Max 15% dari durasi shift
+        
+        Response memisahkan `plan_downtime` dan `breakdown_downtime` beserta statusnya (AMAN / OVER_LIMIT).
+      tags: [Andon]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  message: { type: string, example: "Success get personal history" }
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        properties:
+                          date: { type: string, example: "2026-02-12" }
+                          effective_shift_minutes: { type: number, example: 450 }
+                          total_downtime: { type: number, example: 80 }
+                          total_percentage: { type: number, example: 17.7 }
+                          plan_downtime:
+                            type: object
+                            properties:
+                              total: { type: number, example: 50 }
+                              limit: { type: number, example: 45 }
+                              percentage_of_shift: { type: number, example: 11.1 }
+                              percentage_of_limit: { type: number, example: 111 }
+                          breakdown_downtime:
+                            type: object
+                            properties:
+                              total: { type: number, example: 30 }
+                              limit: { type: number, example: 67.5 }
+                              percentage_of_shift: { type: number, example: 6.6 }
+                              percentage_of_limit: { type: number, example: 44 }
+                      history:
+                        type: object
+                        properties:
+                          plan_downtime:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AndonEventCompact'
+                          breakdown:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AndonEventCompact'
+
+
 
   /produksi/log:
     post:
@@ -192,7 +984,7 @@ paths:
           description: Log created successfully
 
     get:
-      summary: Get Production Logs
+      summary: Get Production Logs (Supervisor)
       tags: [Produksi]
       security:
         - bearerAuth: []
@@ -210,10 +1002,175 @@ paths:
         '200':
           description: Success
 
-  /oee/mesin/{id}:
+  /oee/summary:
     get:
-      summary: Get OEE Statistics
-      description: Get OEE score (Availability, Performance, Quality)
+      summary: Get OEE KPI Summary
+      description: |
+        Mengambil ringkasan KPI OEE (Availability, Performance, Quality, OEE Score).
+        Data di-aggregate berdasarkan tanggal dan plant. Jika terdapat banyak mesin/shift, OEE dihitung menggunakan **Weighted Average** berdasarkan `loading_time`.
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          example: "2026-02-04"
+          description: Tanggal operasional (YYYY-MM-DD). Default today.
+        - in: query
+          name: plant
+          schema: { type: string, default: "3" }
+          example: "3"
+          description: Filter berdasarkan nomor plant (1, 2, 3)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      availability: { type: number, example: 88.1 }
+                      performance: { type: number, example: 74.3 }
+                      quality: { type: number, example: 99.9 }
+                      oee: { type: number, example: 65.3 }
+                      ideal_cycle_time: { type: number, example: 12.5, description: "Ideal cycle time cached in OEE record" }
+                      status: { type: string, enum: [EXCELLENT, GOOD, NEEDS_ATTENTION, CRITICAL, NO_DATA], example: "NEEDS_ATTENTION" }
+
+  /oee/trend:
+    get:
+      summary: Get OEE Trend (Line Chart)
+      description: Mengambil data trend OEE untuk 10 hari terakhir dari tanggal yang dipilih, dikelompokkan per shift.
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Tanggal operasional (YYYY-MM-DD). Default today.
+        - in: query
+          name: shift_ids
+          schema:
+            type: array
+            items: { type: integer }
+          description: Filter shift IDs (optional)
+        - in: query
+          name: plant
+          schema: { type: string, default: "3" }
+          example: "3"
+          description: Filter berdasarkan nomor plant (1, 2, 3)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      labels: { type: array, items: { type: string }, example: ["26", "27", "28", "29", "30", "31", "01", "02", "03", "04"] }
+                      shift_1: { type: array, items: { type: number }, example: [0, 0, 0, 0, 0, 0, 0, 0, 0, 65.3] }
+                      shift_2: { type: array, items: { type: number }, example: [0, 0, 0, 0, 0, 0, 0, 0, 0, 89.0] }
+                      shift_3: { type: array, items: { type: number }, example: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+
+  /oee/history:
+    get:
+      summary: Get Downtime History (Bar Chart)
+      description: Mengambil akumulasi durasi downtime per jenis masalah untuk Bar Chart.
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Tanggal operasional (YYYY-MM-DD). Default today.
+        - in: query
+          name: plant
+          schema: { type: string, default: "3" }
+          example: "3"
+          description: Filter berdasarkan nomor plant (1, 2, 3)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: { type: string, example: "Bahan Telat" }
+                        hours: { type: number, example: 3.0 }
+
+  /oee/machine-detail:
+    get:
+      summary: Get Machine OEE Detail Table
+      description: Mengambil data detail produksi dan OEE per mesin, dipecah per shift untuk tabel dashboard.
+      tags: [OEE]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Tanggal operasional (YYYY-MM-DD). Default today.
+        - in: query
+          name: plant
+          schema: { type: string, default: "3" }
+          example: "3"
+          description: Filter berdasarkan nomor plant (1, 2, 3)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        mesin: { type: string, example: "MC-01" }
+                        shift:
+                          type: object
+                          properties:
+                            shift_1:
+                              type: object
+                              properties:
+                                ok: { type: integer }
+                                ng: { type: integer }
+                                downtime: { type: number, description: "Menit" }
+                                target: { type: integer }
+                            shift_2: { type: object }
+                            shift_3: { type: object }
+                        summary:
+                          type: object
+                          properties:
+                            availability: { type: number }
+                            performance: { type: number }
+                            quality: { type: number }
+                            oee: { type: number }
+
+  /oee/shift-mesin/{id}:
+    get:
+      summary: Get OEE Statistics by Machine ID
+      description: Mengambil data OEE (Availability, Performance, Quality) untuk mesin tertentu.
       tags: [OEE]
       security:
         - bearerAuth: []
@@ -223,188 +1180,48 @@ paths:
           required: true
           schema:
             type: integer
-        - in: query
-          name: tanggal
-          schema:
-            type: string
-            format: date
+          description: ID Mesin
       responses:
         '200':
           description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    availability: { type: number }
+                    performance: { type: number }
+                    quality: { type: number }
+                    oee_score: { type: number }
+                    tanggal: { type: string, format: date }
+                    fk_id_shift: { type: integer }
 
-  /oee/dashboard:
+  /oee/mesin/{id}:
     get:
-      summary: Get OEE Dashboard Summary
+      summary: Get Legacy OEE Statistics
+      description: Get OEE score (Availability, Performance, Quality) for a specific machine record ID.
       tags: [OEE]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
       responses:
         '200':
           description: Success
-  /auth/register:
-    post:
-      summary: Register new user
-      description: Register user baru dengan uid_nfc, email, dan password (semua wajib)
-      tags:
-        - Auth
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - nama
-                - email
-                - password
-                - uid_nfc
-                - fk_id_divisi
-                - role
-              properties:
-                nama:
-                  type: string
-                  example: John Doe
-                email:
-                  type: string
-                  format: email
-                  example: john@example.com
-                password:
-                  type: string
-                  format: password
-                  minLength: 8
-                  example: password123
-                uid_nfc:
-                  type: string
-                  example: ABC123456
-                fk_id_divisi:
-                  type: integer
-                  example: 1
-                role:
-                  type: string
-                  enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
-                  example: OPERATOR
-                foto_profile:
-                  type: string
-                  format: uri
-                  nullable: true
-                plant:
-                  type: string
-                  nullable: true
-                  example: Plant A
-      responses:
-        '201':
-          description: Registrasi berhasil
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Registrasi berhasil
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
-        '400':
-          description: Bad request (email/uid_nfc sudah terdaftar)
-
-  /auth/login:
-    post:
-      summary: Login user
-      description: Login menggunakan NFC card ATAU email+password
-      tags:
-        - Auth
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  required:
-                    - uid_nfc
-                  properties:
-                    uid_nfc:
-                      type: string
-                      example: ABC123456
-                - type: object
-                  required:
-                    - email
-                    - password
-                  properties:
-                    email:
-                      type: string
-                      format: email
-                      example: john@example.com
-                    password:
-                      type: string
-                      format: password
-                      example: password123
-      responses:
-        '200':
-          description: Login success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Login success
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
-                      tokens:
-                        type: object
-                        properties:
-                          access:
-                            type: object
-                            properties:
-                              token:
-                                type: string
-                              expires:
-                                type: string
-                                format: date-time
-                          refresh:
-                            type: object
-                            properties:
-                              token:
-                                type: string
-                              expires:
-                                type: string
-                                format: date-time
-                      dashboard:
-                        type: object
-                        nullable: true
-                        description: Data dashboard untuk OPERATOR
-        '401':
-          description: Unauthorized (credentials salah)
-        '403':
-          description: Forbidden (akun suspended)
 
   /user:
     get:
       summary: Get all users
-      description: Mendapatkan daftar semua user dengan pagination
+      description: Mendapatkan daftar semua user tanpa pagination
       tags:
         - User
-      parameters:
-        - in: query
-          name: page
-          schema:
-            type: integer
-            default: 1
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 10
       responses:
         '200':
           description: Success get users
@@ -413,24 +1230,25 @@ paths:
               schema:
                 type: object
                 properties:
+                  status:
+                    type: boolean
                   message:
                     type: string
                   data:
-                    type: object
-                    properties:
-                      users:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/User'
-                      pagination:
-                        type: object
-                        properties:
-                          totalItems:
-                            type: integer
-                          totalPages:
-                            type: integer
-                          currentPage:
-                            type: integer
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        nama: { type: string }
+                        role: { type: string }
+                        foto_profile: { type: string, nullable: true }
+                        current_point: { type: integer }
+                        divisi:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_divisi: { type: string }
 
   /user/searchByEmail:
     get:
@@ -450,7 +1268,8 @@ paths:
 
   /user/{userId}:
     get:
-      summary: Get user by ID
+      summary: Get User Profile (Full Data)
+      description: Mendapatkan data profil lengkap user berdasarkan ID database (integer). Digunakan untuk manajemen user.
       tags:
         - User
       parameters:
@@ -533,6 +1352,8 @@ paths:
       description: Operator cek poin disiplin sendiri
       tags:
         - Poin
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
@@ -549,8 +1370,8 @@ paths:
 
   /poin/user/{userId}:
     get:
-      summary: Get user discipline points by ID
-      description: Admin/Supervisor cek poin user tertentu
+      summary: Get User Discipline Poin ONLY
+      description: Hanya mengembalikan total poin disiplin user berdasarkan ID database. Digunakan untuk widget poin.
       tags:
         - Poin
       parameters:
@@ -572,31 +1393,38 @@ paths:
                   total_poin:
                     type: integer
 
-  /poin/pelanggaran:
-    post:
-      summary: Create violation record
-      description: Input pelanggaran untuk mengurangi poin operator
+  /poin/history:
+    get:
+      summary: Get discipline points history
+      description: History pelanggaran/poin user (Supervisor)
       tags:
         - Poin
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - fk_id_operator
-                - fk_tipe_disiplin
-              properties:
-                fk_id_operator:
-                  type: integer
-                  example: 5
-                fk_tipe_disiplin:
-                  type: integer
-                  example: 1
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: plant
+          schema:
+            type: string
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+          description: Filter tanggal (YYYY-MM-DD). Mencakup 00:00 - 23:59 WIB.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
       responses:
-        '201':
-          description: Pelanggaran berhasil dicatat
+        '200':
+          description: Success
 
   /poin/dashboard/stats:
     get:
@@ -609,6 +1437,12 @@ paths:
           name: plant
           schema:
             type: string
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+          description: Filter tanggal (YYYY-MM-DD). Mencakup 00:00 - 23:59 WIB.
       responses:
         '200':
           description: Success
@@ -621,6 +1455,29 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    properties:
+                      summary:
+                        type: object
+                        properties:
+                          total_operator: { type: integer, example: 160 }
+                          aman: { type: integer, example: 160 }
+                          peringatan: { type: integer, example: 0 }
+                          kritis: { type: integer, example: 0 }
+                      shift_stats:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Shift 1" }
+                            tipe_shift: { type: string, example: "Shift Pagi" }
+                            value: { type: integer, example: 3 }
+                      top_violations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Meja Kerja Tidak Rapi" }
+                            value: { type: integer, example: 1 }
 
   /poin/dashboard/rankings:
     get:
@@ -648,12 +1505,304 @@ paths:
                     items:
                       type: object
 
+  /poin/dashboard/weekly-stats:
+    get:
+      summary: Get weekly discipline points stats (7 Days)
+      description: Statistik poin disiplin 7 hari terakhir (Sen-Min) untuk bar chart. Mengikuti waktu lokal server (WIB).
+      tags:
+        - Poin
+      parameters:
+        - in: query
+          name: plant
+          schema:
+            type: string
+          description: Nama plant (optional)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  labels:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]
+                  series:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        data:
+                          type: array
+                          items:
+                            type: integer
+                    example:
+                      - name: "Pelanggaran"
+                        data: [10, 8, 15, 6, 9, 4, 7]
+                      - name: "Penghargaan"
+                        data: [2, 3, 1, 4, 5, 1, 2]
+
+  /poin/dashboard/monthly-stats:
+    get:
+      summary: Get monthly discipline points stats (Calendar Year)
+      description: Statistik poin disiplin Januari - Desember untuk line chart tahun berjalan. Mengikuti waktu lokal server (WIB).
+      tags:
+        - Poin
+      parameters:
+        - in: query
+          name: plant
+          schema:
+            type: string
+          description: Nama plant (optional)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  labels:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+                  series:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        data:
+                          type: array
+                          items:
+                            type: integer
+                    example:
+                      - name: "Pelanggaran"
+                        data: [10, 8, 15, 6, 9, 4, 7, 5, 12, 10, 8, 14]
+                      - name: "Penghargaan"
+                        data: [2, 3, 1, 4, 5, 1, 2, 3, 5, 4, 2, 6]
+
+
+  /poin/user/by-nfc/{uid_nfc}:
+    get:
+      summary: Get user data by NFC UID
+      description: Mencari data operator berdasarkan UID NFC untuk preview sebelum input pelanggaran.
+      tags:
+        - Poin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: uid_nfc
+          required: true
+          schema:
+            type: string
+          description: UID dari kartu NFC
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User tidak ditemukan
+
+  /poin/:
+    post:
+      summary: Input Pelanggaran/Penghargaan (Hybrid NFC/Manual)
+      description: |
+        Mencatat pelanggaran atau penghargaan dengan **dua cara input**:
+        1. **Via NFC**: Kirim `uid_nfc` untuk lookup operator otomatis
+        2. **Via Manual**: Kirim `fk_id_operator` langsung (dari dropdown/form)
+        
+        **Validasi:**
+        - Minimal salah satu dari `uid_nfc` atau `fk_id_operator` harus ada
+        - Jika `uid_nfc` dikirim, sistem akan:
+          - Mencari operator berdasarkan UID NFC
+          - Validasi role harus `PRODUKSI`
+          - Validasi status harus `active`
+          - Cek apakah sedang suspend
+        
+        **Database:**
+        - Yang tersimpan di database adalah `fk_id_operator` (ID user)
+        - `uid_nfc` hanya digunakan untuk lookup
+        
+        **Side Effects:**
+        - Update `current_point` di tabel `user`
+        - Kirim email alert jika poin < 50 (SP1/SP2/SP3)
+        - Hitung `status_level` otomatis (AMAN/TEGURAN/SP1/SP2/SP3)
+      tags:
+        - Poin
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fk_tipe_disiplin, fk_id_shift]
+              properties:
+                uid_nfc:
+                  type: string
+                  description: UID NFC operator (untuk input via NFC reader)
+                  example: "ABC123456"
+                fk_id_operator:
+                  type: integer
+                  description: ID operator (untuk input manual via dropdown)
+                  example: 13
+                fk_tipe_disiplin:
+                  type: integer
+                  description: ID tipe pelanggaran/penghargaan
+                  example: 1
+                fk_id_shift:
+                  type: integer
+                  description: ID shift saat kejadian
+                  example: 2
+                keterangan:
+                  type: string
+                  nullable: true
+                  description: Catatan tambahan (optional)
+                  example: "Terlambat 15 menit"
+            examples:
+              viaNFC:
+                summary: Input via NFC (Hardware/IoT)
+                value:
+                  uid_nfc: "ABC123456"
+                  fk_tipe_disiplin: 1
+                  fk_id_shift: 2
+                  keterangan: "Tidak memakai helm"
+              viaManual:
+                summary: Input Manual (Web/Mobile)
+                value:
+                  fk_id_operator: 13
+                  fk_tipe_disiplin: 1
+                  fk_id_shift: 2
+                  keterangan: "Terlambat 15 menit"
+      responses:
+        '201':
+          description: Berhasil dicatat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Pelanggaran berhasil dicatat"
+                  operator:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 13
+                      nama:
+                        type: string
+                        example: "Budi Santoso"
+                      current_point:
+                        type: integer
+                        example: 85
+                        description: Poin terbaru setelah dikurangi/ditambah
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      fk_id_operator:
+                        type: integer
+                        example: 13
+                      fk_tipe_disiplin:
+                        type: integer
+                        example: 1
+                      fk_id_shift:
+                        type: integer
+                        example: 2
+                      poin_berubah:
+                        type: integer
+                        example: -15
+                        description: Negatif untuk pelanggaran, positif untuk penghargaan
+                      status_level:
+                        type: string
+                        enum: [AMAN, TEGURAN, SP1, SP2, SP3]
+                        example: "AMAN"
+                      tanggal:
+                        type: string
+                        format: date-time
+                      keterangan:
+                        type: string
+                        example: "Terlambat 15 menit"
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    example: 400
+              examples:
+                missingBoth:
+                  summary: Tidak ada uid_nfc atau fk_id_operator
+                  value:
+                    message: "Harus menyertakan uid_nfc atau fk_id_operator"
+                    code: 400
+                notProduksi:
+                  summary: Target bukan operator produksi
+                  value:
+                    message: "Target bukan operator produksi"
+                    code: 400
+                suspended:
+                  summary: Operator sedang suspend
+                  value:
+                    message: "Operator sedang dalam masa suspend"
+                    code: 400
+        '404':
+          description: Operator tidak ditemukan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Operator tidak ditemukan"
+                  code:
+                    type: integer
+                    example: 404
+
+
   /rencana-produksi:
     post:
-      summary: Create production plan
+      summary: Create production plan (Supervisor)
       description: Buat rencana produksi harian (RPH)
       tags:
         - Rencana Produksi
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -678,6 +1827,9 @@ paths:
                   type: integer
                 fk_id_target:
                   type: integer
+                fk_id_jenis_pekerjaan:
+                  type: integer
+                  description: (Optional) Auto-derived from target if not provided
                 tanggal:
                   type: string
                   format: date
@@ -690,44 +1842,230 @@ paths:
 
   /rencana-produksi/dashboard/summary:
     get:
-      summary: Get production dashboard summary
+      summary: Get Production Dashboard Summary
+      description: |
+        Mengambil ringkasan dashboard produksi harian dengan data aktual dari LRP (Laporan Realisasi Produksi).
+        
+        **Features:**
+        - Summary produksi harian (target, tercapai, persentase)
+        - Statistik operator (total, aktif)
+        - Progress per shift dengan data aktual
+        - Trend produksi mingguan (7 hari ke belakang)
+        
+        **Data Source:**
+        - Target: Dari `rencana_produksi.target`
+        - Tercapai: Dari `laporan_realisasi_produksi.qty_total_prod` (data aktual)
+        
+        **Default Behavior:**
+        - Tanggal filter default: Hari ini
+        - Trend mingguan: 7 hari dari tanggal filter ke belakang
       tags:
         - Rencana Produksi
-      responses:
-        '200':
-          description: Success
-
-  /rencana-produksi/dashboard/weekly-trend:
-    get:
-      summary: Get weekly production trend
-      tags:
-        - Rencana Produksi
-      responses:
-        '200':
-          description: Success
-
-  /rencana-produksi/list:
-    get:
-      summary: Get production plan history
-      description: Daftar history rencana produksi harian
-      tags:
-        - Rencana Produksi
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: tanggal
           schema:
             type: string
             format: date
+          description: Filter tanggal (YYYY-MM-DD). Default adalah hari ini.
+          example: "2026-02-10"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                    description: Ringkasan produksi harian
+                    properties:
+                      target_harian:
+                        type: integer
+                        description: Total target produksi harian
+                        example: 3700
+                      tercapai:
+                        type: integer
+                        description: Total produksi tercapai (dari LRP qty_total_prod)
+                        example: 1195
+                      persentase:
+                        type: number
+                        description: Persentase pencapaian (tercapai/target * 100)
+                        example: 32.3
+                  operator:
+                    type: object
+                    description: Statistik operator
+                    properties:
+                      total:
+                        type: integer
+                        description: Total operator produksi
+                        example: 160
+                      aktif:
+                        type: integer
+                        description: Jumlah operator yang hadir (tap attendance)
+                        example: 2
+                      label:
+                        type: string
+                        description: Label untuk UI
+                        example: "2 operator"
+                  shift_details:
+                    type: array
+                    description: Detail progress per shift dengan data aktual LRP
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: ID shift
+                          example: 1
+                        nama:
+                          type: string
+                          description: Nama shift
+                          example: "Shift 1"
+                        jam:
+                          type: string
+                          description: Jam kerja shift
+                          example: "07:30 - 15:30"
+                        target:
+                          type: integer
+                          description: Target produksi shift
+                          example: 2450
+                        tercapai:
+                          type: integer
+                          description: Produksi tercapai shift (dari LRP qty_total_prod)
+                          example: 420
+                        persentase:
+                          type: number
+                          description: Persentase pencapaian shift
+                          example: 17.1
+                  trend_produksi_mingguan:
+                    type: array
+                    description: Data trend produksi 7 hari ke belakang dari tanggal filter
+                    items:
+                      type: object
+                      properties:
+                        tanggal:
+                          type: string
+                          format: date
+                          description: Tanggal produksi
+                          example: "2026-02-04"
+                        target:
+                          type: integer
+                          description: Total target hari tersebut
+                          example: 3500
+                        tercapai:
+                          type: integer
+                          description: Total tercapai dari LRP qty_total_prod
+                          example: 1120
+              example:
+                summary:
+                  target_harian: 3700
+                  tercapai: 1195
+                  persentase: 32.3
+                operator:
+                  total: 160
+                  aktif: 2
+                  label: "2 operator"
+                shift_details:
+                  - id: 1
+                    nama: "Shift 1"
+                    jam: "07:30 - 15:30"
+                    target: 2450
+                    tercapai: 420
+                    persentase: 17.1
+                  - id: 2
+                    nama: "Shift 2"
+                    jam: "15:30 - 23:30"
+                    target: 0
+                    tercapai: 465
+                    persentase: 0
+                  - id: 3
+                    nama: "Shift 3"
+                    jam: "23:30 - 07:30"
+                    target: 0
+                    tercapai: 310
+                    persentase: 0
+                trend_produksi_mingguan:
+                  - tanggal: "2026-02-04"
+                    target: 3500
+                    tercapai: 1120
+                  - tanggal: "2026-02-05"
+                    target: 3700
+                    tercapai: 1184
+                  - tanggal: "2026-02-06"
+                    target: 3600
+                    tercapai: 1152
+                  - tanggal: "2026-02-07"
+                    target: 3800
+                    tercapai: 1216
+                  - tanggal: "2026-02-08"
+                    target: 3700
+                    tercapai: 1184
+                  - tanggal: "2026-02-09"
+                    target: 3650
+                    tercapai: 1168
+                  - tanggal: "2026-02-10"
+                    target: 3700
+                    tercapai: 1195
+
+  /rencana-produksi/dashboard/weekly-trend:
+    get:
+      summary: Get weekly production trend (Supervisor)
+      tags:
+        - Rencana Produksi
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
 
+  /rencana-produksi/list:
+    get:
+      summary: Get production plan history (Supervisor)
+      description: Daftar history rencana produksi harian
+      tags:
+        - Rencana Produksi
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+          description: Filter tanggal (YYYY-MM-DD). Default adalah hari ini.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  tanggal: { type: string, format: date, example: "2026-02-09" }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        nama: { type: string }
+                        detail: { type: string, example: "Mesin • Produk" }
+                        shift: { type: string }
+                        kategori_shift: { type: string }
+                        target: { type: integer }
+
   /rencana-produksi/search-operator:
     get:
-      summary: Search operator
+      summary: Search operator (Supervisor)
       description: Cari operator berdasarkan nama atau UID
       tags:
         - Rencana Produksi
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: q
@@ -738,29 +2076,117 @@ paths:
         '200':
           description: Success
 
-  /master/mesin:
+  /master/all:
     get:
-      summary: Get all machines
-      description: Dropdown data mesin
+      summary: Get all master data
+      description: Get aggregated master data (Shift, Mesin, Jenis Pekerjaan, Produk)
       tags:
         - Master
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    nama_mesin:
-                      type: string
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      shift:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            tipe_shift:
+                              type: string
+                            nama_shift:
+                              type: string
+                            jam_masuk:
+                              type: string
+                            jam_keluar:
+                              type: string
+                      mesin:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama_mesin:
+                              type: string
+                            ideal_cycle_time:
+                              type: number
+                      jenisPekerjaan:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama_pekerjaan:
+                              type: string
+                      produk:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama_produk:
+                              type: string
+
+  /master/mesin:
+    get:
+      summary: Get all machines (All Users)
+      description: Dropdown data mesin yang dikelompokkan berdasarkan kategori
+      tags:
+        - Master
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "success" }
+                  message: { type: string, example: "Success get machines" }
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id: { type: integer }
+                          nama_mesin: { type: string }
+                          kategori: { type: string }
+                          ideal_cycle_time: { type: number }
+                example:
+                  status: "success"
+                  message: "Success get machines"
+                  data:
+                    press:
+                      - id: 1
+                        nama_mesin: "A-01"
+                        kategori: "PRESS"
+                    secondary:
+                      - id: 10
+                        nama_mesin: "S-01"
+                        kategori: "SECONDARY"
 
     post:
-      summary: Create new machine
+      summary: Create new machine (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -770,10 +2196,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_mesin, ideal_cycle_time]
+              required: [nama_mesin, ideal_cycle_time, kategori]
               properties:
                 nama_mesin:
                   type: string
+                kategori:
+                  type: string
+                  description: Kategori mesin (e.g., PRESS, SECONDARY, etc.)
                 ideal_cycle_time:
                   type: number
       responses:
@@ -782,7 +2211,7 @@ paths:
 
   /master/mesin/{id}:
     patch:
-      summary: Update machine
+      summary: Update machine (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -798,12 +2227,14 @@ paths:
               type: object
               properties:
                 nama_mesin: { type: string }
+                kategori: { type: string, description: "Kategori mesin" }
                 ideal_cycle_time: { type: number }
       responses:
         '200':
-          description: Success
+          description: Updated
+
     delete:
-      summary: Delete machine
+      summary: Delete machine (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -816,18 +2247,200 @@ paths:
         '200':
           description: Success
 
+  # ==========================================
+  # LRP PATHS
+  # ==========================================
+  /lrp:
+    post:
+      summary: Create LRP (Submit Laporan) (Supervisor)
+      description: Submit laporan realisasi produksi baru dengan perhitungan otomatis OEE
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tanggal
+                - fk_id_shift
+                - fk_id_mesin
+                - fk_id_operator
+                - no_kanagata
+                - no_lot
+                - qty_ok
+                - logs
+              properties:
+                tanggal:
+                  type: string
+                  format: date
+                fk_id_shift:
+                  type: integer
+                fk_id_mesin:
+                  type: integer
+                fk_id_operator:
+                  type: integer
+                fk_id_rph:
+                  type: integer
+                  description: "Reference to Rencana Produksi (RPH)"
+                no_kanagata:
+                  type: string
+                no_lot:
+                  type: string
+                qty_ok:
+                  type: integer
+                qty_ng_prev:
+                  type: integer
+                qty_ng_proses:
+                  type: integer
+                qty_rework:
+                  type: integer
+                logs:
+                  type: array
+                  items:
+                    type: object
+                    required: [waktu_start, waktu_end, durasi_menit, kode_jam_kerja, kategori_downtime]
+                    properties:
+                      waktu_start:
+                        type: string
+                        format: date-time
+                      waktu_end:
+                        type: string
+                        format: date-time
+                      durasi_menit:
+                        type: number
+                      kode_jam_kerja:
+                        type: string
+                        enum: [A, D, B1, B2, B3, B4, C]
+                      kategori_downtime:
+                        type: string
+                        enum: [PLAN_DOWNTIME, RUNTIME, BREAKDOWN]
+                      keterangan:
+                        type: string
+      responses:
+        '201':
+          description: LRP Created Successfully
+    
+    get:
+      summary: Get LRP List
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: fk_id_shift
+          schema:
+            type: integer
+        - in: query
+          name: no_kanagata
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Success
+  
+  /lrp/dashboard/stats:
+    get:
+      summary: Get LRP Dashboard Stats
+      description: Statistik untul dashboard (Total OK, NG, Downtime, Trend)
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+
+  /lrp/{lrpId}:
+    get:
+      summary: Get LRP Detail
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+          
+    patch:
+      summary: Update LRP (Supervisor/Admin)
+      description: Edit LRP (biasanya oleh Supervisor/QC)
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qty_ok: { type: integer }
+                qty_ng_proses: { type: integer }
+                status: { type: string, enum: [SUBMITTED, VERIFIED] }
+      responses:
+        '200':
+          description: Success Update
+    delete:
+      summary: Delete LRP (Supervisor/Admin)
+      description: Hapus LRP dan re-sync OEE
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success Delete LRP
+
+
+
+
+
   /master/produk:
     get:
-      summary: Get all products
+      summary: Get all products (All Users)
       description: Dropdown data produk
       tags:
         - Master
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
 
     post:
-      summary: Create new product
+      summary: Create new product (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -844,9 +2457,10 @@ paths:
         '201':
           description: Created
 
+
   /master/produk/{id}:
     patch:
-      summary: Update product
+      summary: Update product (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -866,7 +2480,7 @@ paths:
         '200':
           description: Success
     delete:
-      summary: Delete product
+      summary: Delete product (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -881,10 +2495,12 @@ paths:
 
   /master/shift:
     get:
-      summary: Get all shifts
+      summary: Get all shifts (All Users)
       description: Dropdown data shift
       tags:
         - Master
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Success
@@ -907,7 +2523,7 @@ paths:
                       type: string
 
     post:
-      summary: Create new shift
+      summary: Create new shift (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -929,7 +2545,7 @@ paths:
 
   /master/shift/{id}:
     patch:
-      summary: Update shift
+      summary: Update shift (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -952,7 +2568,7 @@ paths:
         '200':
           description: Success
     delete:
-      summary: Delete shift
+      summary: Delete shift (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -967,10 +2583,12 @@ paths:
 
   /master/target:
     get:
-      summary: Get all targets
+      summary: Get all targets (All Users)
       description: Dropdown data target (bisa difilter berdasarkan produk/jenis pekerjaan)
       tags:
         - Master
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: fk_produk
@@ -980,12 +2598,50 @@ paths:
           name: fk_jenis_pekerjaan
           schema:
             type: integer
+        - in: query
+          name: fk_id_shift
+          schema:
+            type: integer
       responses:
         '200':
           description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  statusCode: { type: integer, example: 200 }
+                  message: { type: string, example: "Success get target" }
+                  data:
+                    oneOf:
+                      - type: object
+                        properties:
+                          id: { type: integer, example: 1 }
+                          fk_jenis_pekerjaan: { type: integer, example: 1 }
+                          fk_produk: { type: integer, example: 1 }
+                          total_target: { type: integer, example: 5400 }
+                          ideal_cycle_time: { type: number, example: 0.07 }
+                          nama_pekerjaan: { type: string, example: "Pemasangan" }
+                          nama_produk: { type: string, example: "Produk A" }
+                          target_normal: { type: integer, example: 5000 }
+                          target_lembur: { type: integer, example: 400 }
+                      - type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, example: 1 }
+                            fk_jenis_pekerjaan: { type: integer, example: 1 }
+                            fk_produk: { type: integer, example: 1 }
+                            total_target: { type: integer, example: 5400 }
+                            ideal_cycle_time: { type: number, example: 0.07 }
+                            nama_pekerjaan: { type: string, example: "Pemasangan" }
+                            nama_produk: { type: string, example: "Produk A" }
+                            target_normal: { type: integer, example: 5000 }
+                            target_lembur: { type: integer, example: 400 }
 
     post:
-      summary: Create new target
+      summary: Create new target (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -1004,9 +2660,42 @@ paths:
         '201':
           description: Created
 
+  /master/target/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: integer }
+    patch:
+      summary: Update target (Supervisor)
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fk_jenis_pekerjaan: { type: integer }
+                fk_produk: { type: integer }
+                total_target: { type: integer }
+                ideal_cycle_time: { type: number }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete target (Supervisor)
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deleted
+
   /master/masalah-andon:
     get:
-      summary: Get all andon problems
+      summary: Get all andon problems (Public)
       description: Get master data masalah andon (termasuk waktu_perbaikan untuk countdown IoT)
       tags:
         - Master
@@ -1034,7 +2723,7 @@ paths:
                           description: Format HH:mm:ss
 
     post:
-      summary: Create new andon problem
+      summary: Create new andon problem (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -1046,19 +2735,16 @@ paths:
               type: object
               required: [nama_masalah, kategori]
               properties:
-                kode_masalah: { type: string }
                 nama_masalah: { type: string }
                 kategori: { type: string }
-                is_downtime: { type: boolean }
-                waktu_perbaikan: { type: integer }
-                deskripsi: { type: string }
+                waktu_perbaikan: { type: string, description: "Format HH:mm:ss" }
       responses:
         '201':
           description: Created
 
   /master/masalah-andon/{id}:
     patch:
-      summary: Update andon problem
+      summary: Update andon problem (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -1073,17 +2759,15 @@ paths:
             schema:
               type: object
               properties:
-                kode_masalah: { type: string }
                 nama_masalah: { type: string }
                 kategori: { type: string }
-                is_downtime: { type: boolean }
-                waktu_perbaikan: { type: integer }
+                waktu_perbaikan: { type: string, description: "Format HH:mm:ss" }
                 deskripsi: { type: string }
       responses:
         '200':
           description: Success
     delete:
-      summary: Delete andon problem
+      summary: Delete andon problem (Supervisor)
       tags: [Master]
       security:
         - bearerAuth: []
@@ -1095,5 +2779,917 @@ paths:
       responses:
         '200':
           description: Success
+
+  /master/andon-master-data:
+    get:
+      summary: Get Unified Master Data for Andon Dashboard
+      description: Get shifts, machines, and status options in a single request for dashboard filters.
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      shifts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_shift: { type: string }
+                      machines:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_mesin: { type: string }
+                      statuses:
+                        type: array
+                        items: { type: string }
+                        example: ["ACTIVE", "RESOLVED"]
+
+  /master/tipe-disiplin:
+    get:
+      summary: Get discipline types (All Users)
+      description: Get discipline types categorized by violation and award
+      tags:
+        - Master
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      pelanggaran:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipeDisiplin'
+                      penghargaan:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipeDisiplin'
+
+    post:
+      summary: Create new discipline type (Supervisor)
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kode, nama_tipe_disiplin, poin, kategori]
+              properties:
+                kode: { type: string }
+                nama_tipe_disiplin: { type: string }
+                poin: { type: integer }
+                kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+      responses:
+        '201':
+          description: Created
+
+  /master/tipe-disiplin/{id}:
+    patch:
+      summary: Update discipline type (Supervisor)
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kode: { type: string }
+                nama_tipe_disiplin: { type: string }
+                poin: { type: integer }
+                kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+      responses:
+        '200':
+          description: Success
+
+    delete:
+      summary: Delete discipline type (Supervisor)
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+
+  /attendance/scheduled:
+    get:
+      summary: Get scheduled users
+      description: Get list of users scheduled for a specific date and shift, optionally filtered by division.
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: shiftId
+          schema:
+            type: integer
+        - in: query
+          name: divisiId
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    nama:
+                      type: string
+                    uid_nfc:
+                      type: string
+                    fk_id_divisi:
+                      type: integer
+                    divisi:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nama_divisi:
+                          type: string
+                    mesin:
+                      type: string
+                    produk:
+                      type: string
+                    rencana_produksi_id:
+                      type: integer
+
+  /attendance/present:
+    get:
+      summary: Get present users
+      description: Get list of users who have attended/tapped for a specific date and shift.
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: shiftId
+          schema:
+            type: integer
+        - in: query
+          name: divisiId
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    jam_tap:
+                      type: string
+                      format: date-time
+                    is_terlambat:
+                      type: boolean
+                    user:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nama:
+                          type: string
+                        uid_nfc:
+                          type: string
+                        fk_id_divisi:
+                          type: integer
+                        divisi:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama_divisi:
+                              type: string
+                    shift:
+                      type: string
+                    mesin:
+                      type: string
+
+
+
+  # ==========================================
+  # LRP DASHBOARD PATHS
+  # ==========================================
+
+  /lrp-dashboard/summary:
+    get:
+      summary: Get LRP Dashboard Summary
+      description: Get aggregated stats (Total OK, NG, Rework, Production)
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date, example: "YYYY-MM-DD" }
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+        - in: query
+          name: plant
+          schema: { type: string, default: "3", example: "3" }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      total_ok: { type: integer }
+                      total_ng: { type: integer }
+                      total_rework: { type: integer }
+                      total_qty: { type: integer }
+                      laporan_hari_ini: { type: integer }
+
+  /lrp-dashboard/trend-bulanan-harian:
+    get:
+      summary: Get Monthly Production Trend (Daily)
+      description: Get daily production total for the current active month
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: plant
+          schema: { type: string, default: "3", example: "3" }
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      month: { type: string, example: "February" }
+                      year: { type: integer, example: 2026 }
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            day: { type: integer }
+                            ok: { type: integer }
+                            ng: { type: integer }
+                            rework: { type: integer }
+                            total: { type: integer }
+
+  /lrp-dashboard/trend-bulanan:
+    get:
+      summary: Get Yearly Production Trend (Monthly)
+      description: Get monthly production total for a specific year
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer, example: 2026 }
+        - in: query
+          name: plant
+          schema: { type: string, default: "3", example: "3" }
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      year: { type: integer, example: 2026 }
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            month: { type: string, example: "Jan" }
+                            ok: { type: integer }
+                            ng: { type: integer }
+                            rework: { type: integer }
+                            total: { type: integer }
+
+  /lrp-dashboard/ok-vs-ng:
+    get:
+      summary: Get OK vs NG Comparison
+      description: Get Quantity and Percentage of OK vs NG
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+        - in: query
+          name: plant
+          schema: { type: string, default: "3", example: "3" }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      ok: { type: integer }
+                      ng: { type: integer }
+                      rework: { type: integer }
+                      total: { type: integer }
+
+  /lrp-dashboard/list:
+    get:
+      summary: Get LRP List (Datatable)
+      description: Get paginated list of LRPs with filtering
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: plant
+          schema: { type: string, default: "3", example: "3" }
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        tanggal: { type: string, format: date }
+                        jam_kerja: { type: string, description: "Total duration (e.g., 7h 30m)" }
+                        no_kanagata: { type: string }
+                        no_lot: { type: string }
+                        qty_ok: { type: integer }
+                        qty_ng_proses: { type: integer }
+                        qty_total_prod: { type: integer }
+                        status: { type: string }
+                        mesin:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_mesin: { type: string }
+                        shift:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama_shift: { type: string }
+                        operator:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            nama: { type: string }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+
+  /lrp-dashboard/export:
+    get:
+      summary: Export Data
+      description: Export LRP data to Excel/PDF
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Default today
+        - in: query
+          name: fk_id_mesin
+          schema: { type: integer }
+        - in: query
+          name: fk_id_shift
+          schema: { type: integer }
+        - in: query
+          name: plant
+          schema: { type: string }
+          description: Default Semua Plant
+      responses:
+        '200':
+          description: Success (Excel File)
+          content:
+             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+               schema:
+                 type: string
+                 format: binary
+
+  /lrp-dashboard/{lrpId}:
+    get:
+      summary: Get LRP Detail
+      description: Get detailed LRP information including logs and summary
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      header:
+                        type: object
+                        description: LRP Header info (Machine, Shift, User, Qty)
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            waktu_start: { type: string, format: date-time }
+                            waktu_end: { type: string, format: date-time }
+                            durasi_menit: { type: number }
+                            kategori_downtime: { type: string }
+                            keterangan: { type: string }
+                      summary_waktu:
+                        type: object
+                        properties:
+                          runtime: { type: number }
+                          breakdown: { type: number }
+                          plan_downtime: { type: number }
+        '404':
+          description: LRP not found
+
+    patch:
+      summary: Update LRP (Supervisor/Admin)
+      description: Update LRP quantities or status
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qty_ok:
+                  type: integer
+                  minimum: 0
+                qty_ng_proses:
+                  type: integer
+                  minimum: 0
+                qty_ng_prev:
+                  type: integer
+                  minimum: 0
+                qty_rework:
+                  type: integer
+                  minimum: 0
+                status_lrp:
+                  type: string
+                  enum: [SUBMITTED, VERIFIED]
+      responses:
+        '200':
+          description: LRP updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '404':
+          description: LRP not found
+
+    delete:
+      summary: Delete LRP (Supervisor/Admin)
+      description: Delete LRP and re-sync OEE
+      tags: [LRP Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: LRP deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: LRP not found
+
+  /poin/form-data:
+    get:
+      summary: Get form data for discipline points input (Supervisor)
+      description: Returns dropdown data for operators, discipline types, and shifts
+      tags:
+        - Poin
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      operators:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama:
+                              type: string
+                            plant:
+                              type: string
+                            fk_id_divisi:
+                              type: integer
+                            divisi:
+                              type: object
+                              properties:
+                                nama_divisi:
+                                  type: string
+                      tipe_disiplin:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TipeDisiplin'
+                      shifts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            nama_shift:
+                              type: string
+                            tipe_shift:
+                              type: string
+                            jam_masuk:
+                              type: string
+                            jam_keluar:
+                              type: string
+
+  /divisi:
+    get:
+      summary: Get list of all divisions (Supervisor)
+      tags: [Divisi]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Divisi'
+    post:
+      summary: Create new division (Supervisor)
+      tags: [Divisi]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_divisi]
+              properties:
+                nama_divisi: { type: string, example: "Production" }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Divisi created" }
+                  data: { $ref: '#/components/schemas/Divisi' }
+
+  /divisi/{divisiId}:
+    parameters:
+      - in: path
+        name: divisiId
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Get division detail (Supervisor)
+      tags: [Divisi]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data: { $ref: '#/components/schemas/Divisi' }
+    put:
+      summary: Update division (Supervisor)
+      tags: [Divisi]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama_divisi: { type: string, example: "Maintenance" }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Divisi updated" }
+    delete:
+      summary: Delete division (Supervisor)
+      tags: [Divisi]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Divisi deleted" }
+
+  /jenis-pekerjaan:
+    get:
+      summary: Get list of all jenis pekerjaan (Supervisor)
+      tags: [Jenis Pekerjaan]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JenisPekerjaan'
+    post:
+      summary: Create new jenis pekerjaan (Supervisor)
+      tags: [Jenis Pekerjaan]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama_pekerjaan]
+              properties:
+                nama_pekerjaan: { type: string, example: "Production" }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Jenis pekerjaan created" }
+                  data: { $ref: '#/components/schemas/JenisPekerjaan' }
+
+  /jenis-pekerjaan/{jenisPekerjaanId}:
+    parameters:
+      - in: path
+        name: jenisPekerjaanId
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Get jenis pekerjaan detail (Supervisor)
+      tags: [Jenis Pekerjaan]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data: { $ref: '#/components/schemas/JenisPekerjaan' }
+    put:
+      summary: Update jenis pekerjaan (Supervisor)
+      tags: [Jenis Pekerjaan]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama_pekerjaan: { type: string, example: "Maintenance" }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Jenis pekerjaan updated" }
+    delete:
+      summary: Delete jenis pekerjaan (Supervisor)
+      tags: [Jenis Pekerjaan]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string, example: "Jenis pekerjaan deleted" }
+
+
+
+
+
 
 

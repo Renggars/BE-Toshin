@@ -2,13 +2,13 @@ import express from "express";
 import validate from "../middlewares/validate.js";
 import authValidation from "../validations/auth.validation.js";
 import authController from "../controllers/auth.controller.js";
-import { authAdmin } from "../middlewares/auth.js";
+// import { auth } from "../middlewares/auth.js";
 
 const router = express.Router();
 
 router.post(
   "/register",
-  // authAdmin(),
+  // auth("SUPERVISOR"),
   validate(authValidation.register),
   authController.register,
 );

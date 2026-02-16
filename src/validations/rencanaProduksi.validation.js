@@ -9,6 +9,7 @@ const createRencanaProduksi = {
     fk_id_produk: Joi.number().required(),
     fk_id_shift: Joi.number().required(),
     fk_id_target: Joi.number().required(),
+    fk_id_jenis_pekerjaan: Joi.number().integer().required(),
     tanggal: Joi.date().required(),
     keterangan: Joi.string().allow("", null),
   }),

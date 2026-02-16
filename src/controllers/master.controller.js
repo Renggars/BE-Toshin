@@ -81,13 +81,32 @@ const getTarget = catchAsync(async (req, res) => {
   if (req.query.fk_produk) filter.fk_produk = parseInt(req.query.fk_produk);
   if (req.query.fk_jenis_pekerjaan)
     filter.fk_jenis_pekerjaan = parseInt(req.query.fk_jenis_pekerjaan);
-  const result = await masterService.getTarget(filter);
+
+  // Ambil ID Shift dari query untuk keperluan kalkulasi
+  const shiftId = req.query.fk_id_shift
+    ? parseInt(req.query.fk_id_shift)
+    : null;
+
+  const result = await masterService.getTarget(filter, shiftId);
   responseApiSuccess(res, "Success get target", result);
 });
 
 const createTarget = catchAsync(async (req, res) => {
   const result = await masterService.createTarget(req.body);
   responseApiSuccess(res, "Success create target", result, httpStatus.CREATED);
+});
+
+const updateTarget = catchAsync(async (req, res) => {
+  const result = await masterService.updateTarget(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update target", result);
+});
+
+const deleteTarget = catchAsync(async (req, res) => {
+  await masterService.deleteTarget(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete target", null);
 });
 
 // --- Masalah Andon ---
@@ -119,6 +138,46 @@ const deleteMasalahAndon = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success delete masalah andon", null);
 });
 
+// --- Aggregated Master Data ---
+const getAllMasterData = catchAsync(async (req, res) => {
+  const result = await masterService.getAllMasterData();
+  responseApiSuccess(res, "Success get all master data", result);
+});
+
+// --- Tipe Disiplin ---
+const getTipeDisiplin = catchAsync(async (req, res) => {
+  const result = await masterService.getTipeDisiplin();
+  responseApiSuccess(res, "Success get tipe disiplin", result);
+});
+
+const createTipeDisiplin = catchAsync(async (req, res) => {
+  const result = await masterService.createTipeDisiplin(req.body);
+  responseApiSuccess(
+    res,
+    "Success create tipe disiplin",
+    result,
+    httpStatus.CREATED,
+  );
+});
+
+const updateTipeDisiplin = catchAsync(async (req, res) => {
+  const result = await masterService.updateTipeDisiplin(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update tipe disiplin", result);
+});
+
+const deleteTipeDisiplin = catchAsync(async (req, res) => {
+  await masterService.deleteTipeDisiplin(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete tipe disiplin", null);
+});
+
+const getAndonMaster = catchAsync(async (req, res) => {
+  const result = await masterService.getAndonMasterData();
+  responseApiSuccess(res, "Success get andon master data", result);
+});
+
 export default {
   // Mesin
   getMesin,
@@ -138,9 +197,19 @@ export default {
   // Target
   getTarget,
   createTarget,
+  updateTarget,
+  deleteTarget,
   // Andon
   getMasalahAndon,
   createMasalahAndon,
   updateMasalahAndon,
   deleteMasalahAndon,
+  // Tipe Disiplin
+  getTipeDisiplin,
+  createTipeDisiplin,
+  updateTipeDisiplin,
+  deleteTipeDisiplin,
+  // Aggregated
+  getAllMasterData,
+  getAndonMaster,
 };

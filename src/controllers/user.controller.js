@@ -19,10 +19,7 @@ const createUser = async (req, res) => {
 const getUsers = async (req, res) => {
   try {
     const { page, limit, ...filter } = req.query;
-    const result = await userService.queryUsers(filter, {
-      page,
-      limit,
-    });
+    const result = await userService.queryUsers(filter);
     responseApiSuccess(res, "Success get users", result);
   } catch (err) {
     responseApiFailed(res, `Failed get Users ${err}`);
@@ -31,7 +28,7 @@ const getUsers = async (req, res) => {
 
 const getUser = async (req, res) => {
   try {
-    const result = await userService.getUserById(req.params.userId);
+    const result = await userService.getUserById(parseInt(req.params.userId));
     responseApiSuccess(res, "Success get user", result);
   } catch (err) {
     responseApiFailed(res, `Failed get user ${err}`);
@@ -51,7 +48,7 @@ const getUserByEmail = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const result = await userService.updateUserById(
-      req.params.userId,
+      parseInt(req.params.userId),
       req.body,
     );
 
@@ -64,7 +61,9 @@ const updateUser = async (req, res) => {
 
 const deactivateUser = async (req, res) => {
   try {
-    const result = await userService.deactivateUserById(req.params.userId);
+    const result = await userService.deactivateUserById(
+      parseInt(req.params.userId),
+    );
 
     responseApiSuccess(res, "Success deactivate user", result);
   } catch (err) {

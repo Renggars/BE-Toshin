@@ -1,3 +1,5 @@
+// src/controllers/auth.controller.js
+
 import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import authService from "../services/auth.service.js";
@@ -5,16 +7,9 @@ import userService from "../services/user.service.js";
 import tokenService from "../services/token.service.js";
 import ApiError from "../utils/ApiError.js";
 import rencanaProduksiService from "../services/rencanaProduksi.service.js";
+import moment from "moment";
 
 const register = catchAsync(async (req, res) => {
-  // Cek apakah kartu NFC sudah terdaftar (jika ada)
-  if (req.body.uid_nfc) {
-    const existingUserByNfc = await userService.getUserByNfc(req.body.uid_nfc);
-    if (existingUserByNfc) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Kartu NFC sudah terdaftar");
-    }
-  }
-
   // Cek apakah email sudah terdaftar
   const existingUserByEmail = await userService.getUserByEmail(req.body.email);
   if (existingUserByEmail) {
@@ -54,8 +49,8 @@ const login = catchAsync(async (req, res) => {
 
   let dashboardData = null;
 
-  if (user.role === "OPERATOR") {
-    const today = new Date().toISOString().split("T")[0];
+  if (user.role === "PRODUKSI") {
+    const today = moment().format("YYYY-MM-DD");
     dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
       user.id,
       today,

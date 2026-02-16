@@ -1,6 +1,6 @@
 import express from "express";
 import rencanaProduksiController from "../controllers/rencanaProduksi.controller.js";
-import { authAdmin } from "../middlewares/auth.js";
+import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import rencanaProduksiValidation from "../validations/rencanaProduksi.validation.js";
 
@@ -8,28 +8,32 @@ const router = express.Router();
 
 router.post(
   "/",
-  authAdmin(),
+  auth("SUPERVISOR"),
   validate(rencanaProduksiValidation.createRencanaProduksi),
   rencanaProduksiController.createRencanaProduksi,
 );
 
 router.get(
   "/dashboard/summary",
-  authAdmin(),
+  auth("SUPERVISOR"),
   rencanaProduksiController.getDashboardSummary,
 );
 router.get(
   "/dashboard/weekly-trend",
-  authAdmin(),
+  auth("SUPERVISOR"),
   rencanaProduksiController.getWeeklyTrend,
 );
 
-router.get("/list", authAdmin(), rencanaProduksiController.getHistoryRPH);
+router.get(
+  "/list",
+  auth("SUPERVISOR"),
+  rencanaProduksiController.getHistoryRPH,
+);
 
 // Endpoint pendukung Form Input RPH
 router.get(
   "/search-operator",
-  authAdmin(),
+  auth("SUPERVISOR"),
   rencanaProduksiController.searchOperator,
 );
 

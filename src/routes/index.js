@@ -7,6 +7,11 @@ import poinRoute from "./poin.route.js";
 import andonRoute from "./andon.route.js";
 import produksiRoute from "./produksi.route.js";
 import oeeRoute from "./oee.route.js";
+import lrpRoute from "./lrp.route.js";
+import attendanceRoute from "./attendance.route.js";
+import lrpDashboardRoute from "./lrpDashboard.route.js";
+import divisiRoute from "./divisi.route.js";
+import jenisPekerjaanRoute from "./jenisPekerjaan.route.js";
 
 const router = express.Router();
 
@@ -42,6 +47,26 @@ const defaultRoutes = [
   {
     path: "/oee",
     route: oeeRoute,
+  },
+  {
+    path: "/lrp",
+    route: lrpRoute,
+  },
+  {
+    path: "/attendance",
+    route: attendanceRoute,
+  },
+  {
+    path: "/lrp-dashboard",
+    route: lrpDashboardRoute,
+  },
+  {
+    path: "/divisi",
+    route: divisiRoute,
+  },
+  {
+    path: "/jenis-pekerjaan",
+    route: jenisPekerjaanRoute,
   },
 ];
 

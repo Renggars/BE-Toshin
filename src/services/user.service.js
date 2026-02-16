@@ -4,7 +4,7 @@ import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
 
 /**
- * Create a user (All fields: email, password, uid_nfc are required)
+ * Create a user (email and password are required, uid_nfc is optional)
  * @param {Object} userBody
  * @returns {Promise<User>}
  */
@@ -17,15 +17,16 @@ const createUser = async (userBody) => {
       nama: userBody.nama,
       email: userBody.email,
       password: hashedPassword,
-      uid_nfc: userBody.uid_nfc,
+      uid_nfc: userBody.uid_nfc || null,
       role: userBody.role,
       fk_id_divisi: userBody.fk_id_divisi,
       foto_profile: userBody.foto_profile || null,
-      plant: userBody.plant || null,
+      plant: userBody.plant,
+      line: userBody.line,
       status: "active",
-      // Set cycle start jika role-nya OPERATOR
+      // Set cycle start jika role-nya PRODUKSI
       point_cycle_start:
-        userBody.role === "OPERATOR" ? new Date(new Date().setDate(1)) : null,
+        userBody.role === "PRODUKSI" ? new Date(new Date().setDate(1)) : null,
     },
     include: {
       divisi: true,
@@ -34,36 +35,33 @@ const createUser = async (userBody) => {
 };
 
 /**
- * Query for users with pagination
+ * Query for users without pagination (return all)
  * @param {Object} filter - Prisma filter
- * @param {Object} options - Pagination options
- * @returns {Promise<Object>}
+ * @returns {Promise<User[]>}
  */
-const queryUsers = async (filter, options) => {
-  const page = parseInt(options.page || 1);
-  const limit = parseInt(options.limit || 10);
-  const skip = (page - 1) * limit;
-
+const queryUsers = async (filter) => {
   const users = await prisma.user.findMany({
-    skip,
-    take: limit,
     where: filter,
-    include: {
-      divisi: true,
+    select: {
+      id: true,
+      foto_profile: true,
+      nama: true,
+      email: true,
+      role: true,
+      divisi: {
+        select: {
+          id: true,
+          nama_divisi: true,
+        },
+      },
+      plant: true,
+      line: true,
+      status: true,
+      current_point: true,
     },
   });
 
-  const totalItems = await prisma.user.count({ where: filter });
-  const totalPages = Math.ceil(totalItems / limit);
-
-  return {
-    users,
-    pagination: {
-      totalItems,
-      totalPages,
-      currentPage: page,
-    },
-  };
+  return users;
 };
 
 /**
@@ -81,6 +79,8 @@ const getUserByEmail = async (email) => {
       password: true,
       foto_profile: true,
       role: true,
+      plant: true,
+      current_point: true,
       status: true,
       suspended_until: true,
       fk_id_divisi: true,
@@ -108,6 +108,8 @@ const getUserByNfc = async (uid_nfc) => {
       foto_profile: true,
       role: true,
       status: true,
+      plant: true,
+      current_point: true,
       suspended_until: true,
       fk_id_divisi: true,
       divisi: {
@@ -185,6 +187,23 @@ const getCurrentUserData = async (userId) => {
  */
 const updateUserById = async (userId, updateBody) => {
   await getUserById(userId);
+
+  // Jika ada uid_nfc, cek apakah sudah digunakan oleh user lain
+  if (updateBody.uid_nfc) {
+    const userWithNfc = await prisma.user.findFirst({
+      where: {
+        uid_nfc: updateBody.uid_nfc,
+        id: { not: userId }, // Pastikan bukan user yang sedang diupdate
+      },
+    });
+
+    if (userWithNfc) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "UID NFC sudah digunakan oleh user lain",
+      );
+    }
+  }
 
   // Hash password jika ada update password
   if (updateBody.password) {

@@ -1,31 +1,70 @@
+import moment from "moment";
+import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
-import { responseApiSuccess } from "../utils/responseApi.js";
 import oeeService from "../services/oee.service.js";
 
-const getOEEByMesin = catchAsync(async (req, res) => {
-  const { id } = req.params;
-  const { tanggal } = req.query;
-  const result = await oeeService.getOEEByMesin(id, tanggal);
-
-  if (!result) {
-    // If not found, try to calculate on the fly? Or just return empty stats
-    // Let's force calculate for today if empty
-    if (!tanggal || new Date(tanggal).getDate() === new Date().getDate()) {
-      const calc = await oeeService.calculateOEE(parseInt(id), new Date());
-      return responseApiSuccess(res, "Success get OEE stats", calc);
-    }
-    return responseApiSuccess(res, "OEE Data not found for this date", null);
-  }
-
-  responseApiSuccess(res, "Success get OEE stats", result);
+const byMesin = catchAsync(async (req, res) => {
+  res.json(await oeeService.getOEEByMesin(req.params.id));
 });
 
-const getDashboardSummary = catchAsync(async (req, res) => {
-  const result = await oeeService.getDashboardSummary();
-  responseApiSuccess(res, "Success get OEE dashboard", result);
+const byShift = catchAsync(async (req, res) => {
+  res.json(await oeeService.getOEEByShift(req.params.shiftId));
+});
+
+const plantSummary = catchAsync(async (req, res) => {
+  res.json(await oeeService.getPlantOEE());
+});
+
+/**
+ * Dashboard Specific Controllers
+ */
+
+const getOEESummary = catchAsync(async (req, res) => {
+  const { tanggal = moment().format("YYYY-MM-DD"), plant = "3" } = req.query;
+  const result = await oeeService.getOEESummary(tanggal, plant);
+  res.status(httpStatus.OK).send({
+    status: true,
+    data: result,
+  });
+});
+
+const getOEETrend = catchAsync(async (req, res) => {
+  const {
+    tanggal = moment().format("YYYY-MM-DD"),
+    shift_ids,
+    plant = "3",
+  } = req.query;
+  const result = await oeeService.getOEETrend(tanggal, shift_ids, plant);
+  res.status(httpStatus.OK).send({
+    status: true,
+    data: result,
+  });
+});
+
+const getDowntimeHistory = catchAsync(async (req, res) => {
+  const { tanggal = moment().format("YYYY-MM-DD"), plant = "3" } = req.query;
+  const result = await oeeService.getDowntimeHistory(tanggal, plant);
+  res.status(httpStatus.OK).send({
+    status: true,
+    data: result,
+  });
+});
+
+const getMachineDetail = catchAsync(async (req, res) => {
+  const { tanggal = moment().format("YYYY-MM-DD"), plant = "3" } = req.query;
+  const result = await oeeService.getMachineDetail(tanggal, plant);
+  res.status(httpStatus.OK).send({
+    status: true,
+    data: result,
+  });
 });
 
 export default {
-  getOEEByMesin,
-  getDashboardSummary,
+  byMesin,
+  byShift,
+  plantSummary,
+  getOEESummary,
+  getOEETrend,
+  getDowntimeHistory,
+  getMachineDetail,
 };

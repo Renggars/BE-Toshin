@@ -6,13 +6,15 @@ import { auth } from "../middlewares/auth.js";
 
 const router = express.Router();
 
+const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+
 router.post(
   "/log",
-  auth(),
+  allRoles,
   validate(produksiValidation.createLog),
   produksiController.createLog,
 );
 
-router.get("/log", auth(), produksiController.getLogs);
+router.get("/log", auth("SUPERVISOR"), produksiController.getLogs);
 
 export default router;

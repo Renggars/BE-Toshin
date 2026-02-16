@@ -55,3 +55,98 @@ export const emitOeeUpdate = (data) => {
     logger.error("Failed to emit OEE update", error);
   }
 };
+
+/**
+ * Emit event real-time update khusus untuk Andon dashboard
+ * @param {Object} data Refresh signal data
+ */
+export const emitAndonDashboardUpdate = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-dashboard-updated", data);
+  } catch (error) {
+    logger.error("Failed to emit Andon dashboard update", error);
+  }
+};
+
+/**
+ * Emit event ketika Andon baru di-trigger
+ * @param {Object} data - Andon created event data
+ * @param {string} data.andonId - ID Andon event
+ * @param {number} data.machineId - ID Mesin
+ * @param {string} data.machineName - Nama Mesin
+ * @param {string} data.type - Kategori masalah (BREAKDOWN, QUALITY, etc)
+ * @param {string} data.problemName - Nama masalah
+ * @param {Date} data.startTime - Waktu trigger
+ * @param {string} data.status - Status Andon (ACTIVE)
+ * @param {string} data.plant - Plant location
+ * @param {string} data.operator - Nama operator
+ * @param {string} data.shift - Nama shift
+ */
+export const emitAndonCreated = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-created", data);
+    logger.info(`WebSocket: andon-created emitted for Andon ${data.andonId}`);
+  } catch (error) {
+    logger.error("Failed to emit andon-created event", error);
+  }
+};
+
+/**
+ * Emit event ketika Andon di-resolve
+ * @param {Object} data - Andon resolved event data
+ * @param {string} data.andonId - ID Andon event
+ * @param {number} data.machineId - ID Mesin
+ * @param {string} data.machineName - Nama Mesin
+ * @param {Date} data.resolvedAt - Waktu resolved
+ * @param {number} data.duration - Durasi downtime (menit)
+ * @param {number} data.total_duration_menit - Durasi total (decimal menit)
+ * @param {number} data.late_menit - Keterlambatan (decimal menit)
+ * @param {boolean} data.is_late - Status terlambat
+ * @param {string} data.responStatus - Status SLA (ON_TIME/OVER_TIME)
+ * @param {number} data.resolverId - ID user yang resolve
+ */
+export const emitAndonResolved = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-resolved", data);
+    logger.info(`WebSocket: andon-resolved emitted for Andon ${data.andonId}`);
+  } catch (error) {
+    logger.error("Failed to emit andon-resolved event", error);
+  }
+};
+
+/**
+ * Emit event ketika summary dashboard berubah
+ * @param {Object} data - Dashboard summary data
+ * @param {number} data.activeAndonCount - Jumlah Andon aktif
+ * @param {number} data.resolvedToday - Jumlah Andon resolved hari ini
+ * @param {number} data.avgDowntime - Rata-rata downtime (menit)
+ * @param {Array} data.problematicMachines - List mesin bermasalah
+ */
+export const emitAndonSummaryUpdated = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-summary-updated", data);
+    logger.info("WebSocket: andon-summary-updated emitted");
+  } catch (error) {
+    logger.error("Failed to emit andon-summary-updated event", error);
+  }
+};
+
+/**
+ * Emit event ketika metric berubah (avg downtime, dll)
+ * @param {Object} data - Metric change data
+ * @param {string} data.metric - Nama metric yang berubah
+ * @param {string} data.scope - Scope metric (today, this_week, etc)
+ */
+export const emitAndonMetricChanged = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-metric-changed", data);
+    logger.info(`WebSocket: andon-metric-changed emitted for ${data.metric}`);
+  } catch (error) {
+    logger.error("Failed to emit andon-metric-changed event", error);
+  }
+};

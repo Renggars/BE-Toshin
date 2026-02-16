@@ -2,86 +2,125 @@ import express from "express";
 import masterController from "../controllers/master.controller.js";
 import validate from "../middlewares/validate.js";
 import masterValidation from "../validations/master.validation.js";
-import { authAdmin } from "../middlewares/auth.js";
+import { auth } from "../middlewares/auth.js";
 
 const router = express.Router();
 
+// Role yang diizinkan melihat (Read Only)
+const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+// Role yang diizinkan mengubah (Write/Edit)
+const managerRoles = auth("SUPERVISOR");
+
+// --- Tipe Disiplin ---
+router.get("/tipe-disiplin", allRoles, masterController.getTipeDisiplin);
+router.post(
+  "/tipe-disiplin",
+  managerRoles,
+  validate(masterValidation.createTipeDisiplin),
+  masterController.createTipeDisiplin,
+);
+router.patch(
+  "/tipe-disiplin/:id",
+  managerRoles,
+  validate(masterValidation.updateTipeDisiplin),
+  masterController.updateTipeDisiplin,
+);
+router.delete(
+  "/tipe-disiplin/:id",
+  managerRoles,
+  masterController.deleteTipeDisiplin,
+);
+
+// --- ALL MASTER DATA ---
+router.get("/all", managerRoles, masterController.getAllMasterData);
+
 // --- MESIN ---
-router.get("/mesin", authAdmin(), masterController.getMesin);
+router.get("/mesin", allRoles, masterController.getMesin);
 router.post(
   "/mesin",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.createMesin),
   masterController.createMesin,
 );
 router.patch(
   "/mesin/:id",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.updateMesin),
   masterController.updateMesin,
 );
-router.delete("/mesin/:id", authAdmin(), masterController.deleteMesin);
+router.delete("/mesin/:id", managerRoles, masterController.deleteMesin);
 
 // --- PRODUK ---
-router.get("/produk", authAdmin(), masterController.getProduk);
+router.get("/produk", allRoles, masterController.getProduk);
 router.post(
   "/produk",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.createProduk),
   masterController.createProduk,
 );
 router.patch(
   "/produk/:id",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.updateProduk),
   masterController.updateProduk,
 );
-router.delete("/produk/:id", authAdmin(), masterController.deleteProduk);
+router.delete("/produk/:id", managerRoles, masterController.deleteProduk);
 
 // --- SHIFT ---
-router.get("/shift", authAdmin(), masterController.getShift);
+router.get("/shift", allRoles, masterController.getShift);
 router.post(
   "/shift",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.createShift),
   masterController.createShift,
 );
 router.patch(
   "/shift/:id",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.updateShift),
   masterController.updateShift,
 );
-router.delete("/shift/:id", authAdmin(), masterController.deleteShift);
+router.delete("/shift/:id", managerRoles, masterController.deleteShift);
 
-// --- TARGET ---
-router.get("/target", authAdmin(), masterController.getTarget);
-router.post(
-  "/target",
-  authAdmin(),
-  validate(masterValidation.createTarget),
-  masterController.createTarget,
-);
+router
+  .route("/target")
+  .get(allRoles, masterController.getTarget)
+  .post(
+    managerRoles,
+    validate(masterValidation.createTarget),
+    masterController.createTarget,
+  );
+
+router
+  .route("/target/:id")
+  .patch(
+    managerRoles,
+    validate(masterValidation.updateTarget),
+    masterController.updateTarget,
+  )
+  .delete(managerRoles, masterController.deleteTarget);
 
 // --- MASALAH ANDON ---
 // Public read for IoT, restricted write
 router.get("/masalah-andon", masterController.getMasalahAndon);
 router.post(
   "/masalah-andon",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.createMasalahAndon),
   masterController.createMasalahAndon,
 );
 router.patch(
   "/masalah-andon/:id",
-  authAdmin(),
+  managerRoles,
   validate(masterValidation.updateMasalahAndon),
   masterController.updateMasalahAndon,
 );
 router.delete(
   "/masalah-andon/:id",
-  authAdmin(),
+  managerRoles,
   masterController.deleteMasalahAndon,
 );
+
+router.get("/andon-master-data", allRoles, masterController.getAndonMaster);
 
 export default router;

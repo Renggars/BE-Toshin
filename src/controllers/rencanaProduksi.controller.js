@@ -15,7 +15,8 @@ const createRencanaProduksi = catchAsync(async (req, res) => {
 });
 
 const getDashboardSummary = catchAsync(async (req, res) => {
-  const summary = await rencanaProduksiService.getDashboardSummary();
+  const { tanggal } = req.query; // Opsional: filter per tanggal, default today di service
+  const summary = await rencanaProduksiService.getDashboardSummary(tanggal);
   res.send(summary);
 });
 
@@ -25,9 +26,9 @@ const getWeeklyTrend = catchAsync(async (req, res) => {
 });
 
 const getHistoryRPH = catchAsync(async (req, res) => {
-  const { tanggal } = req.query; // Opsional: filter per tanggal
+  const { tanggal } = req.query; // Opsional: filter per tanggal, default today di service
   const history = await rencanaProduksiService.getHistoryRPH(tanggal);
-  res.send({ status: true, data: history });
+  res.send({ status: true, ...history });
 });
 
 const searchOperator = catchAsync(async (req, res) => {

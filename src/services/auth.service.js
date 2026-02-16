@@ -1,7 +1,8 @@
-import httpStatus from "http-status";
 import bcrypt from "bcryptjs";
 import userService from "./user.service.js";
+import attendanceService from "./attendance.service.js";
 import ApiError from "../utils/ApiError.js";
+import httpStatus from "http-status";
 
 /**
  * Login dengan NFC UID
@@ -18,6 +19,8 @@ const loginWithNfc = async (uid_nfc) => {
   if (user.status === "suspended") {
     throw new ApiError(httpStatus.FORBIDDEN, "Akun Anda sedang ditangguhkan");
   }
+
+  await attendanceService.clockIn(user);
 
   return user;
 };
@@ -43,6 +46,8 @@ const loginWithEmail = async (email, password) => {
   if (user.status === "suspended") {
     throw new ApiError(httpStatus.FORBIDDEN, "Akun Anda sedang ditangguhkan");
   }
+
+  await attendanceService.clockIn(user);
 
   return user;
 };

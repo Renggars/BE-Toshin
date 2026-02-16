@@ -1,32 +1,36 @@
 import express from "express";
-import { authAdmin } from "../middlewares/auth.js";
+import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import userValidation from "../validations/user.validation.js";
 import userController from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-router.route("/").get(authAdmin(), userController.getUsers);
+router.route("/").get(auth("SUPERVISOR", "ADMIN"), userController.getUsers);
 
 router.get(
   "/searchByEmail",
-  authAdmin(),
+  auth("SUPERVISOR", "ADMIN"),
   validate(userValidation.getUserByEmail),
   userController.getUserByEmail,
 );
 
 router
   .route("/:userId")
-  .get(authAdmin(), validate(userValidation.getUser), userController.getUser)
+  .get(
+    auth("SUPERVISOR", "ADMIN"),
+    validate(userValidation.getUser),
+    userController.getUser,
+  )
   .put(
-    authAdmin(),
+    auth("SUPERVISOR", "ADMIN"),
     validate(userValidation.updateUser),
     userController.updateUser,
   );
 
 router.patch(
   "/:userId/deactivate",
-  authAdmin(),
+  auth("SUPERVISOR", "ADMIN"),
   validate(userValidation.deactivateUser),
   userController.deactivateUser,
 );

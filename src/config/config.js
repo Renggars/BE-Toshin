@@ -18,6 +18,7 @@ const config = {
     accessExpirationMinutes: process.env.JWT_ACCESS_EXPIRATION_MINUTES,
     refreshExpirationDays: process.env.JWT_REFRESH_EXPIRATION_DAYS,
   },
+
   clientUrls: [
     "http://localhost:3000",
     "http://localhost:61909",
