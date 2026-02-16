@@ -2,6 +2,7 @@ import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
 import moment from "moment-timezone";
+import notificationService from "./notification.service.js";
 
 const TZ = "Asia/Jakarta";
 
@@ -100,7 +101,7 @@ const createCall = async (payload) => {
     );
   }
 
-  return prisma.andonCall.create({
+  const newCall = await prisma.andonCall.create({
     data: {
       fk_id_mesin,
       fk_id_operator,
@@ -119,6 +120,30 @@ const createCall = async (payload) => {
       divisi_target: true,
     },
   });
+
+  const supervisors = await prisma.user.findMany({
+    where: {
+      role: "SUPERVISOR",
+      divisi: { nama_divisi: { contains: "PRODUKSI" } },
+    },
+    select: {
+      id: true
+    },
+  });
+
+  if (supervisors.length > 0) {
+    await notificationService.createBulkNotifications(supervisors.map((s) => s.id),
+      "ANDON_CALL",
+      "Andon Call Baru",
+      `Operator ${newCall.operator.nama} menekan Andon di mesin ${newCall.mesin.nama_mesin}`,
+      JSON.stringify({
+        andonCallId: newCall.id,
+        mesin: newCall.mesin.nama_mesin,
+      }),
+    );
+  };
+
+  return newCall;
 };
 
 const getWaitingCalls = async () => {
