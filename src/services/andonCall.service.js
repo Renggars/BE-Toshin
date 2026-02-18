@@ -2,6 +2,11 @@ import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
 import moment from "moment-timezone";
+import {
+  emitAndonCallCreated,
+  emitAndonSummaryUpdated,
+} from "../config/socket.js";
+import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
 
 const TZ = "Asia/Jakarta";
@@ -121,18 +126,26 @@ const createCall = async (payload) => {
     },
   });
 
+  // Emit WebSocket events
+  emitAndonCallCreated(newCall);
+  const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
+  const summary = await andonService.calculateAndonSummary(plantFilter);
+  emitAndonSummaryUpdated(summary);
+
+  // Send notification to production supervisors
   const supervisors = await prisma.user.findMany({
     where: {
       role: "SUPERVISOR",
       divisi: { nama_divisi: { contains: "PRODUKSI" } },
     },
     select: {
-      id: true
+      id: true,
     },
   });
 
   if (supervisors.length > 0) {
-    await notificationService.createBulkNotifications(supervisors.map((s) => s.id),
+    await notificationService.createBulkNotifications(
+      supervisors.map((s) => s.id),
       "ANDON_CALL",
       "Andon Call Baru",
       `Operator ${newCall.operator.nama} menekan Andon di mesin ${newCall.mesin.nama_mesin}`,
@@ -141,7 +154,7 @@ const createCall = async (payload) => {
         mesin: newCall.mesin.nama_mesin,
       }),
     );
-  };
+  }
 
   return newCall;
 };
