@@ -150,3 +150,30 @@ export const emitAndonMetricChanged = (data) => {
     logger.error("Failed to emit andon-metric-changed event", error);
   }
 };
+/**
+ * Emit event ketika ada panggilan baru (WAITING)
+ * @param {Object} data Andon call data
+ */
+export const emitAndonCallCreated = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-call-created", data);
+    logger.info(`WebSocket: andon-call-created emitted for Call ${data.id}`);
+  } catch (error) {
+    logger.error("Failed to emit andon-call-created event", error);
+  }
+};
+
+/**
+ * Emit event ketika perbaikan dimulai (IN_REPAIR)
+ * @param {Object} data Andon event data
+ */
+export const emitAndonRepairStarted = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("andon-repair-started", data);
+    logger.info(`WebSocket: andon-repair-started emitted for Event ${data.id}`);
+  } catch (error) {
+    logger.error("Failed to emit andon-repair-started event", error);
+  }
+};

@@ -2,6 +2,11 @@ import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
 import moment from "moment-timezone";
+import {
+  emitAndonCallCreated,
+  emitAndonSummaryUpdated,
+} from "../config/socket.js";
+import andonService from "./andon.service.js";
 
 const TZ = "Asia/Jakarta";
 
@@ -100,7 +105,7 @@ const createCall = async (payload) => {
     );
   }
 
-  return prisma.andonCall.create({
+  const newCall = await prisma.andonCall.create({
     data: {
       fk_id_mesin,
       fk_id_operator,
@@ -119,6 +124,14 @@ const createCall = async (payload) => {
       divisi_target: true,
     },
   });
+
+  // Emit WebSocket events
+  emitAndonCallCreated(newCall);
+  const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
+  const summary = await andonService.calculateAndonSummary(plantFilter);
+  emitAndonSummaryUpdated(summary);
+
+  return newCall;
 };
 
 const getWaitingCalls = async () => {
