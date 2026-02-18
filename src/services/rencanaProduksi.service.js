@@ -6,6 +6,7 @@ import moment from "moment";
 
 import prisma from "../../prisma/index.js";
 import { calculateProductionTarget } from "../utils/productionCalc.js";
+import notificationService from "./notification.service.js";
 
 const createRencanaProduksi = async (payload) => {
   const {
@@ -53,7 +54,7 @@ const createRencanaProduksi = async (payload) => {
   // RPH baru akan berstatus PLANNED secara default sesuai schema.
 
   // 3. Simpan rencana produksi (Tanpa field lembur sesuai schema baru)
-  return prisma.rencanaProduksi.create({
+  const rph = await prisma.rencanaProduksi.create({
     data: {
       fk_id_user,
       fk_id_mesin,
@@ -73,6 +74,16 @@ const createRencanaProduksi = async (payload) => {
       target: { include: { jenis_pekerjaan: true } },
     },
   });
+
+  //kirim notifikasi ke user yang di assign
+  await notificationService.createNotification({
+    fk_id_user: fk_id_user,
+    tipe: "RPH_ASSIGNED",
+    judul: "RPH Baru Ditugaskan",
+    pesan: `RPH baru telah ditambahkan pada ${moment().format("DD-MM-YYYY HH:mm")}`,
+  });
+
+  return rph;
 };
 
 /**
@@ -282,10 +293,10 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       late_menit: lateMinutes,
       pending_rph: pendingRph
         ? {
-            id: pendingRph.id,
-            produk: pendingRph.produk.nama_produk,
-            mesin: pendingRph.mesin.nama_mesin,
-          }
+          id: pendingRph.id,
+          produk: pendingRph.produk.nama_produk,
+          mesin: pendingRph.mesin.nama_mesin,
+        }
         : null,
     },
   };
