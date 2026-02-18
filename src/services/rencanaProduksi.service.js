@@ -80,7 +80,7 @@ const createRencanaProduksi = async (payload) => {
     fk_id_user: fk_id_user,
     tipe: "RPH_ASSIGNED",
     judul: "RPH Baru Ditugaskan",
-    pesan: `Anda ditugaskan RPH baru: mesin ${mesin.nama_mesin}, produk ${produk.nama_produk}, tanggal ${tanggal}`,
+    pesan: `RPH baru telah ditambahkan pada ${moment().format("DD-MM-YYYY HH:mm")}`,
   });
 
   return rph;
