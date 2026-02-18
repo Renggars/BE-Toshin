@@ -8,6 +8,7 @@ import {
   emitAndonDashboardUpdate,
   emitAndonCreated,
   emitAndonResolved,
+  emitAndonRepairStarted,
   emitAndonSummaryUpdated,
   emitAndonMetricChanged,
 } from "../config/socket.js";
@@ -129,11 +130,8 @@ const calculateAndonSummary = async (plantFilter = {}) => {
   const dateStr = moment().tz(TZ).format("YYYY-MM-DD");
   const operationalDate = new Date(`${dateStr}T00:00:00.000Z`);
 
-  const [activeAndonCount, resolvedToday, avgDowntimeAgg, activeMesinAgg] =
+  const [resolvedToday, avgDowntimeAgg, totalActiveRepair, totalActiveCall] =
     await Promise.all([
-      prisma.andonEvent.count({
-        where: { status: "ACTIVE", ...plantFilter },
-      }),
       prisma.andonEvent.count({
         where: {
           status: "RESOLVED",
@@ -149,36 +147,27 @@ const calculateAndonSummary = async (plantFilter = {}) => {
           ...plantFilter,
         },
       }),
-      prisma.andonEvent.findMany({
-        where: { status: "ACTIVE", ...plantFilter },
-        select: {
-          fk_id_mesin: true,
-          mesin: { select: { id: true, nama_mesin: true } },
+      // Total Active Repair (IN_REPAIR)
+      prisma.andonEvent.count({
+        where: {
+          status: "IN_REPAIR",
+          ...plantFilter,
+        },
+      }),
+      // Total Active Call (WAITING)
+      prisma.andonCall.count({
+        where: {
+          status: "WAITING",
+          ...plantFilter,
         },
       }),
     ]);
 
-  // Group problematic machines
-  const machineMap = {};
-  activeMesinAgg.forEach((e) => {
-    const machineId = e.fk_id_mesin;
-    if (!machineMap[machineId]) {
-      machineMap[machineId] = {
-        machineId: machineId,
-        machineName: e.mesin?.nama_mesin || "Unknown",
-        activeCount: 0,
-      };
-    }
-    machineMap[machineId].activeCount += 1;
-  });
-
-  const problematicMachines = Object.values(machineMap);
-
   return {
-    activeAndonCount,
     resolvedToday,
     avgDowntime: Math.round(avgDowntimeAgg._avg.durasi_downtime || 0),
-    problematicMachines,
+    totalActiveCall,
+    totalActiveRepair,
   };
 };
 
@@ -428,7 +417,7 @@ const startRepairAndon = async (id, data) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, nama: true },
     });
 
     if (!user) {
@@ -482,6 +471,7 @@ const startRepairAndon = async (id, data) => {
           status: "IN_REPAIR",
           tanggal: call.tanggal,
           plant: call.plant,
+          resolved_by: userId,
         },
         include: { mesin: true, masalah: true, operator: true, shift: true },
       });
@@ -497,7 +487,28 @@ const startRepairAndon = async (id, data) => {
       return event;
     });
 
-    emitAndonUpdate({ type: "ANDON_IN_REPAIR", data: newEvent });
+    const formattedEvent = {
+      id: newEvent.id,
+      tanggal: newEvent.waktu_trigger,
+      mesin: newEvent.mesin?.nama_mesin || "Unknown",
+      plant: newEvent.plant || "Unknown",
+      shift: newEvent.shift?.nama_shift || "Unknown",
+      masalah: newEvent.masalah?.nama_masalah || "Unknown",
+      kategori: newEvent.masalah?.kategori || "UNKNOWN",
+      operator: newEvent.operator?.nama || "-",
+      resolver: user.nama || "-",
+      downtime: 0,
+      status: "IN_REPAIR",
+      estimasi_menit: newEvent.masalah?.waktu_perbaikan_menit || 0,
+      waktu_resolved: null,
+      respon_status: null,
+    };
+
+    emitAndonRepairStarted(formattedEvent);
+    const plantFilter = newEvent.plant ? { plant: newEvent.plant } : {};
+    const summary = await calculateAndonSummary(plantFilter);
+    emitAndonSummaryUpdated(summary);
+
     return newEvent;
   }
 
@@ -522,7 +533,32 @@ const startRepairAndon = async (id, data) => {
     include: { mesin: true, masalah: true, operator: true, shift: true },
   });
 
-  emitAndonUpdate({ type: "ANDON_IN_REPAIR", data: updated });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { nama: true },
+  });
+
+  const formattedEvent = {
+    id: updated.id,
+    tanggal: updated.waktu_trigger,
+    mesin: updated.mesin?.nama_mesin || "Unknown",
+    plant: updated.plant || "Unknown",
+    shift: updated.shift?.nama_shift || "Unknown",
+    masalah: updated.masalah?.nama_masalah || "Unknown",
+    kategori: updated.masalah?.kategori || "UNKNOWN",
+    operator: updated.operator?.nama || "-",
+    resolver: user?.nama || "-",
+    downtime: 0,
+    status: "IN_REPAIR",
+    estimasi_menit: updated.masalah?.waktu_perbaikan_menit || 0,
+    waktu_resolved: null,
+    respon_status: null,
+  };
+
+  emitAndonRepairStarted(formattedEvent);
+  const plantFilter = updated.plant ? { plant: updated.plant } : {};
+  const summary = await calculateAndonSummary(plantFilter);
+  emitAndonSummaryUpdated(summary);
 
   return updated;
 };
@@ -641,17 +677,26 @@ const resolveAndon = async (id, data) => {
   await oeeService.recalculateByMesin(event.fk_id_mesin, event.tanggal);
 
   // ✅ WebSocket Events
+  const resolverUser = await prisma.user.findUnique({
+    where: { id: data.resolved_by || event.resolved_by },
+    select: { nama: true },
+  });
+
   emitAndonResolved({
-    andonId: id,
-    machineId: event.fk_id_mesin,
-    machineName: updatedEvent?.mesin?.nama_mesin || "Unknown",
-    resolvedAt: resolvedAt,
-    duration: totalDurationMinutes,
-    total_duration_menit: totalDurationMinutes,
-    late_menit: lateMinutes,
-    is_late: isLate,
-    responStatus: responStatus,
-    resolverId: data.resolved_by || event.resolved_by,
+    id: updatedEvent.id,
+    tanggal: updatedEvent.waktu_trigger,
+    mesin: updatedEvent.mesin?.nama_mesin || "Unknown",
+    plant: updatedEvent.plant || "Unknown",
+    shift: updatedEvent.shift?.nama_shift || "Unknown",
+    masalah: updatedEvent.masalah?.nama_masalah || "Unknown",
+    kategori: updatedEvent.masalah?.kategori || "UNKNOWN",
+    operator: updatedEvent.operator?.nama || "-",
+    resolver: resolverUser?.nama || "-",
+    downtime: totalDurationMinutes,
+    status: "RESOLVED",
+    estimasi_menit: updatedEvent.masalah?.waktu_perbaikan_menit || 0,
+    waktu_resolved: resolvedAt,
+    respon_status: responStatus,
   });
 
   const plantFilter = event.plant ? { plant: event.plant } : {};
@@ -988,11 +1033,30 @@ const getPersonalHistory = async (userId) => {
   };
 };
 
-const getActiveEvents = () =>
-  prisma.andonEvent.findMany({
-    where: { status: "ACTIVE" },
-    include: { mesin: true, masalah: true, operator: true, shift: true },
-  });
+const getActiveEvents = async () => {
+  const [calls, events] = await Promise.all([
+    prisma.andonCall.findMany({
+      where: { status: "WAITING" },
+      include: {
+        mesin: true,
+        operator: true,
+        shift: true,
+        divisi_target: true,
+      },
+      orderBy: { waktu_call: "desc" },
+    }),
+    prisma.andonEvent.findMany({
+      where: { status: "IN_REPAIR" },
+      include: { mesin: true, masalah: true, operator: true, shift: true },
+      orderBy: { waktu_trigger: "desc" },
+    }),
+  ]);
+
+  return {
+    calls,
+    repairs: events,
+  };
+};
 
 /**
  * Unified Dashboard Data
@@ -1003,7 +1067,6 @@ const getDashboardData = async (query) => {
     shiftId,
     plantId = "Semua Plant",
     mesinId,
-    status,
     kategori = "Semua Kategori",
     page = 1,
     limit = 20,
@@ -1024,20 +1087,18 @@ const getDashboardData = async (query) => {
     mesinId && mesinId !== "0" && mesinId !== "Semua Mesin"
       ? { fk_id_mesin: Number(mesinId) }
       : {};
-  const statusFilter =
-    status && status !== "Semua Status" ? { status: status } : {};
   const kategoriFilter =
     kategori && kategori !== "Semua Kategori"
       ? { masalah: { kategori: kategori } }
       : {};
 
-  // History Filter: Based on exact operational date
+  // History Filter: Based on exact operational date (RESOLVED only)
   const historyWhere = {
+    status: "RESOLVED",
     tanggal: operationalDate,
     ...plantFilter,
     ...shiftFilter,
     ...mesinFilter,
-    ...statusFilter,
     ...kategoriFilter,
   };
 
@@ -1051,20 +1112,23 @@ const getDashboardData = async (query) => {
   }
 
   // Full Dashboard
-  const activeWhere = { status: "ACTIVE", ...plantFilter, ...kategoriFilter };
+  const inRepairWhere = {
+    status: "IN_REPAIR",
+    ...plantFilter,
+    ...kategoriFilter,
+  };
+  const waitingCallWhere = { status: "WAITING", ...plantFilter };
 
   const [
-    totalActive,
     resolvedToday,
     avgDowntimeAgg,
-    activeMesinAgg,
+    totalActiveRepair,
+    totalActiveCall,
     plantsRaw,
-    activeEventsRaw,
+    callsRaw,
+    repairsRaw,
     historyData,
   ] = await Promise.all([
-    prisma.andonEvent.count({
-      where: activeWhere,
-    }),
     prisma.andonEvent.count({
       where: {
         status: "RESOLVED",
@@ -1086,17 +1150,33 @@ const getDashboardData = async (query) => {
         ...kategoriFilter,
       },
     }),
-    prisma.andonEvent.groupBy({
-      by: ["fk_id_mesin"],
-      where: activeWhere,
+    // Total Active Repair (IN_REPAIR)
+    prisma.andonEvent.count({
+      where: inRepairWhere,
+    }),
+    // Total Active Call (WAITING)
+    prisma.andonCall.count({
+      where: { ...waitingCallWhere, ...mesinFilter },
     }),
     prisma.andonEvent.findMany({
-      where: activeWhere,
+      where: inRepairWhere,
       select: { plant: true },
     }),
+    // WAITING calls
+    prisma.andonCall.findMany({
+      where: { ...waitingCallWhere, ...mesinFilter },
+      include: {
+        mesin: true,
+        operator: true,
+        shift: true,
+        divisi_target: true,
+      },
+      orderBy: { waktu_call: "desc" },
+    }),
+    // IN_REPAIR events
     prisma.andonEvent.findMany({
       where: {
-        ...activeWhere,
+        ...inRepairWhere,
         ...mesinFilter,
       },
       select: {
@@ -1113,6 +1193,7 @@ const getDashboardData = async (query) => {
         },
         operator: { select: { nama: true } },
         shift: { select: { nama_shift: true } },
+        resolver: { select: { nama: true } },
       },
       orderBy: { waktu_trigger: "desc" },
     }),
@@ -1131,13 +1212,12 @@ const getDashboardData = async (query) => {
     activeCount: plantsMap[k],
   }));
 
-  // Process Active Events
-  const activeEvents = activeEventsRaw.map((e) => {
+  // Process Repairs (IN_REPAIR events)
+  const repairs = repairsRaw.map((e) => {
     const elapsed = moment().diff(moment(e.waktu_trigger), "minutes");
     const slaMenit = e.masalah?.waktu_perbaikan_menit || 0;
     let liveStatus = "ON_TIME";
     if (slaMenit > 0 && elapsed > slaMenit) liveStatus = "OVER_TIME";
-
     return {
       ...e,
       elapsed_minutes: elapsed,
@@ -1148,19 +1228,22 @@ const getDashboardData = async (query) => {
 
   return {
     summary: {
-      totalActive,
       resolvedToday,
       avgDowntime: Math.round(avgDowntimeAgg._avg.durasi_downtime || 0),
-      totalMesinBermasalah: activeMesinAgg.length,
+      totalActiveCall,
+      totalActiveRepair,
     },
     plants: plantsStatus,
-    activeEvents,
+    activeEvents: {
+      calls: callsRaw,
+      repairs,
+    },
     history: historyData,
   };
 };
 
 const getAndonFilters = async () => {
-  const [shiftsRaw, machinesRaw] = await Promise.all([
+  const [shiftsRaw, machines] = await Promise.all([
     prisma.shift.findMany({
       select: {
         id: true,
@@ -1168,26 +1251,18 @@ const getAndonFilters = async () => {
         tipe_shift: true,
       },
     }),
-    prisma.andonEvent.findMany({
-      distinct: ["fk_id_mesin"],
+    prisma.mesin.findMany({
       select: {
-        mesin: {
-          select: {
-            id: true,
-            nama_mesin: true,
-          },
-        },
+        id: true,
+        nama_mesin: true,
+      },
+      orderBy: {
+        nama_mesin: "asc",
       },
     }),
   ]);
 
-  const categories = [
-    "MAINTENANCE",
-    "QUALITY_CONTROL",
-    "DIE_MAINTENANCE",
-    "PRODUCTION",
-    "PLAN_DOWNTIME",
-  ];
+  const categories = ["MAINTENANCE", "QUALITY", "PRODUKSI", "PLAN_DOWNTIME"];
 
   // Format shifts: nama_shift + tipe_shift
   const shifts = shiftsRaw.map((s) => ({
@@ -1195,11 +1270,6 @@ const getAndonFilters = async () => {
     nama: `${s.nama_shift} (${s.tipe_shift})`,
   }));
 
-  // Flatten and filter null machines
-  const machines = machinesRaw
-    .map((m) => m.mesin)
-    .filter((m) => m !== null)
-    .sort((a, b) => a.nama_mesin.localeCompare(b.nama_mesin));
   return {
     shifts,
     categories,
@@ -1237,4 +1307,5 @@ export default {
   getAndonFilters,
   getTriggerMasterData,
   getPersonalHistory,
+  calculateAndonSummary,
 };

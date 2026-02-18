@@ -689,10 +689,6 @@ paths:
           schema: { type: integer }
           description: Filter by machine ID. Use "Semua Mesin" or omit for all machines
         - in: query
-          name: status
-          schema: { type: string, enum: [ACTIVE, RESOLVED, "Semua Status"] }
-          description: Filter history by status. Use "Semua Status" or omit for all statuses
-        - in: query
           name: page
           schema: { type: integer, default: 1 }
           description: Page number for history pagination
@@ -715,10 +711,10 @@ paths:
             application/json:
               example:
                 summary:
-                  totalActive: 1
                   resolvedToday: 12
                   avgDowntime: 18
-                  totalMesinBermasalah: 1
+                  totalActiveCall: 2
+                  totalActiveRepair: 1
                 plants:
                   - id: 1
                     name: "Plant 1"
@@ -730,22 +726,36 @@ paths:
                     name: "Plant 3"
                     activeCount: 0
                 activeEvents:
-                  - id: 550
-                    status: "ACTIVE"
-                    waktu_trigger: "2026-02-04T10:30:00.000Z"
-                    elapsed_minutes: 5.5
-                    live_sla_status: "ON_TIME"
-                    estimasi_menit: 30
-                    mesin:
-                      id: 1
-                      nama_mesin: "CNC-01"
-                    masalah:
-                      nama_masalah: "Motor Rusak"
-                      kategori: "BREAKDOWN"
-                    operator:
-                      nama: "Budi"
-                    shift:
-                      nama_shift: "Shift 1"
+                  calls:
+                    - id: 16
+                      fk_id_mesin: 1
+                      fk_id_operator: 9
+                      target_divisi: "MAINTENANCE"
+                      waktu_call: "2026-02-18T04:39:13.766Z"
+                      status: "WAITING"
+                      plant: "3"
+                      mesin: { nama_mesin: "FB800" }
+                      operator: { nama: "DEDDY PRASETYO" }
+                      shift: { nama_shift: "Shift 1" }
+                  repairs:
+                    - id: 550
+                      status: "IN_REPAIR"
+                      waktu_trigger: "2026-02-04T10:30:00.000Z"
+                      elapsed_minutes: 5.5
+                      live_sla_status: "ON_TIME"
+                      estimasi_menit: 30
+                      mesin:
+                        id: 1
+                        nama_mesin: "CNC-01"
+                      masalah:
+                        nama_masalah: "Motor Rusak"
+                        kategori: "BREAKDOWN"
+                      operator:
+                        nama: "Budi"
+                      resolver:
+                        nama: "Technician A"
+                      shift:
+                        nama_shift: "Shift 1"
                 history:
                   data:
                     - id: 549
@@ -774,10 +784,10 @@ paths:
                     nullable: true
                     description: "Null if onlyHistory=true"
                     properties:
-                      totalActive: { type: integer, description: "Jumlah event ACTIVE saat ini" }
                       resolvedToday: { type: integer, description: "Jumlah event resolved pada tanggal terpilih" }
                       avgDowntime: { type: number, description: "Rata-rata downtime dalam menit" }
-                      totalMesinBermasalah: { type: integer, description: "Jumlah unique mesin dengan status ACTIVE" }
+                      totalActiveCall: { type: integer, description: "Jumlah andon call dengan status WAITING" }
+                      totalActiveRepair: { type: integer, description: "Jumlah andon event dengan status IN_REPAIR" }
                   plants:
                     type: array
                     nullable: true
@@ -789,36 +799,46 @@ paths:
                         name: { type: string }
                         activeCount: { type: integer }
                   activeEvents:
-                    type: array
+                    type: object
                     nullable: true
-                    description: "List event yang sedang ACTIVE. Null if onlyHistory=true"
-                    items:
-                      type: object
-                      properties:
-                        id: { type: integer }
-                        status: { type: string }
-                        waktu_trigger: { type: string, format: date-time }
-                        elapsed_minutes: { type: number, description: "Durasi sejak trigger (menit)" }
-                        live_sla_status: { type: string, enum: [ON_TIME, OVER_TIME], description: "Status SLA real-time" }
-                        estimasi_menit: { type: integer, description: "Estimasi waktu perbaikan (menit)" }
-                        mesin:
+                    description: "Object berisi calls (WAITING) dan repairs (IN_REPAIR). Null if onlyHistory=true"
+                    properties:
+                      calls:
+                        type: array
+                        items: { $ref: '#/components/schemas/AndonCall' }
+                      repairs:
+                        type: array
+                        items:
                           type: object
                           properties:
                             id: { type: integer }
-                            nama_mesin: { type: string }
-                        masalah:
-                          type: object
-                          properties:
-                            nama_masalah: { type: string }
-                            kategori: { type: string }
-                        operator:
-                          type: object
-                          properties:
-                            nama: { type: string }
-                        shift:
-                          type: object
-                          properties:
-                            nama_shift: { type: string }
+                            status: { type: string }
+                            waktu_trigger: { type: string, format: date-time }
+                            elapsed_minutes: { type: number, description: "Durasi sejak trigger (menit)" }
+                            live_sla_status: { type: string, enum: [ON_TIME, OVER_TIME] }
+                            estimasi_menit: { type: integer }
+                            mesin:
+                              type: object
+                              properties:
+                                id: { type: integer }
+                                nama_mesin: { type: string }
+                            masalah:
+                              type: object
+                              properties:
+                                nama_masalah: { type: string }
+                                kategori: { type: string }
+                            operator:
+                              type: object
+                              properties:
+                                nama: { type: string }
+                            resolver:
+                              type: object
+                              properties:
+                                nama: { type: string }
+                            shift:
+                              type: object
+                              properties:
+                                nama_shift: { type: string }
                   history:
                     type: object
                     description: "History events (RESOLVED & ACTIVE based on status filter)"
