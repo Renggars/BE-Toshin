@@ -14,6 +14,12 @@ export const initSocket = (httpServer) => {
   io.on("connection", (socket) => {
     logger.info(`New client connected: ${socket.id}`);
 
+    // Emit notifikasi baru ke client spesifik
+    socket.on("join", (userId) => {
+      socket.join(`user:${userId}`);
+      logger.info(`Socket ${socket.id} joined room user: ${userId}`);
+    });
+
     socket.on("disconnect", () => {
       logger.info(`Client disconnected: ${socket.id}`);
     });
@@ -150,3 +156,18 @@ export const emitAndonMetricChanged = (data) => {
     logger.error("Failed to emit andon-metric-changed event", error);
   }
 };
+
+/**
+ * Emit notifikasi ke user tertentu via room
+ * @param {number} userId - ID user penerima
+ * @param {Object} notification - Data notifikasi
+ */
+export const emitNotification = (userId, notification) => {
+  try{
+    const ioInstance = getIo();
+    ioInstance.to(`user:${userId}`).emit("notification", notification);
+    logger.info(`Notification emitted to user: ${userId}`);
+  }catch(error){
+    logger.error(`Failed to emit notification to user: ${userId}`, error);
+  }
+}
