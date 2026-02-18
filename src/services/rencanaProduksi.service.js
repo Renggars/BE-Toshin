@@ -80,7 +80,9 @@ const createRencanaProduksi = async (payload) => {
     fk_id_user: fk_id_user,
     tipe: "RPH_ASSIGNED",
     judul: "RPH Baru Ditugaskan",
-    pesan: `RPH baru telah ditambahkan pada ${moment().format("DD-MM-YYYY HH:mm")}`,
+    pesan: `RPH baru telah ditambahkan pada ${moment().format(
+      "DD-MM-YYYY HH:mm",
+    )}`,
   });
 
   return rph;
@@ -171,25 +173,29 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       status_level: log.status_level,
     })) || [];
 
-  // Hitung Absensi
-  const attendance = rp.attendances[0] || null;
+  // Hitung Absensi: Cari tap paling awal dari semua RPH hari ini
+  const allAttendances = allRphs.flatMap((r) => r.attendances);
+  const firstAttendance =
+    allAttendances.length > 0
+      ? [...allAttendances].sort(
+          (a, b) => new Date(a.jam_tap) - new Date(b.jam_tap),
+        )[0]
+      : null;
+
   let statusAbsensi = "Belum Hadir";
   let jamMasukAktual = "-";
   let isTerlambat = false;
   let selisihWaktu = "-";
 
-  if (attendance) {
-    const jamTap = new Date(attendance.jam_tap);
+  if (firstAttendance) {
+    const jamTap = new Date(firstAttendance.jam_tap);
     const jamMasukShift = rp.shift.jam_masuk;
 
     const [h, m] = jamMasukShift.split(":");
-    const shiftTime = new Date(attendance.jam_tap);
+    const shiftTime = new Date(jamTap);
     shiftTime.setHours(parseInt(h), parseInt(m), 0, 0);
 
-    jamMasukAktual = jamTap.toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    jamMasukAktual = moment(jamTap).format("HH:mm");
 
     if (jamTap > shiftTime) {
       statusAbsensi = "Terlambat";
@@ -293,10 +299,10 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       late_menit: lateMinutes,
       pending_rph: pendingRph
         ? {
-          id: pendingRph.id,
-          produk: pendingRph.produk.nama_produk,
-          mesin: pendingRph.mesin.nama_mesin,
-        }
+            id: pendingRph.id,
+            produk: pendingRph.produk.nama_produk,
+            mesin: pendingRph.mesin.nama_mesin,
+          }
         : null,
     },
   };
