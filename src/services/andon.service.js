@@ -15,6 +15,8 @@ import {
 
 import logger from "../config/logger.js";
 
+import notificationService from "./notification.service.js";
+
 const TZ = "Asia/Jakarta";
 
 /**
@@ -714,13 +716,36 @@ const resolveAndon = async (id, data) => {
     tanggal: moment(event.tanggal).format("YYYY-MM-DD"),
   });
 
+  //tambahan untuk kirim notifikasi resolve ke supervisor divisi produksi
+  const supervisors = await prisma.user.findMany({
+    where: {
+      role: "SUPERVISOR",
+      divisi: { nama_divisi: { contains: "PRODUKSI" } },
+    },
+    select: { id: true },
+  });
+
+  if (supervisors.length > 0) {
+    await notificationService.createBulkNotifications(
+      supervisors.map((s) => s.id),
+      "ANDON_RESOLVED",
+      "Andon Telah Diselesaikan",
+      `Andon di mesin ${updatedEvent.mesin?.nama_mesin || "Unknown"} telah diselesaikan. Durasi downtime: ${totalDurationMinutes} menit`,
+      JSON.stringify({
+        andonId: id,
+        mesin: updatedEvent.mesin?.nama_mesin,
+        durasi: totalDurationMinutes,
+      }),
+    );
+  }
+
   const waitTime = event.waktu_repair
     ? Number(
-        (
-          (new Date(event.waktu_repair) - new Date(event.waktu_trigger)) /
-          60000
-        ).toFixed(2),
-      )
+      (
+        (new Date(event.waktu_repair) - new Date(event.waktu_trigger)) /
+        60000
+      ).toFixed(2),
+    )
     : 0;
 
   return {

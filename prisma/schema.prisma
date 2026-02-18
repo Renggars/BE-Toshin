@@ -40,6 +40,7 @@ model User {
   poin_disiplins_diberikan  PoinDisiplin[]             @relation("StaffPemberiPoin")
   produksi_logs             ProduksiLog[]              @relation("ProduksiOperator")
   rencana_produksis         RencanaProduksi[]
+  notifications             Notification[]
   divisi                    Divisi                     @relation(fields: [fk_id_divisi], references: [id])
 
   @@index([fk_id_divisi], map: "user_fk_id_divisi_fkey")
@@ -474,4 +475,26 @@ enum CallDivisi {
   QUALITY
   PRODUKSI
   DIE_MAINT
+}
+
+enum TipeNotifikasi{
+  RPH_ASSIGNED
+  ANDON_CALL
+  ANDON_RESOLVED
+}
+
+model Notification {
+  id Int @id @default(autoincrement())
+  fk_id_user Int
+  tipe TipeNotifikasi
+  judul String
+  pesan String @db.Text
+  is_read Boolean @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [fk_id_user], references: [id])
+
+  @@index([fk_id_user])
+  @@index([created_at])
+  @@map("notification")
 }

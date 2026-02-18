@@ -12,6 +12,7 @@ import attendanceRoute from "./attendance.route.js";
 import lrpDashboardRoute from "./lrpDashboard.route.js";
 import divisiRoute from "./divisi.route.js";
 import jenisPekerjaanRoute from "./jenisPekerjaan.route.js";
+import notificationRoute from "./notification.route.js";
 
 const router = express.Router();
 
@@ -67,6 +68,10 @@ const defaultRoutes = [
   {
     path: "/jenis-pekerjaan",
     route: jenisPekerjaanRoute,
+  },
+  {
+    path: "/notification",
+    route: notificationRoute,
   },
 ];
 
