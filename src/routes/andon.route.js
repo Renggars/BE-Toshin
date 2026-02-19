@@ -41,33 +41,69 @@ router.patch(
 
 router.get(
   "/shift",
-  auth("ADMIN", "SUPERVISOR", "PRODUKSI"),
+  auth(
+    "ADMIN",
+    "SUPERVISOR",
+    "PRODUKSI",
+    "QUALITY",
+    "DIE_MAINT",
+    "MAINTENANCE",
+  ),
   andonController.getActive,
 );
 router.get("/active", auth("ADMIN", "SUPERVISOR"), andonController.getActive);
 
 router.get(
   "/dashboard",
-  auth("ADMIN", "SUPERVISOR", "PRODUKSI"),
+  auth(
+    "ADMIN",
+    "SUPERVISOR",
+    "PRODUKSI",
+    "QUALITY",
+    "DIE_MAINT",
+    "MAINTENANCE",
+  ),
   validate(andonValidation.getDashboard),
   andonController.getDashboard,
 );
 
 router.get(
   "/filters",
-  auth("ADMIN", "SUPERVISOR", "PRODUKSI"),
+  auth(
+    "ADMIN",
+    "SUPERVISOR",
+    "PRODUKSI",
+    "QUALITY",
+    "DIE_MAINT",
+    "MAINTENANCE",
+  ),
   andonController.getFilters,
 );
 
 router.get(
   "/trigger-master",
-  auth("ADMIN", "SUPERVISOR", "PRODUKSI", "QUALITY"),
+  auth(
+    "ADMIN",
+    "SUPERVISOR",
+    "PRODUKSI",
+    "QUALITY",
+    "QUALITY",
+    "DIE_MAINT",
+    "MAINTENANCE",
+  ),
   andonController.getTriggerMasterData,
 );
 
 router.get(
   "/history",
-  auth("PRODUKSI", "SUPERVISOR", "ADMIN"),
+  auth(
+    "PRODUKSI",
+    "SUPERVISOR",
+    "ADMIN",
+    "QUALITY",
+    "DIE_MAINT",
+    "MAINTENANCE",
+  ),
   andonController.getPersonalHistory,
 );
 

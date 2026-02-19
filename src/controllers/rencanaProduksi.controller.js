@@ -37,10 +37,32 @@ const searchOperator = catchAsync(async (req, res) => {
   res.send(operator);
 });
 
+const updateRencanaProduksi = catchAsync(async (req, res) => {
+  const data = await rencanaProduksiService.updateRencanaProduksi(
+    req.params.rphId,
+    req.body,
+  );
+  res.send({
+    status: true,
+    message: "Rencana produksi berhasil diperbarui",
+    data,
+  });
+});
+
+const deleteRencanaProduksi = catchAsync(async (req, res) => {
+  await rencanaProduksiService.deleteRencanaProduksi(req.params.rphId);
+  res.send({
+    status: true,
+    message: "Rencana produksi berhasil dihapus",
+  });
+});
+
 export default {
   createRencanaProduksi,
   getDashboardSummary,
   getWeeklyTrend,
   searchOperator,
   getHistoryRPH,
+  updateRencanaProduksi,
+  deleteRencanaProduksi,
 };

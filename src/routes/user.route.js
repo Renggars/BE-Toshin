@@ -28,7 +28,7 @@ router
     userController.updateUser,
   );
 
-router.patch(
+router.put(
   "/:userId/deactivate",
   auth("SUPERVISOR", "ADMIN"),
   validate(userValidation.deactivateUser),

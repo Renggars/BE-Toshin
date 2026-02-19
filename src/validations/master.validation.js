@@ -5,6 +5,7 @@ const createTarget = {
     fk_jenis_pekerjaan: Joi.number().required(),
     fk_produk: Joi.number().required(),
     total_target: Joi.number().required().min(1),
+    ideal_cycle_time: Joi.number().required().min(0),
   }),
 };
 
@@ -12,8 +13,15 @@ const createTarget = {
 const createMesin = {
   body: Joi.object().keys({
     nama_mesin: Joi.string().required(),
-    kategori: Joi.string().required().valid("PRESS", "SECONDARY"),
-    ideal_cycle_time: Joi.number().required().min(0),
+    kategori: Joi.string()
+      .required()
+      .valid(
+        "PRESS",
+        "SECONDARY",
+        "PROGRESIVE_TRANSFER",
+        "FINE_BLANKING",
+        "TACI",
+      ),
   }),
 };
 
@@ -24,8 +32,13 @@ const updateMesin = {
   body: Joi.object()
     .keys({
       nama_mesin: Joi.string(),
-      kategori: Joi.string().valid("PRESS", "SECONDARY"),
-      ideal_cycle_time: Joi.number().min(0),
+      kategori: Joi.string().valid(
+        "PRESS",
+        "SECONDARY",
+        "PROGRESIVE_TRANSFER",
+        "FINE_BLANKING",
+        "TACI",
+      ),
     })
     .min(1),
 };
@@ -79,7 +92,7 @@ const createMasalahAndon = {
   body: Joi.object().keys({
     nama_masalah: Joi.string().required(),
     kategori: Joi.string().required(),
-    waktu_perbaikan: Joi.string().allow(null, ""), // Expect "HH:mm:ss" or null
+    waktu_perbaikan_menit: Joi.number().integer().required().min(0),
   }),
 };
 
@@ -91,8 +104,7 @@ const updateMasalahAndon = {
     .keys({
       nama_masalah: Joi.string(),
       kategori: Joi.string(),
-      waktu_perbaikan: Joi.string().allow(null, ""),
-      deskripsi: Joi.string().allow(null, ""),
+      waktu_perbaikan_menit: Joi.number().integer().min(0),
     })
     .min(1),
 };

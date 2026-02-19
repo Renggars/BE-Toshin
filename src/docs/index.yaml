@@ -712,7 +712,7 @@ paths:
               example:
                 summary:
                   resolvedToday: 12
-                  avgDowntime: 18
+                  totalDowntime: 13
                   totalActiveCall: 2
                   totalActiveRepair: 1
                 plants:
@@ -768,6 +768,7 @@ paths:
                       operator: "Andi"
                       resolver: "Supervisor"
                       downtime: 15.25
+                      real_downtime: 18.5
                       status: "RESOLVED"
                       respon_status: "ON_TIME"
                       estimasi_menit: 20
@@ -784,8 +785,8 @@ paths:
                     nullable: true
                     description: "Null if onlyHistory=true"
                     properties:
-                      resolvedToday: { type: integer, description: "Jumlah event resolved pada tanggal terpilih" }
-                      avgDowntime: { type: number, description: "Rata-rata downtime dalam menit" }
+                      resolvedToday: { type: integer, description: "Jumlah event resolved hari ini (tidak termasuk PLAN_DOWNTIME)" }
+                      totalDowntime: { type: number, description: "Total downtime breakdown hari ini (tidak termasuk PLAN_DOWNTIME)" }
                       totalActiveCall: { type: integer, description: "Jumlah andon call dengan status WAITING" }
                       totalActiveRepair: { type: integer, description: "Jumlah andon event dengan status IN_REPAIR" }
                   plants:
@@ -845,24 +846,9 @@ paths:
                     properties:
                       data:
                         type: array
-                        description: "Flattened history events for UI table"
+                        description: "Flattened history items (excluding PLAN_DOWNTIME)"
                         items:
-                          type: object
-                          properties:
-                            id: { type: integer }
-                            tanggal: { type: string, format: date-time }
-                            mesin: { type: string }
-                            plant: { type: string }
-                            shift: { type: string }
-                            masalah: { type: string }
-                            kategori: { type: string }
-                            operator: { type: string }
-                            resolver: { type: string }
-                            downtime: { type: number, description: "Durasi dalam menit" }
-                            status: { type: string }
-                            respon_status: { type: string, enum: [ON_TIME, OVER_TIME], description: "Status ketepatan waktu perbaikan" }
-                            estimasi_menit: { type: integer, description: "Estimasi waktu perbaikan (menit)" }
-                            waktu_resolved: { type: string, format: date-time, nullable: true }
+                          $ref: "#/components/schemas/HistoryItem"
                       meta:
                         type: object
                         properties:
@@ -1379,7 +1365,7 @@ paths:
           description: Success update user
 
   /user/{userId}/deactivate:
-    patch:
+    put:
       summary: Deactivate user
       description: Soft delete - mengubah status user menjadi inactive tanpa menghapus data dari database
       tags:
@@ -2136,6 +2122,71 @@ paths:
         '200':
           description: Success
 
+  /rencana-produksi/{rphId}:
+    put:
+      summary: Update production plan (Supervisor)
+      description: Memperbarui data rencana produksi harian (RPH). Jika operator diganti, notifikasi akan dikirim ke operator baru.
+      tags:
+        - Rencana Produksi
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: rphId
+          required: true
+          schema:
+            type: integer
+          description: ID Rencana Produksi
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fk_id_user: { type: integer }
+                fk_id_mesin: { type: integer }
+                fk_id_produk: { type: integer }
+                fk_id_shift: { type: integer }
+                fk_id_target: { type: integer }
+                fk_id_jenis_pekerjaan: { type: integer }
+                tanggal: { type: string, format: date }
+                keterangan: { type: string, nullable: true }
+                status:
+                  type: string
+                  enum: [PLANNED, WAITING_START, ACTIVE, CLOSED]
+      responses:
+        '200':
+          description: Rencana produksi berhasil diperbarui
+        '404':
+          description: Rencana Produksi tidak ditemukan
+
+    delete:
+      summary: Delete production plan (Supervisor)
+      description: |
+        Menghapus rencana produksi harian (RPH).
+        
+        **Constraint:**
+        - Gagal jika RPH sudah memiliki Laporan Realisasi Produksi (LRP).
+        - Gagal jika RPH sudah memiliki data absensi (tap-in).
+      tags:
+        - Rencana Produksi
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: rphId
+          required: true
+          schema:
+            type: integer
+          description: ID Rencana Produksi
+      responses:
+        '200':
+          description: Rencana produksi berhasil dihapus
+        '400':
+          description: Gagal menghapus karena ada data terkait (LRP atau Absensi)
+        '404':
+          description: Rencana Produksi tidak ditemukan
+
   /master/all:
     get:
       summary: Get all master data
@@ -2174,16 +2225,15 @@ paths:
                             jam_keluar:
                               type: string
                       mesin:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: integer
-                            nama_mesin:
-                              type: string
-                            ideal_cycle_time:
-                              type: number
+                        type: object
+                        additionalProperties:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id: { type: integer }
+                              nama_mesin: { type: string }
+                              kategori: { type: string }
                       jenisPekerjaan:
                         type: array
                         items:
@@ -2256,21 +2306,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_mesin, ideal_cycle_time, kategori]
+              required: [nama_mesin, kategori]
               properties:
                 nama_mesin:
                   type: string
                 kategori:
                   type: string
-                  description: Kategori mesin (e.g., PRESS, SECONDARY, etc.)
-                ideal_cycle_time:
-                  type: number
+                  enum: [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
+                  description: Kategori mesin
       responses:
         '201':
           description: Created
 
   /master/mesin/{id}:
-    patch:
+    put:
       summary: Update machine (Supervisor)
       tags: [Master]
       security:
@@ -2287,8 +2336,9 @@ paths:
               type: object
               properties:
                 nama_mesin: { type: string }
-                kategori: { type: string, description: "Kategori mesin" }
-                ideal_cycle_time: { type: number }
+                kategori:
+                  type: string
+                  enum: [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
       responses:
         '200':
           description: Updated
@@ -2711,11 +2761,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fk_jenis_pekerjaan, fk_produk, total_target]
+              required: [fk_jenis_pekerjaan, fk_produk, total_target, ideal_cycle_time]
               properties:
                 fk_jenis_pekerjaan: { type: integer }
                 fk_produk: { type: integer }
                 total_target: { type: integer }
+                ideal_cycle_time: { type: number, minimum: 0, description: "Waktu siklus ideal dalam menit" }
       responses:
         '201':
           description: Created
@@ -2726,7 +2777,7 @@ paths:
         name: id
         required: true
         schema: { type: integer }
-    patch:
+    put:
       summary: Update target (Supervisor)
       tags: [Master]
       security:
@@ -2740,7 +2791,7 @@ paths:
                 fk_jenis_pekerjaan: { type: integer }
                 fk_produk: { type: integer }
                 total_target: { type: integer }
-                ideal_cycle_time: { type: number }
+                ideal_cycle_time: { type: number, minimum: 0 }
       responses:
         '200':
           description: Updated
@@ -2778,9 +2829,11 @@ paths:
                           type: integer
                         nama_masalah:
                           type: string
-                        waktu_perbaikan:
+                        kategori:
                           type: string
-                          description: Format HH:mm:ss
+                        waktu_perbaikan_menit:
+                          type: integer
+                          description: Estimated repair duration in minutes
 
     post:
       summary: Create new andon problem (Supervisor)
@@ -2793,11 +2846,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_masalah, kategori]
+              required: [nama_masalah, kategori, waktu_perbaikan_menit]
               properties:
                 nama_masalah: { type: string }
                 kategori: { type: string }
-                waktu_perbaikan: { type: string, description: "Format HH:mm:ss" }
+                waktu_perbaikan_menit: { type: integer, minimum: 0, description: "Perkiraan durasi perbaikan dalam menit" }
       responses:
         '201':
           description: Created
@@ -2821,8 +2874,7 @@ paths:
               properties:
                 nama_masalah: { type: string }
                 kategori: { type: string }
-                waktu_perbaikan: { type: string, description: "Format HH:mm:ss" }
-                deskripsi: { type: string }
+                waktu_perbaikan_menit: { type: integer, minimum: 0, description: "Perkiraan durasi perbaikan dalam menit" }
       responses:
         '200':
           description: Success
@@ -2840,44 +2892,6 @@ paths:
         '200':
           description: Success
 
-  /master/andon-master-data:
-    get:
-      summary: Get Unified Master Data for Andon Dashboard
-      description: Get shifts, machines, and status options in a single request for dashboard filters.
-      tags: [Master]
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: boolean }
-                  message: { type: string }
-                  data:
-                    type: object
-                    properties:
-                      shifts:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id: { type: integer }
-                            nama_shift: { type: string }
-                      machines:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id: { type: integer }
-                            nama_mesin: { type: string }
-                      statuses:
-                        type: array
-                        items: { type: string }
-                        example: ["ACTIVE", "RESOLVED"]
 
   /master/tipe-disiplin:
     get:

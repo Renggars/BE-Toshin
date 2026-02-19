@@ -37,4 +37,18 @@ router.get(
   rencanaProduksiController.searchOperator,
 );
 
+router.put(
+  "/:rphId",
+  auth("SUPERVISOR"),
+  validate(rencanaProduksiValidation.updateRencanaProduksi),
+  rencanaProduksiController.updateRencanaProduksi,
+);
+
+router.delete(
+  "/:rphId",
+  auth("SUPERVISOR"),
+  validate(rencanaProduksiValidation.deleteRencanaProduksi),
+  rencanaProduksiController.deleteRencanaProduksi,
+);
+
 export default router;

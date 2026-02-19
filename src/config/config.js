@@ -24,6 +24,9 @@ const config = {
     "http://localhost:61909",
     "https://lesli-thorny-bunny.ngrok-free.dev",
   ],
+  redis: {
+    url: process.env.REDIS_URL,
+  },
 };
 
 export default config;
