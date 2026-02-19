@@ -598,6 +598,90 @@ const getHistoryRPH = async (filterTanggal) => {
   };
 };
 
+const updateRencanaProduksi = async (rphId, payload) => {
+  const rph = await prisma.rencanaProduksi.findUnique({
+    where: { id: rphId },
+  });
+
+  if (!rph) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "Rencana Produksi tidak ditemukan",
+    );
+  }
+
+  // Jika ada perubahan user, kirim notifikasi ke user baru
+  if (payload.fk_id_user && payload.fk_id_user !== rph.fk_id_user) {
+    await notificationService.createNotification({
+      fk_id_user: payload.fk_id_user,
+      tipe: "RPH_ASSIGNED",
+      judul: "RPH Baru Ditugaskan",
+      pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
+        "DD-MM-YYYY HH:mm",
+      )} (Update)`,
+    });
+  }
+
+  const updatedRph = await prisma.rencanaProduksi.update({
+    where: { id: rphId },
+    data: {
+      ...payload,
+      tanggal: payload.tanggal ? new Date(payload.tanggal) : undefined,
+    },
+    include: {
+      user: { include: { divisi: true } },
+      mesin: true,
+      produk: true,
+      shift: true,
+      jenis_pekerjaan: true,
+      target: { include: { jenis_pekerjaan: true } },
+    },
+  });
+
+  return updatedRph;
+};
+
+const deleteRencanaProduksi = async (rphId) => {
+  const rph = await prisma.rencanaProduksi.findUnique({
+    where: { id: rphId },
+    include: {
+      _count: {
+        select: {
+          attendances: true,
+          laporanRealisasiProduksis: true,
+        },
+      },
+    },
+  });
+
+  if (!rph) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "Rencana Produksi tidak ditemukan",
+    );
+  }
+
+  if (rph._count.laporanRealisasiProduksis > 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Gagal menghapus! RPH ini sudah memiliki Laporan Realisasi Produksi (LRP). Hapus LRP terlebih dahulu jika ingin menghapus RPH ini.",
+    );
+  }
+
+  if (rph._count.attendances > 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Gagal menghapus! Sudah ada data absensi untuk RPH ini. Silakan hapus data absensi terlebih dahulu jika diperlukan.",
+    );
+  }
+
+  await prisma.rencanaProduksi.delete({
+    where: { id: rphId },
+  });
+
+  return true;
+};
+
 export default {
   createRencanaProduksi,
   getRencanaProduksiHarian,
@@ -605,4 +689,6 @@ export default {
   getWeeklyTrend,
   searchOperator,
   getHistoryRPH,
+  updateRencanaProduksi,
+  deleteRencanaProduksi,
 };

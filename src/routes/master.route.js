@@ -9,7 +9,7 @@ const router = express.Router();
 // Role yang diizinkan melihat (Read Only)
 const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
 // Role yang diizinkan mengubah (Write/Edit)
-const managerRoles = auth("SUPERVISOR");
+const managerRoles = auth("SUPERVISOR", "ADMIN");
 
 // --- Tipe Disiplin ---
 router.get("/tipe-disiplin", allRoles, masterController.getTipeDisiplin);
@@ -42,7 +42,7 @@ router.post(
   validate(masterValidation.createMesin),
   masterController.createMesin,
 );
-router.patch(
+router.put(
   "/mesin/:id",
   managerRoles,
   validate(masterValidation.updateMesin),
@@ -93,7 +93,7 @@ router
 
 router
   .route("/target/:id")
-  .patch(
+  .put(
     managerRoles,
     validate(masterValidation.updateTarget),
     masterController.updateTarget,
@@ -120,7 +120,5 @@ router.delete(
   managerRoles,
   masterController.deleteMasalahAndon,
 );
-
-router.get("/andon-master-data", allRoles, masterController.getAndonMaster);
 
 export default router;

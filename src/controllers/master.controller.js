@@ -173,11 +173,6 @@ const deleteTipeDisiplin = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success delete tipe disiplin", null);
 });
 
-const getAndonMaster = catchAsync(async (req, res) => {
-  const result = await masterService.getAndonMasterData();
-  responseApiSuccess(res, "Success get andon master data", result);
-});
-
 export default {
   // Mesin
   getMesin,
@@ -211,5 +206,4 @@ export default {
   deleteTipeDisiplin,
   // Aggregated
   getAllMasterData,
-  getAndonMaster,
 };

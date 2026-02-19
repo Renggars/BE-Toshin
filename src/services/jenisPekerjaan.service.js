@@ -1,6 +1,19 @@
 import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
+import redis from "../utils/redis.js";
+import logger from "../config/logger.js";
+
+const JENIS_PEKERJAAN_CACHE_KEY = "master_jenis_pekerjaan_all";
+const MASTER_CACHE_KEY = "master_data_all";
+
+const invalidateCache = async () => {
+  logger.info("[Redis] Invalidating Jenis Pekerjaan and Master Cache...");
+  await Promise.all([
+    redis.del(JENIS_PEKERJAAN_CACHE_KEY),
+    redis.del(MASTER_CACHE_KEY),
+  ]);
+};
 
 /**
  * Create a jenis pekerjaan
@@ -19,11 +32,14 @@ const createJenisPekerjaan = async (jenisPekerjaanBody) => {
     );
   }
 
-  return prisma.jenisPekerjaan.create({
+  const result = await prisma.jenisPekerjaan.create({
     data: {
       nama_pekerjaan: jenisPekerjaanBody.nama_pekerjaan,
     },
   });
+
+  await invalidateCache();
+  return result;
 };
 
 /**
@@ -31,11 +47,29 @@ const createJenisPekerjaan = async (jenisPekerjaanBody) => {
  * @returns {Promise<JenisPekerjaan[]>}
  */
 const queryJenisPekerjaan = async () => {
-  return prisma.jenisPekerjaan.findMany({
+  // Check Cache First
+  const cachedData = await redis.get(JENIS_PEKERJAAN_CACHE_KEY);
+  if (cachedData) {
+    logger.info(
+      `[Redis] Cache HIT: Serving Jenis Pekerjaan List from Redis. Summary: ${cachedData.length} items`,
+    );
+    return cachedData;
+  }
+
+  logger.info(
+    "[Redis] Cache MISS: Fetching Jenis Pekerjaan List from Database...",
+  );
+  const result = await prisma.jenisPekerjaan.findMany({
     orderBy: {
       nama_pekerjaan: "asc",
     },
   });
+
+  // Set Cache
+  await redis.set(JENIS_PEKERJAAN_CACHE_KEY, result, 3600);
+  logger.info("[Redis] Cache SET: Jenis Pekerjaan List cached successfully");
+
+  return result;
 };
 
 /**
@@ -77,10 +111,13 @@ const updateJenisPekerjaanById = async (id, updateBody) => {
     }
   }
 
-  return prisma.jenisPekerjaan.update({
+  const result = await prisma.jenisPekerjaan.update({
     where: { id },
     data: updateBody,
   });
+
+  await invalidateCache();
+  return result;
 };
 
 /**
@@ -115,9 +152,12 @@ const deleteJenisPekerjaanById = async (id) => {
     );
   }
 
-  return prisma.jenisPekerjaan.delete({
+  const result = await prisma.jenisPekerjaan.delete({
     where: { id },
   });
+
+  await invalidateCache();
+  return result;
 };
 
 export default {

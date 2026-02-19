@@ -1,6 +1,15 @@
 import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
+import redis from "../utils/redis.js";
+import logger from "../config/logger.js";
+
+const DIVISI_CACHE_KEY = "master_divisi_all";
+
+const invalidateDivisiCache = async () => {
+  logger.info("[Redis] Invalidating Divisi Cache...");
+  await redis.del(DIVISI_CACHE_KEY);
+};
 
 /**
  * Create a divisi
@@ -17,11 +26,14 @@ const createDivisi = async (divisiBody) => {
     throw new ApiError(httpStatus.BAD_REQUEST, "Divisi already exists");
   }
 
-  return prisma.divisi.create({
+  const result = await prisma.divisi.create({
     data: {
       nama_divisi: divisiBody.nama_divisi,
     },
   });
+
+  await invalidateDivisiCache();
+  return result;
 };
 
 /**
@@ -29,11 +41,27 @@ const createDivisi = async (divisiBody) => {
  * @returns {Promise<Divisi[]>}
  */
 const queryDivisi = async () => {
-  return prisma.divisi.findMany({
+  // Check Cache First
+  const cachedData = await redis.get(DIVISI_CACHE_KEY);
+  if (cachedData) {
+    logger.info(
+      `[Redis] Cache HIT: Serving Divisi List from Redis. Summary: ${cachedData.length} divisions`,
+    );
+    return cachedData;
+  }
+
+  logger.info("[Redis] Cache MISS: Fetching Divisi List from Database...");
+  const result = await prisma.divisi.findMany({
     orderBy: {
       nama_divisi: "asc",
     },
   });
+
+  // Set Cache
+  await redis.set(DIVISI_CACHE_KEY, result, 3600); // Cache for 1 hour
+  logger.info("[Redis] Cache SET: Divisi List cached successfully");
+
+  return result;
 };
 
 /**
@@ -73,10 +101,13 @@ const updateDivisiById = async (divisiId, updateBody) => {
     }
   }
 
-  return prisma.divisi.update({
+  const result = await prisma.divisi.update({
     where: { id: divisiId },
     data: updateBody,
   });
+
+  await invalidateDivisiCache();
+  return result;
 };
 
 /**
@@ -99,9 +130,12 @@ const deleteDivisiById = async (divisiId) => {
     );
   }
 
-  return prisma.divisi.delete({
+  const result = await prisma.divisi.delete({
     where: { id: divisiId },
   });
+
+  await invalidateDivisiCache();
+  return result;
 };
 
 export default {
