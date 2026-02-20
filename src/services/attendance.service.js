@@ -1,6 +1,7 @@
 import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
+import poinService from "./poin.service.js";
 
 /**
  * Get all users scheduled for a specific shift, date, and optionally division
@@ -168,6 +169,47 @@ const clockIn = async (user) => {
         is_terlambat,
       },
     });
+
+    // LOGIKA FITUR: Otomatis kurangi poin jika terlambat
+    if (is_terlambat) {
+      try {
+        const tipeDisiplin = await prisma.tipeDisiplin.findUnique({
+          where: { kode: "P01" },
+        });
+
+        if (tipeDisiplin) {
+          // Cari admin untuk pencatatan sistem
+          const adminStaff = await prisma.user.findFirst({
+            where: { role: "ADMIN" },
+            select: { id: true },
+          });
+
+          if (adminStaff) {
+            await poinService.createPelanggaran(
+              {
+                fk_id_operator: user.id,
+                fk_tipe_disiplin: tipeDisiplin.id,
+                fk_id_shift: rph.fk_id_shift,
+                keterangan: `Sistem: Terlambat login pada ${now.toLocaleTimeString(
+                  "id-ID",
+                  {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  },
+                )} (Shift: ${rph.shift.jam_masuk})`,
+              },
+              adminStaff.id,
+            );
+          }
+        }
+      } catch (error) {
+        // Jangan block proses login jika pencatatan poin gagal, tapi log errornya
+        console.error(
+          "[ClockIn] Gagal mencatat poin disiplin otomatis:",
+          error,
+        );
+      }
+    }
   }
 };
 

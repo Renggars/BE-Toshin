@@ -22,7 +22,8 @@ const loginWithNfc = async (uid_nfc) => {
 
   await attendanceService.clockIn(user);
 
-  return user;
+  // Return fresh user data to include updated points
+  return userService.getUserByNfc(uid_nfc);
 };
 
 /**
@@ -49,7 +50,8 @@ const loginWithEmail = async (email, password) => {
 
   await attendanceService.clockIn(user);
 
-  return user;
+  // Return fresh user data to include updated points
+  return userService.getUserByEmail(email);
 };
 
 export default {

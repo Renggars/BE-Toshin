@@ -439,7 +439,6 @@ enum KategoriMesin {
 
 enum RphStatus {
   PLANNED
-  WAITING_START
   ACTIVE
   CLOSED
 }

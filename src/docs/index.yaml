@@ -2153,7 +2153,7 @@ paths:
                 keterangan: { type: string, nullable: true }
                 status:
                   type: string
-                  enum: [PLANNED, WAITING_START, ACTIVE, CLOSED]
+                  enum: [PLANNED, ACTIVE, CLOSED]
       responses:
         '200':
           description: Rencana produksi berhasil diperbarui
