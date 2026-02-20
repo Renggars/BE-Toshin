@@ -147,7 +147,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       where: {
         fk_id_user: userId,
         tanggal: { gte: yesterdayStart, lte: yesterdayEnd },
-        status: { in: ["ACTIVE", "WAITING_START"] }, // Hanya ambil yang masih relevan
+        status: { in: ["ACTIVE", "PLANNED"] }, // Hanya ambil yang masih relevan
       },
       include: includeQuery,
       orderBy: { id: "asc" },
@@ -160,7 +160,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   // Gunakan ID terbesar (paling baru ditambahkan) untuk setiap kategori status.
   const rp =
     [...allRphs].reverse().find((r) => r.status === "ACTIVE") ||
-    [...allRphs].reverse().find((r) => r.status === "WAITING_START") ||
+    // Priority: If no active, search for planned that should be started
     [...allRphs].reverse().find((r) => r.status === "PLANNED") ||
     allRphs[allRphs.length - 1];
 
@@ -250,9 +250,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     }
   }
 
-  const pendingRph = [...allRphs]
-    .reverse()
-    .find((r) => r.status === "WAITING_START");
+  const pendingRph = [...allRphs].find((r) => r.status === "PLANNED");
 
   return {
     user: {

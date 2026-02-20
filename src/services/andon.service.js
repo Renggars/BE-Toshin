@@ -300,17 +300,6 @@ const triggerAndon = async (payload) => {
       );
     }
 
-    const pendingRph = await prisma.rencanaProduksi.findFirst({
-      where: { fk_id_mesin, status: "WAITING_START" },
-    });
-
-    if (pendingRph) {
-      throw new ApiError(
-        httpStatus.CONFLICT,
-        "Sudah ada RPH yang menunggu untuk dimulai (WAITING_START)",
-      );
-    }
-
     const nextPlannedRph = await prisma.rencanaProduksi.findFirst({
       where: { fk_id_mesin, status: "PLANNED", tanggal: operationalDate },
       orderBy: { id: "asc" },
@@ -323,6 +312,8 @@ const triggerAndon = async (payload) => {
       );
     }
 
+    let openedRphId = null;
+
     // Perform state transitions + event creation in transaction
     const result = await prisma.$transaction(async (tx) => {
       // Close active RPH if it exists
@@ -334,12 +325,13 @@ const triggerAndon = async (payload) => {
         activeRphId = currentActiveRph.id;
       }
 
-      // Set next planned to waiting
+      // Activate next planned RPH immediately if it exists
       if (nextPlannedRph) {
         await tx.rencanaProduksi.update({
           where: { id: nextPlannedRph.id },
-          data: { status: "WAITING_START" },
+          data: { status: "ACTIVE", start_time: currentTime.toDate() },
         });
+        openedRphId = nextPlannedRph.id;
       }
 
       return tx.andonEvent.create({
@@ -353,6 +345,7 @@ const triggerAndon = async (payload) => {
           kategori: masalah.kategori,
           status: "ACTIVE",
           fk_id_rph_closed: activeRphId,
+          fk_id_rph_opened: openedRphId,
         },
         include: { mesin: true, masalah: true, operator: true, shift: true },
       });
@@ -654,36 +647,7 @@ const resolveAndon = async (id, data) => {
   const [updatedEvent] = await prisma.$transaction(async (tx) => {
     let openedRphId = null;
 
-    if (isRphSwitch) {
-      // Find WAITING_START RPH to activate
-      const waitingRph = await tx.rencanaProduksi.findFirst({
-        where: { fk_id_mesin: event.fk_id_mesin, status: "WAITING_START" },
-      });
-
-      if (waitingRph) {
-        // Guard: Ensure no other RPH is ACTIVE
-        const otherActive = await tx.rencanaProduksi.findFirst({
-          where: {
-            fk_id_mesin: event.fk_id_mesin,
-            status: "ACTIVE",
-            NOT: { id: waitingRph.id },
-          },
-        });
-
-        if (otherActive) {
-          throw new ApiError(
-            httpStatus.CONFLICT,
-            "Tidak bisa mengaktifkan RPH baru karena masih ada RPH ACTIVE di mesin ini. Selesaikan RPH sebelumnya dulu.",
-          );
-        }
-
-        await tx.rencanaProduksi.update({
-          where: { id: waitingRph.id },
-          data: { status: "ACTIVE", start_time: resolvedAt },
-        });
-        openedRphId = waitingRph.id;
-      }
-    }
+    // RPH activation is now handled during triggerAndon
 
     const updated = await tx.andonEvent.update({
       where: { id },
@@ -819,8 +783,8 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
   const dataList = [];
 
   // Determine RPH to attribute downtime to
-  // Rule: CHANGE_RPH belongs to closed RPH. Others belong to active RPH at trigger time.
-  let rphId = event.fk_id_rph_closed;
+  // Rule: Prioritize opened RPH for Switch events, otherwise use closed or active.
+  let rphId = event.fk_id_rph_opened || event.fk_id_rph_closed;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
       where: {
@@ -880,7 +844,7 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
   const resolveTime = moment(resolvedAt).tz(TZ);
 
   // Determine RPH
-  let rphId = event.fk_id_rph_closed;
+  let rphId = event.fk_id_rph_opened || event.fk_id_rph_closed;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
       where: { fk_id_mesin: event.fk_id_mesin, status: "ACTIVE" },
