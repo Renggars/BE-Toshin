@@ -1319,9 +1319,9 @@ const getTriggerMasterData = async () => {
 
   const categories = [
     "MAINTENANCE",
-    "QUALITY_CONTROL",
-    "DIE_MAINTENANCE",
-    "PRODUCTION",
+    "QUALITY",
+    "DIE_MAINT",
+    "PRODUKSI",
     "PLAN_DOWNTIME",
   ];
 
