@@ -22,20 +22,13 @@ router.post(
 
 router.patch(
   "/:id/start-repair",
-  auth("MAINTENANCE", "ENGINEERING", "DIE_MAINT", "SUPERVISOR", "QUALITY"),
+  auth("MAINTENANCE", "DIE_MAINT", "SUPERVISOR", "QUALITY", "PRODUKSI"),
   andonController.startRepairAndon,
 );
 
 router.patch(
   "/:id/resolve",
-  auth(
-    "DIE_MAINT",
-    "MAINTENANCE",
-    "ENGINEERING",
-    "SUPERVISOR",
-    "PRODUKSI",
-    "QUALITY",
-  ),
+  auth("DIE_MAINT", "MAINTENANCE", "SUPERVISOR", "PRODUKSI", "QUALITY"),
   andonController.resolveAndon,
 );
 
@@ -86,7 +79,6 @@ router.get(
     "ADMIN",
     "SUPERVISOR",
     "PRODUKSI",
-    "QUALITY",
     "QUALITY",
     "DIE_MAINT",
     "MAINTENANCE",

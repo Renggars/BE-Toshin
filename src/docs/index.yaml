@@ -703,7 +703,7 @@ paths:
         - in: query
           name: kategori
           schema: { type: string, default: "Semua Kategori" }
-          description: "Filter by problem category (MAINTENANCE, QUALITY_CONTROL, DIE_MAINTENANCE, PRODUCTION, PLAN_DOWNTIME). Default Semua Kategori."
+          description: "Filter by problem category (MAINTENANCE, QUALITY, DIE_MAINT, PRODUKSI, PLAN_DOWNTIME). Default Semua Kategori."
       responses:
         '200':
           description: Success
