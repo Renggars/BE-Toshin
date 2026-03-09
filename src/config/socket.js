@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import { instrument } from "@socket.io/admin-ui";
 import logger from "./logger.js";
 
 let io = null;
@@ -6,9 +7,16 @@ let io = null;
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: ["https://admin.socket.io", "*"],
+      credentials: true,
       methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     },
+  });
+
+  // Enable Socket.io Admin UI
+  instrument(io, {
+    auth: false, // Set true and add password for production
+    mode: "development",
   });
 
   io.on("connection", (socket) => {

@@ -33,7 +33,14 @@ router.patch(
 );
 
 router.get(
-  "/shift",
+  "/active",
+  auth("ADMIN", "SUPERVISOR", "MAINTENANCE", "QUALITY", "DIE_MAINT"),
+  validate(andonValidation.getActive),
+  andonController.getActive,
+);
+
+router.get(
+  "/my-active",
   auth(
     "ADMIN",
     "SUPERVISOR",
@@ -42,9 +49,9 @@ router.get(
     "DIE_MAINT",
     "MAINTENANCE",
   ),
-  andonController.getActive,
+  validate(andonValidation.getActive),
+  andonController.getMyActive,
 );
-router.get("/active", auth("ADMIN", "SUPERVISOR"), andonController.getActive);
 
 router.get(
   "/dashboard",

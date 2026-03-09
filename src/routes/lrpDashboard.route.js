@@ -3,6 +3,7 @@ import validate from "../middlewares/validate.js";
 import { auth } from "../middlewares/auth.js";
 import lrpDashboardValidation from "../validations/lrpDashboard.validation.js";
 import lrpDashboardController from "../controllers/lrpDashboard.controller.js";
+import exportController from "../controllers/export.controller.js";
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ const router = express.Router();
 // You might also allow ENGINEERING/MAINTENANCE if needed, but per request: SUPERVISOR
 const dashboardAuth = auth("SUPERVISOR", "ADMIN", "ENGINEERING");
 
+// Consolidated summary endpoint
 router.get(
   "/summary",
   dashboardAuth,
@@ -17,39 +19,18 @@ router.get(
   lrpDashboardController.getDashboardSummary,
 );
 
-router.get(
-  "/trend-bulanan-harian",
-  dashboardAuth,
-  validate(lrpDashboardValidation.getTrendBulananHarian),
-  lrpDashboardController.getTrendBulananHarian,
-);
-
-router.get(
-  "/trend-bulanan",
-  dashboardAuth,
-  validate(lrpDashboardValidation.getTrendBulanan),
-  lrpDashboardController.getTrendBulanan,
-);
-
-router.get(
-  "/ok-vs-ng",
-  dashboardAuth,
-  validate(lrpDashboardValidation.getOkVsNg),
-  lrpDashboardController.getOkVsNg,
-);
-
-router.get(
-  "/list",
-  dashboardAuth,
-  validate(lrpDashboardValidation.getLrpList),
-  lrpDashboardController.getLrpList,
-);
-
-router.get(
-  "/export",
+// Async Export Endpoints
+router.post(
+  "/export/request",
   dashboardAuth,
   validate(lrpDashboardValidation.exportData),
-  lrpDashboardController.exportData,
+  exportController.requestExport,
+);
+
+router.get(
+  "/export/status/:jobId",
+  dashboardAuth,
+  exportController.getExportStatus,
 );
 
 router.get(

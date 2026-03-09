@@ -1,6 +1,7 @@
 // src/controllers/rencanaProduksi.controller.js
 
 import httpStatus from "http-status";
+import moment from "moment";
 import catchAsync from "../utils/catchAsync.js";
 import rencanaProduksiService from "../services/rencanaProduksi.service.js";
 
@@ -57,6 +58,33 @@ const deleteRencanaProduksi = catchAsync(async (req, res) => {
   });
 });
 
+const getMyRPH = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const { tanggal } = req.query; // Opsional: filter per tanggal
+  const dateStr = tanggal || moment().format("YYYY-MM-DD");
+
+  const data = await rencanaProduksiService.getUserRPHList(
+    parseInt(userId),
+    dateStr,
+  );
+
+  res.send({
+    status: true,
+    data,
+  });
+});
+
+const closeActiveRph = catchAsync(async (req, res) => {
+  const { rphId } = req.params;
+  const data = await rencanaProduksiService.closeRph(parseInt(rphId));
+
+  res.send({
+    status: true,
+    message: "RPH berhasil ditutup",
+    data,
+  });
+});
+
 export default {
   createRencanaProduksi,
   getDashboardSummary,
@@ -65,4 +93,6 @@ export default {
   getHistoryRPH,
   updateRencanaProduksi,
   deleteRencanaProduksi,
+  getMyRPH,
+  closeActiveRph,
 };

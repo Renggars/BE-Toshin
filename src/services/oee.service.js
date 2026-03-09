@@ -60,7 +60,6 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
         fk_id_shift: shift.id,
         tanggal: targetDate,
       },
-      include: { logs: true },
     });
 
     let totalOk = 0;

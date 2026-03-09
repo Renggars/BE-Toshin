@@ -211,12 +211,12 @@ const getMachineDetail = async (tanggal, plant) => {
   const machineIds = machines.map((m) => m.id);
 
   // 2. Fetch all supporting data in parallel
-  const [oeeRecords, produksiLogs, downtimeShifts, rencanaProduksis] =
+  const [oeeRecords, lrpRecords, downtimeShifts, rencanaProduksis] =
     await Promise.all([
       prisma.oEE.findMany({
         where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
       }),
-      prisma.produksiLog.findMany({
+      prisma.laporanRealisasiProduksi.findMany({
         where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
       }),
       prisma.andonDowntimeShift.findMany({
@@ -231,7 +231,7 @@ const getMachineDetail = async (tanggal, plant) => {
   // 3. Process and merge
   return machines.map((mesin) => {
     const mcOee = oeeRecords.filter((r) => r.fk_id_mesin === mesin.id);
-    const mcLogs = produksiLogs.filter((r) => r.fk_id_mesin === mesin.id);
+    const mcLrp = lrpRecords.filter((r) => r.fk_id_mesin === mesin.id);
     const mcDt = downtimeShifts.filter((r) => r.fk_id_mesin === mesin.id);
     const mcRencana = rencanaProduksis.filter(
       (r) => r.fk_id_mesin === mesin.id,
@@ -240,15 +240,15 @@ const getMachineDetail = async (tanggal, plant) => {
     const shifts = {};
     [1, 2, 3].forEach((shiftId) => {
       const shiftKey = `shift_${shiftId}`;
-      const log = mcLogs.find((l) => l.fk_id_shift === shiftId);
+      const lrp = mcLrp.find((l) => l.fk_id_shift === shiftId);
       const dt = mcDt
         .filter((d) => d.fk_id_shift === shiftId)
         .reduce((sum, d) => sum + d.durasi_menit, 0);
       const rencana = mcRencana.find((r) => r.fk_id_shift === shiftId);
 
       shifts[shiftKey] = {
-        ok: log ? log.total_ok : 0,
-        ng: log ? log.total_ng : 0,
+        ok: lrp ? lrp.qty_ok : 0,
+        ng: lrp ? lrp.qty_ng_proses + lrp.qty_ng_prev : 0,
         downtime: dt,
         target: rencana && rencana.target ? rencana.target.total_target : 0,
       };

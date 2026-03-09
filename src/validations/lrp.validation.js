@@ -11,36 +11,22 @@ const createLrp = {
 
       no_kanagata: Joi.string().required(),
       no_lot: Joi.string().required(),
+      no_reg: Joi.string().required(),
 
       qty_ok: Joi.number().integer().min(0).required(),
       qty_ng_prev: Joi.number().integer().min(0).default(0),
       qty_ng_proses: Joi.number().integer().min(0).default(0),
       qty_rework: Joi.number().integer().min(0).default(0),
 
-      logs: Joi.array()
-        .items(
-          Joi.object({
-            waktu_start: Joi.date().required(),
-            waktu_end: Joi.date().greater(Joi.ref("waktu_start")).required(),
-            durasi_menit: Joi.number().positive().required(),
-            kode_jam_kerja: Joi.string()
-              .valid("A", "D", "B1", "B2", "B3", "B4", "C")
-              .required(),
-            kategori_downtime: Joi.string()
-              .valid("PLAN_DOWNTIME", "RUNTIME", "BREAKDOWN")
-              .required(),
-            keterangan: Joi.string().allow(null, ""),
-          }),
-        )
-        .min(1)
-        .required(),
+      counter_start: Joi.number().integer().min(0).allow(null).optional(),
+      counter_end: Joi.number().integer().min(0).allow(null).optional(),
     })
     .custom((value, helpers) => {
       const total =
         value.qty_ok +
-        value.qty_ng_prev +
-        value.qty_ng_proses +
-        value.qty_rework;
+        (value.qty_ng_prev || 0) +
+        (value.qty_ng_proses || 0) +
+        (value.qty_rework || 0);
 
       if (total <= 0) {
         return helpers.error("any.invalid");

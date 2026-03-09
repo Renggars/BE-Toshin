@@ -17,7 +17,11 @@ const getPoinByUserId = catchAsync(async (req, res) => {
 });
 
 const postPelanggaran = catchAsync(async (req, res) => {
-  const result = await poinService.createPelanggaran(req.body, req.user.id);
+  const result = await poinService.createPelanggaran(
+    req.body,
+    req.user.id,
+    req.file,
+  );
   res.status(httpStatus.CREATED).send({
     status: true,
     message: "Pelanggaran berhasil dicatat",

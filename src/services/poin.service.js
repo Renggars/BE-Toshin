@@ -89,7 +89,7 @@ const getUserCurrentPoin = async (userId) => {
   return currentTotal;
 };
 
-const createPelanggaran = async (payload, staffId) => {
+const createPelanggaran = async (payload, staffId, imageFile = null) => {
   let fk_id_operator;
 
   // Support both uid_nfc and fk_id_operator
@@ -187,6 +187,10 @@ const createPelanggaran = async (payload, staffId) => {
     status_level = "TEGURAN";
   }
 
+  const bukti_foto = imageFile
+    ? `/uploads/poin-images/${imageFile.filename}`
+    : null;
+
   // 3. Simpan Transaksi & Update Saldo User secara Atomik (Transaction)
   const result = await prisma.$transaction(async (tx) => {
     // Kurangi poin di tabel User
@@ -205,6 +209,7 @@ const createPelanggaran = async (payload, staffId) => {
         poin_berubah: nilaiPerubahan,
         status_level,
         tanggal: new Date(),
+        bukti_foto,
         keterangan,
       },
       include: { tipe_disiplin: true, operator: true },
@@ -479,6 +484,8 @@ const getPoinHistory = async (filter, options) => {
     poin_berubah: item.poin_berubah,
     status_level: item.status_level,
     tanggal: item.tanggal,
+    bukti_foto: item.bukti_foto,
+    keterangan: item.keterangan,
   }));
 
   return {

@@ -3,6 +3,7 @@ import poinController from "../controllers/poin.controller.js";
 import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import poinValidation from "../validations/poin.validation.js";
+import upload from "../utils/upload.js";
 
 const router = express.Router();
 
@@ -12,6 +13,7 @@ const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
 router.post(
   "/",
   auth("SUPERVISOR"),
+  upload.single("foto"),
   validate(poinValidation.createPelanggaran),
   poinController.postPelanggaran,
 );

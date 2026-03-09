@@ -39,8 +39,8 @@ model User {
   notifications             Notification[]
   poin_disiplins_diterima   PoinDisiplin[]             @relation("OperatorPoin")
   poin_disiplins_diberikan  PoinDisiplin[]             @relation("StaffPemberiPoin")
-  produksi_logs             ProduksiLog[]              @relation("ProduksiOperator")
   rencana_produksis         RencanaProduksi[]
+  no_reg                    String?
   divisi                    Divisi                     @relation(fields: [fk_id_divisi], references: [id])
 
   @@index([fk_id_divisi], map: "user_fk_id_divisi_fkey")
@@ -71,7 +71,6 @@ model Mesin {
   andon_events              AndonEvent[]
   laporanRealisasiProduksis LaporanRealisasiProduksi[]
   oee_records               OEE[]
-  produksi_logs             ProduksiLog[]
   rencana_produksis         RencanaProduksi[]
 
   @@map("mesin")
@@ -126,7 +125,6 @@ model Shift {
   laporanRealisasiProduksis LaporanRealisasiProduksi[]
   oee_records               OEE[]
   poinDisiplins             PoinDisiplin[]
-  produksi_logs             ProduksiLog[]
   rencana_produksis         RencanaProduksi[]
 
   @@map("shift")
@@ -184,6 +182,7 @@ model PoinDisiplin {
   fk_tipe_disiplin Int
   tanggal          DateTime     @default(now())
   fk_id_shift      Int?
+  bukti_foto       String?
   keterangan       String?      @db.Text
   operator         User         @relation("OperatorPoin", fields: [fk_id_operator], references: [id])
   shift            Shift?       @relation(fields: [fk_id_shift], references: [id])
@@ -273,27 +272,6 @@ model AndonDowntimeShift {
   @@map("andon_downtime_shift")
 }
 
-model ProduksiLog {
-  id             Int      @id @default(autoincrement())
-  fk_id_mesin    Int
-  fk_id_shift    Int
-  fk_id_operator Int?
-  total_target   Int
-  total_ok       Int      @default(0)
-  total_ng       Int      @default(0)
-  jam_mulai      DateTime
-  jam_selesai    DateTime
-  tanggal        DateTime @db.Date
-  mesin          Mesin    @relation(fields: [fk_id_mesin], references: [id])
-  operator       User?    @relation("ProduksiOperator", fields: [fk_id_operator], references: [id])
-  shift          Shift    @relation(fields: [fk_id_shift], references: [id])
-
-  @@index([fk_id_mesin], map: "produksi_log_fk_id_mesin_fkey")
-  @@index([fk_id_operator], map: "produksi_log_fk_id_operator_fkey")
-  @@index([fk_id_shift], map: "produksi_log_fk_id_shift_fkey")
-  @@map("produksi_log")
-}
-
 model OEE {
   id               Int      @id @default(autoincrement())
   fk_id_mesin      Int
@@ -335,33 +313,20 @@ model LaporanRealisasiProduksi {
   created_at       DateTime        @default(now())
   updated_at       DateTime        @updatedAt
   status_lrp       String          @default("SUBMITTED")
+  no_reg           String
+  counter_start    Int?
+  counter_end      Int?
   fk_id_rph        Int             @unique
   mesin            Mesin           @relation(fields: [fk_id_mesin], references: [id])
   operator         User            @relation(fields: [fk_id_operator], references: [id])
   rencana_produksi RencanaProduksi @relation(fields: [fk_id_rph], references: [id])
   shift            Shift           @relation(fields: [fk_id_shift], references: [id])
-  logs             LrpLog[]
 
   @@index([fk_id_mesin], map: "laporan_realisasi_produksi_fk_id_mesin_fkey")
   @@index([fk_id_operator], map: "laporan_realisasi_produksi_fk_id_operator_fkey")
   @@index([fk_id_shift], map: "laporan_realisasi_produksi_fk_id_shift_fkey")
   @@index([created_at])
   @@map("laporan_realisasi_produksi")
-}
-
-model LrpLog {
-  id                Int                      @id @default(autoincrement())
-  fk_id_lrp         Int
-  waktu_start       DateTime
-  waktu_end         DateTime
-  durasi_menit      Float
-  kode_jam_kerja    KodeJamKerja
-  kategori_downtime KategoriDowntime
-  keterangan        String?                  @db.Text
-  laporan           LaporanRealisasiProduksi @relation(fields: [fk_id_lrp], references: [id], onDelete: Cascade)
-
-  @@index([fk_id_lrp], map: "lrp_log_fk_id_lrp_fkey")
-  @@map("lrp_log")
 }
 
 model AndonCall {
@@ -465,22 +430,6 @@ enum AndonStatus {
 enum ResponStatus {
   ON_TIME
   OVER_TIME
-}
-
-enum KodeJamKerja {
-  A
-  D
-  B1
-  B2
-  B3
-  B4
-  C
-}
-
-enum KategoriDowntime {
-  PLAN_DOWNTIME
-  RUNTIME
-  BREAKDOWN
 }
 
 enum CallStatus {

@@ -36,6 +36,7 @@ const createUser = async (userBody) => {
       plant: userBody.plant,
       line: userBody.line,
       status: "active",
+      no_reg: userBody.no_reg || null,
       // Set cycle start jika role-nya PRODUKSI
       point_cycle_start:
         userBody.role === "PRODUKSI" ? new Date(new Date().setDate(1)) : null,
@@ -87,6 +88,7 @@ const queryUsers = async (filter) => {
       line: true,
       status: true,
       current_point: true,
+      no_reg: true,
     },
   });
 
@@ -117,6 +119,7 @@ const getUserByEmail = async (email) => {
       status: true,
       suspended_until: true,
       fk_id_divisi: true,
+      no_reg: true,
       divisi: {
         select: {
           id: true,
@@ -145,6 +148,7 @@ const getUserByNfc = async (uid_nfc) => {
       current_point: true,
       suspended_until: true,
       fk_id_divisi: true,
+      no_reg: true,
       divisi: {
         select: {
           id: true,
@@ -196,6 +200,7 @@ const getCurrentUserData = async (userId) => {
       suspended_until: true,
       point_cycle_start: true,
       fk_id_divisi: true,
+      no_reg: true,
       divisi: {
         select: {
           id: true,

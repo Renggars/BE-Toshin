@@ -33,6 +33,7 @@ const login = catchAsync(async (req, res) => {
   // Deteksi metode login: NFC atau Email
   if (req.body.uid_nfc) {
     // Login dengan NFC
+    console.log(req.body.uid_nfc)
     user = await authService.loginWithNfc(req.body.uid_nfc);
   } else if (req.body.email && req.body.password) {
     // Login dengan Email & Password

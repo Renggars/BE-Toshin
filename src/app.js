@@ -13,6 +13,7 @@ import ApiError from "./utils/ApiError.js";
 import setupSwagger from "./docs/swaggerConfig.js";
 import { sanitize } from "./middlewares/sanitizeXss.js";
 import path from "path";
+import logger from "./config/logger.js";
 
 const app = express();
 
@@ -24,6 +25,9 @@ app.set("etag", false);
 if (config.env !== "test") {
   app.use(morgan.successHandler);
   app.use(morgan.errorHandler);
+  logger.info(`Morgan logging enabled. Environment: ${config.env}`);
+} else {
+  logger.info("Morgan logging skipped (TEST environment)");
 }
 
 // 2. SETUP CORS (Menggunakan library agar lebih stabil)
@@ -40,7 +44,6 @@ app.use(
     credentials: true,
   }),
 );
-app.options("*", cors()); // Handle pre-flight untuk semua route
 
 // 3. SET SECURITY HEADERS
 app.use(
@@ -60,6 +63,7 @@ app.use(compression());
 
 // Static Files
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
+app.use("/exports", express.static(path.join(process.cwd(), "public/exports")));
 
 // Route dasar
 app.get("/", (req, res) => {
@@ -77,6 +81,7 @@ setupSwagger(app);
 // Pastikan rute ini benar. Jika routes berisi rute master,
 // panggilannya akan menjadi: http://localhost:4001/master/shift
 app.use("/", routes);
+app.options("*", cors());
 
 // --- Error Handling ---
 app.use((req, res, next) => {
