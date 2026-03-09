@@ -5,7 +5,10 @@ import multer from "multer";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = "public/uploads/menu-images";
+    let dir = "public/uploads/user-profiles";
+    if (req.baseUrl.includes("/poin") || req.path.includes("/poin")) {
+      dir = "public/uploads/poin-images";
+    }
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }

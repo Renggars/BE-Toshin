@@ -2,113 +2,33 @@ import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import lrpDashboardService from "../services/lrpDashboard.service.js";
 import lrpService from "../services/lrp.service.js";
+import moment from "moment";
 import { pick } from "../utils/pick.js";
 
 const getDashboardSummary = catchAsync(async (req, res) => {
   const filter = pick(req.query, [
+    "startDate",
+    "endDate",
     "fk_id_mesin",
     "fk_id_shift",
-    "tanggal",
+    "fk_id_jenis_pekerjaan",
+    "fk_id_produk",
     "plant",
   ]);
 
-  if (!filter.tanggal) {
-    filter.tanggal = new Date().toISOString().split("T")[0];
+  if (!filter.startDate && !filter.endDate) {
+    filter.startDate = moment().format("YYYY-MM-DD");
   }
 
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const result = await lrpDashboardService.getDashboardSummary(filter);
+  const result = await lrpDashboardService.getUnifiedDashboardData(filter);
   res.status(httpStatus.OK).send({
     status: true,
     data: result,
   });
 });
 
-const getTrendBulananHarian = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ["fk_id_mesin", "fk_id_shift", "plant"]);
-
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const result = await lrpDashboardService.getTrendBulananHarian(filter);
-  res.status(httpStatus.OK).send({
-    status: true,
-    data: result,
-  });
-});
-
-const getTrendBulanan = catchAsync(async (req, res) => {
-  const filter = pick(req.query, [
-    "year",
-    "fk_id_mesin",
-    "fk_id_shift",
-    "plant",
-  ]);
-
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const result = await lrpDashboardService.getTrendBulanan(filter);
-  res.status(httpStatus.OK).send({
-    status: true,
-    data: result,
-  });
-});
-
-const getOkVsNg = catchAsync(async (req, res) => {
-  const filter = pick(req.query, [
-    "fk_id_mesin",
-    "fk_id_shift",
-    "tanggal",
-    "plant",
-  ]);
-
-  // Default to today if no date provided
-  if (!filter.tanggal) {
-    filter.tanggal = new Date().toISOString().split("T")[0];
-  }
-
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const result = await lrpDashboardService.getOkVsNg(filter);
-  res.status(httpStatus.OK).send({
-    status: true,
-    data: result,
-  });
-});
-
-const getLrpList = catchAsync(async (req, res) => {
-  const filter = pick(req.query, [
-    "fk_id_mesin",
-    "fk_id_shift",
-    "tanggal",
-    "plant",
-  ]);
-  const options = pick(req.query, ["limit", "page"]);
-
-  if (!filter.tanggal) {
-    filter.tanggal = new Date().toISOString().split("T")[0];
-  }
-
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const result = await lrpDashboardService.getLrpList(filter, options);
-  res.status(httpStatus.OK).send({
-    status: true,
-    statusCode: 200,
-    message: "Success get LRP list",
-    ...result,
-  });
-});
+// Redundant endpoints consolidated into getDashboardSummary
+// Removing: getTrendBulananHarian, getTrendBulanan, getOkVsNg, getLrpList
 
 const getLrpDetail = catchAsync(async (req, res) => {
   const result = await lrpDashboardService.getLrpDetail(
@@ -120,35 +40,7 @@ const getLrpDetail = catchAsync(async (req, res) => {
   });
 });
 
-const exportData = catchAsync(async (req, res) => {
-  const filter = pick(req.query, [
-    "tanggal",
-    "fk_id_mesin",
-    "fk_id_shift",
-    "plant",
-  ]);
-
-  if (!filter.tanggal) {
-    filter.tanggal = new Date().toISOString().split("T")[0];
-  }
-
-  if (!filter.plant) {
-    filter.plant = "3";
-  }
-
-  const buffer = await lrpDashboardService.exportData(filter);
-
-  const filename = `LRP_Dashboard_Export_${filter.tanggal}.xlsx`;
-
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  );
-  res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-
-  res.status(httpStatus.OK).send(buffer);
-});
-
+// Removed synchronous exportData as per request.
 const updateLrp = catchAsync(async (req, res) => {
   const result = await lrpService.updateLrpById(
     Number(req.params.lrpId),
@@ -171,12 +63,7 @@ const deleteLrp = catchAsync(async (req, res) => {
 
 export default {
   getDashboardSummary,
-  getTrendBulananHarian,
-  getTrendBulanan,
-  getOkVsNg,
-  getLrpList,
   getLrpDetail,
-  exportData,
   updateLrp,
   deleteLrp,
 };

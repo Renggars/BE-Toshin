@@ -2,10 +2,13 @@ import prisma from "../prisma/index.js";
 import app from "./app.js";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
-
 import { initSocket } from "./config/socket.js";
-
 import redis from "./utils/redis.js";
+import { initOeeWorker, closeOeeWorker } from "./workers/oee.worker.js";
+import {
+  initExportWorker,
+  closeExportWorker,
+} from "./workers/export.worker.js";
 
 let server;
 
@@ -17,6 +20,10 @@ if (prisma) {
     .connectRedis()
     .then(() => {
       logger.info("Connected to Redis");
+
+      // Start BullMQ OEE Worker setelah Redis siap
+      initOeeWorker();
+      initExportWorker();
     })
     .catch((err) => {
       logger.error("Redis connection failed", err);
@@ -55,6 +62,9 @@ process.on("SIGTERM", () => {
   if (server) {
     server.close();
   }
+  // Graceful shutdown: tunggu job BullMQ yang sedang berjalan selesai
+  closeOeeWorker();
+  closeExportWorker();
 });
 
 export default app;

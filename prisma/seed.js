@@ -274,7 +274,145 @@ async function main() {
     }
   }
 
+  // 7. Seed MasterMasalahAndon (from seed-andon.js)
+  console.log("Seeding MasterMasalahAndon...");
+  const andonFilePath = path.join(csvDir, "data_master_masalah_andon.xlsx");
+  const andonWorkbook = xlsx.readFile(andonFilePath);
+  const andonCategoriesMapping = {
+    MAINTENANCE: "MAINTENANCE",
+    QUALITY_CONTROL: "QUALITY",
+    DIE_MAINTENANCE: "DIE_MAINT",
+    PRODUCTION: "PRODUKSI",
+  };
+
+  console.log("Clearing existing MasterMasalahAndon records...");
+  await prisma.masterMasalahAndon.deleteMany();
+
+  for (const [sheetName, kategoriEnum] of Object.entries(
+    andonCategoriesMapping,
+  )) {
+    const sheet = andonWorkbook.Sheets[sheetName];
+    if (!sheet) {
+      console.warn(`Sheet "${sheetName}" not found in Excel file, skipping...`);
+      continue;
+    }
+
+    const data = xlsx.utils.sheet_to_json(sheet);
+    console.log(`Seeding ${data.length} records for category: ${sheetName} (Enum: ${kategoriEnum})`);
+
+    const records = data
+      .map((row) => {
+        const nama_masalah = row["Keterangan"];
+        const timeout = row["Timeout (HH:MM:SS)"];
+
+        if (!nama_masalah) return null;
+
+        return {
+          nama_masalah: nama_masalah.toString().trim(),
+          kategori: kategoriEnum,
+          waktu_perbaikan_menit: timeToMinutes(timeout),
+        };
+      })
+      .filter((record) => record !== null);
+
+    if (records.length > 0) {
+      await prisma.masterMasalahAndon.createMany({
+        data: records,
+      });
+    }
+  }
+
+  // 8. Update User No Reg (from seed_no_reg.js)
+  console.log("Updating User No Reg from Excel...");
+  const noRegFilePath = path.join(csvDir, "NoRegistrasi.xlsx");
+  console.log(`Reading file: ${noRegFilePath}`);
+  const noRegWorkbook = xlsx.readFile(noRegFilePath);
+
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+
+  for (const sheetName of noRegWorkbook.SheetNames) {
+    const worksheet = noRegWorkbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+
+    let nameIndex = -1;
+    let noRegIndex = -1;
+
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const nameIdx = row.findIndex(
+        (cell) => cell?.toString().trim().toUpperCase() === "NAMA",
+      );
+      const noRegIdx = row.findIndex(
+        (cell) =>
+          cell?.toString().trim().toUpperCase() === "NO. REG" ||
+          cell?.toString().trim().toUpperCase() === "NO.REG",
+      );
+
+      if (nameIdx !== -1 && noRegIdx !== -1) {
+        nameIndex = nameIdx;
+        noRegIndex = noRegIdx;
+        rows.splice(0, i + 1);
+        break;
+      }
+    }
+
+    if (nameIndex === -1 || noRegIndex === -1) continue;
+
+    for (const row of rows) {
+      const nama = row[nameIndex]?.toString().trim();
+      const noReg = row[noRegIndex]?.toString().trim();
+
+      if (!nama || !noReg || nama.toUpperCase() === "NAMA") {
+        continue;
+      }
+
+      const users = await prisma.user.findMany({
+        where: {
+          nama: {
+            contains: nama,
+          },
+        },
+      });
+
+      const user = users.find(
+        (u) => u.nama.trim().toLowerCase() === nama.toLowerCase(),
+      );
+
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { no_reg: noReg },
+        });
+        totalUpdated++;
+      } else {
+        totalSkipped++;
+      }
+    }
+  }
+  console.log(`Total Updated: ${totalUpdated}, Total Skipped: ${totalSkipped}`);
+
   console.log("--- Seed Completed Successfully ---");
+}
+
+/**
+ * Converts Excel time (fraction of a day or HH:MM:SS string) to total minutes as an integer.
+ */
+function timeToMinutes(timeValue) {
+  if (timeValue === undefined || timeValue === null) return 0;
+  if (typeof timeValue === "number") {
+    return Math.round(timeValue * 24 * 60);
+  }
+  if (typeof timeValue === "string") {
+    const parts = timeValue.split(":");
+    if (parts.length >= 2) {
+      const hours = parseInt(parts[0], 10) || 0;
+      const minutes = parseInt(parts[1], 10) || 0;
+      return hours * 60 + minutes;
+    }
+  }
+  return 0;
 }
 
 main()

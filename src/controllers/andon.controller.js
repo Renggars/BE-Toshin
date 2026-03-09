@@ -34,8 +34,13 @@ const resolveAndon = catchAsync(async (req, res) => {
 });
 
 const getActive = catchAsync(async (req, res) => {
-  const result = await andonService.getActiveEvents();
+  const result = await andonService.getActiveEvents(null, req.query);
   responseApiSuccess(res, "Success get active andon", result);
+});
+
+const getMyActive = catchAsync(async (req, res) => {
+  const result = await andonService.getMyActiveEvents(req.user.id, req.query);
+  responseApiSuccess(res, "Success get my active andon", result);
 });
 
 const getDashboard = catchAsync(async (req, res) => {
@@ -64,6 +69,7 @@ export default {
   startRepairAndon,
   resolveAndon,
   getActive,
+  getMyActive,
   getDashboard,
   getFilters,
   getTriggerMasterData,

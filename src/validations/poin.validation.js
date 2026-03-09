@@ -8,9 +8,20 @@ const createPelanggaran = {
       fk_id_operator: Joi.number().integer().optional(),
       fk_tipe_disiplin: Joi.number().integer().required(),
       fk_id_shift: Joi.number().integer().required(),
-      keterangan: Joi.string().allow(null, ""),
+      keterangan: Joi.string().optional(),
     })
     .or("uid_nfc", "fk_id_operator"), // At least one must be present
+  file: Joi.object()
+    .keys({
+      mimetype: Joi.string()
+        .valid("image/jpeg", "image/jpg", "image/png", "image/webp")
+        .required(),
+      size: Joi.number()
+        .max(1024 * 1024)
+        .required(), // 1MB
+    })
+    .unknown(true)
+    .optional(),
 };
 
 const createPelanggaranByNfc = {
@@ -18,8 +29,19 @@ const createPelanggaranByNfc = {
     uid_nfc: Joi.string().required(),
     fk_tipe_disiplin: Joi.number().integer().required(),
     fk_id_shift: Joi.number().integer().required(),
-    keterangan: Joi.string().allow(null, ""),
+    keterangan: Joi.string().optional(),
   }),
+  file: Joi.object()
+    .keys({
+      mimetype: Joi.string()
+        .valid("image/jpeg", "image/jpg", "image/png", "image/webp")
+        .required(),
+      size: Joi.number()
+        .max(1024 * 1024)
+        .required(), // 1MB
+    })
+    .unknown(true)
+    .optional(),
 };
 
 const getHistory = {

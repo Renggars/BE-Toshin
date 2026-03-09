@@ -20,7 +20,7 @@ const errorConverter = (err, req, res, next) => {
       error = handlePrismaError(err);
     } else {
       // Handling Global Error
-      const statusCode = error.statusCode;
+      const statusCode = error.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
       const message = error.message || httpStatus[statusCode];
       error = new ApiError(statusCode, message, false, err.stack);
     }
@@ -36,7 +36,7 @@ const handlePrismaError = (err) => {
         400,
         `Duplicate field value: ${err.meta.target}`,
         false,
-        err.stack
+        err.stack,
       );
     case "P2014":
       // handling invalid id errors
@@ -44,7 +44,7 @@ const handlePrismaError = (err) => {
         400,
         `Invalid ID: ${err.meta.target}`,
         false,
-        err.stack
+        err.stack,
       );
     case "P2003":
       // handling invalid data errors
@@ -52,7 +52,7 @@ const handlePrismaError = (err) => {
         400,
         `Invalid input data: ${err.meta.target}`,
         false,
-        err.stack
+        err.stack,
       );
     default:
       // handling all other errors
@@ -60,7 +60,7 @@ const handlePrismaError = (err) => {
         500,
         `Something went wrong: ${err.message}`,
         false,
-        err.stack
+        err.stack,
       );
   }
 };

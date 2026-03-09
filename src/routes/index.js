@@ -5,7 +5,6 @@ import rencanaProduksiRoute from "./rencanaProduksi.route.js";
 import masterRoute from "./master.route.js";
 import poinRoute from "./poin.route.js";
 import andonRoute from "./andon.route.js";
-import produksiRoute from "./produksi.route.js";
 import oeeRoute from "./oee.route.js";
 import lrpRoute from "./lrp.route.js";
 import attendanceRoute from "./attendance.route.js";
@@ -13,6 +12,8 @@ import lrpDashboardRoute from "./lrpDashboard.route.js";
 import divisiRoute from "./divisi.route.js";
 import jenisPekerjaanRoute from "./jenisPekerjaan.route.js";
 import notificationRoute from "./notification.route.js";
+import healthRoute from "./health.route.js";
+import metricsRoute from "./metrics.route.js";
 
 const router = express.Router();
 
@@ -42,10 +43,6 @@ const defaultRoutes = [
     route: andonRoute,
   },
   {
-    path: "/produksi",
-    route: produksiRoute,
-  },
-  {
     path: "/oee",
     route: oeeRoute,
   },
@@ -72,6 +69,14 @@ const defaultRoutes = [
   {
     path: "/notification",
     route: notificationRoute,
+  },
+  {
+    path: "/health",
+    route: healthRoute,
+  },
+  {
+    path: "/metrics",
+    route: metricsRoute,
   },
 ];
 

@@ -3,13 +3,35 @@
 import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
-import oeeService from "./oee.service.js";
+import moment from "moment";
+import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
+import { oeeQueue } from "../queues/oeeQueue.js";
+
+/**
+ * Helper: enqueue OEE recalculation job dengan dedup + delay.
+ * jobId = `oee-{mesinId}-{YYYY-MM-DD}` → burst LRP untuk mesin + hari yang
+ * sama hanya akan trigger 1 recalc setelah window delay 3 detik selesai.
+ */
+const enqueueOeeRecalc = async (mesinId, tanggal) => {
+  // Normalize ke YYYY-MM-DD agar jobId selalu konsisten
+  // (tanggal bisa berupa Date object atau ISO string)
+  const tanggalStr = moment(tanggal).format("YYYY-MM-DD");
+
+  await oeeQueue.add(
+    "oee-recalc",
+    { mesinId, tanggal: tanggalStr },
+    {
+      jobId: `oee-${mesinId}-${tanggalStr}`, // kunci dedup
+      delay: 3000, // tunggu 3 detik (window dedup)
+    },
+  );
+};
 
 /**
  * Create LRP
  */
 const createLrp = async (lrpBody) => {
-  const { logs, ...data } = lrpBody;
+  const data = lrpBody;
 
   // 1. Validasi ID RPH
   if (!data.fk_id_rph) {
@@ -19,88 +41,78 @@ const createLrp = async (lrpBody) => {
     );
   }
 
-  const rph = await prisma.rencanaProduksi.findUnique({
-    where: { id: data.fk_id_rph },
-    include: { target: true, shift: true },
-  });
+  const result = await prisma.$transaction(async (tx) => {
+    const rph = await tx.rencanaProduksi.findUnique({
+      where: { id: data.fk_id_rph },
+      include: { target: true, shift: true },
+    });
 
-  if (!rph) {
-    throw new ApiError(
-      httpStatus.NOT_FOUND,
-      "Rencana Produksi tidak ditemukan",
-    );
-  }
+    if (!rph) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Rencana Produksi tidak ditemukan",
+      );
+    }
 
-  // 2. State Guardrails: LRP hanya untuk RPH yang sudah CLOSED
-  if (rph.status !== "CLOSED") {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "LRP hanya dapat dibuat untuk Rencana Produksi (RPH) yang berstatus CLOSED. Lakukan RPH Switch atau selesaikan shift terlebih dahulu.",
-    );
-  }
+    // 2. State Guardrails: LRP hanya untuk RPH yang ACTIVE atau CLOSED
+    // RPH tetap ACTIVE agar downtime administrasi tetap masuk ke RPH ini
+    if (rph.status !== "ACTIVE" && rph.status !== "CLOSED") {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "LRP hanya dapat dibuat untuk Rencana Produksi (RPH) yang berstatus ACTIVE atau CLOSED.",
+      );
+    }
 
-  // 3. Enforce 1:1 Mapping
-  const existingLrp = await prisma.laporanRealisasiProduksi.findUnique({
-    where: { fk_id_rph: data.fk_id_rph },
-  });
-  if (existingLrp) {
-    throw new ApiError(
-      httpStatus.CONFLICT,
-      "LRP untuk Rencana Produksi ini sudah pernah dibuat (Strict 1:1 Mapping)",
-    );
-  }
+    // 3. Enforce 1:1 Mapping
+    const existingLrp = await tx.laporanRealisasiProduksi.findUnique({
+      where: { fk_id_rph: data.fk_id_rph },
+    });
+    if (existingLrp) {
+      throw new ApiError(
+        httpStatus.CONFLICT,
+        "LRP untuk Rencana Produksi ini sudah pernah dibuat (Strict 1:1 Mapping)",
+      );
+    }
 
-  // 4. Konsistensi Data (Optional but recommended for integrity)
-  if (
-    rph.fk_id_mesin !== data.fk_id_mesin ||
-    rph.fk_id_shift !== data.fk_id_shift ||
-    moment(rph.tanggal).format("YYYY-MM-DD") !==
-      moment(data.tanggal).format("YYYY-MM-DD")
-  ) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "Data Mesin, Shift, atau Tanggal pada LRP tidak sesuai dengan Rencana Produksi (RPH) yang direferensikan",
-    );
-  }
+    // 4. Hitung loading time (Gunakan start_time ke end_time atau shift)
+    let loading_time = 0;
+    const currentEnd = rph.end_time || new Date();
+    if (rph.start_time) {
+      loading_time = Math.ceil(
+        (new Date(currentEnd) - new Date(rph.start_time)) / 60000,
+      );
+    } else {
+      loading_time = calculateLoadingTimeFromShift(rph.shift);
+    }
 
-  // 5. Hitung loading time (Gunakan shift dari RPH)
-  // Perhitungan loading_time mengikuti durasi RPH (start_time ke end_time)
-  // atau standard loading time shift jika start/end tidak tersedia.
-  // Sesuai rule: loading_time belong exclusively to that RPH.
-  let loading_time = 0;
-  if (rph.start_time && rph.end_time) {
-    loading_time = Math.ceil(
-      (new Date(rph.end_time) - new Date(rph.start_time)) / 60000,
-    );
-  } else {
-    // Fallback ke standard shift calculation jika data waktu tidak lengkap
-    loading_time = calculateLoadingTimeFromShift(rph.shift);
-  }
+    // 5. Hitung total produksi
+    const qty_total_prod =
+      Number(data.qty_ok || 0) +
+      Number(data.qty_ng_proses || 0) +
+      Number(data.qty_rework || 0);
 
-  // 6. Hitung total produksi
-  const qty_total_prod =
-    Number(data.qty_ok || 0) +
-    Number(data.qty_ng_proses || 0) +
-    Number(data.qty_rework || 0);
-
-  // 7. Simpan LRP
-  const lrp = await prisma.laporanRealisasiProduksi.create({
-    data: {
-      ...data,
-      qty_total_prod,
-      loading_time,
-      cycle_time: rph.target.ideal_cycle_time || 0,
-      logs: {
-        create: logs,
+    // 6. Simpan LRP
+    const lrp = await tx.laporanRealisasiProduksi.create({
+      data: {
+        ...data,
+        qty_total_prod,
+        loading_time,
+        cycle_time: rph.target.ideal_cycle_time || 0,
+        no_reg: data.no_reg || null,
+        counter_start:
+          data.counter_start != null ? Number(data.counter_start) : null,
+        counter_end: data.counter_end != null ? Number(data.counter_end) : null,
       },
-    },
-    include: { logs: true },
+    });
+
+    return lrp;
   });
 
-  // 8. Sync ke OEE
-  await oeeService.recalculateByMesin(lrp.fk_id_mesin, lrp.tanggal);
+  // 7. Enqueue OEE recalc ke background worker (non-blocking)
+  // Response 201 sudah dikirim, recalc jalan setelah delay 3 detik
+  await enqueueOeeRecalc(result.fk_id_mesin, result.tanggal);
 
-  return lrp;
+  return result;
 };
 
 /**
@@ -154,7 +166,6 @@ const getLrpById = async (id) => {
   return prisma.laporanRealisasiProduksi.findUnique({
     where: { id },
     include: {
-      logs: true,
       operator: true,
       mesin: true,
       shift: true,
@@ -178,7 +189,6 @@ const updateLrpById = async (lrpId, updateBody) => {
   const updatedLrp = await prisma.laporanRealisasiProduksi.update({
     where: { id: lrpId },
     data: updateBody,
-    include: { logs: true }, // Needed for syncOee
   });
 
   // Sync OEE (Recalculate)
@@ -188,11 +198,8 @@ const updateLrpById = async (lrpId, updateBody) => {
     updateBody.qty_ng_prev !== undefined ||
     updateBody.qty_rework !== undefined
   ) {
-    // If quantity changed, we must re-sync OEE
-    await oeeService.recalculateByMesin(
-      updatedLrp.fk_id_mesin,
-      updatedLrp.tanggal,
-    );
+    // Quantity berubah → enqueue OEE recalc ke background worker
+    await enqueueOeeRecalc(updatedLrp.fk_id_mesin, updatedLrp.tanggal);
   }
 
   return updatedLrp;
@@ -216,71 +223,10 @@ const deleteLrpById = async (lrpId) => {
     where: { id: lrpId },
   });
 
-  // Re-sync OEE because data is gone
-  await oeeService.recalculateByMesin(lrp.fk_id_mesin, lrp.tanggal);
+  // Enqueue OEE recalc karena data LRP sudah dihapus
+  await enqueueOeeRecalc(lrp.fk_id_mesin, lrp.tanggal);
 
   return lrp;
-};
-
-/**
- * Get Dashboard Stats
- * @returns {Promise<Object>}
- */
-const getDashboardStats = async () => {
-  // 1. Total OK vs NG (All time? Or Today?)
-  // Assuming All time for now, or maybe last 30 days is better for charts.
-  // Let's do aggregations.
-
-  const aggregations = await prisma.laporanRealisasiProduksi.aggregate({
-    _sum: {
-      qty_ok: true,
-      qty_ng_proses: true,
-      qty_rework: true,
-      total_downtime: true,
-    },
-  });
-
-  // 2. Trend Produksi Harian (Last 7 days)
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const dailyTrend = await prisma.laporanRealisasiProduksi.groupBy({
-    by: ["tanggal"],
-    where: {
-      tanggal: {
-        gte: sevenDaysAgo,
-      },
-    },
-    _sum: {
-      qty_total_prod: true,
-    },
-    orderBy: {
-      tanggal: "asc",
-    },
-  });
-
-  // 3. Total Downtime per Kategori
-  // Need to aggregate on logs
-  const downtimeStats = await prisma.lrpLog.groupBy({
-    by: ["kategori_downtime"],
-    _sum: {
-      durasi_menit: true,
-    },
-  });
-
-  return {
-    summary: {
-      total_ok: aggregations._sum.qty_ok || 0,
-      total_ng: aggregations._sum.qty_ng_proses || 0,
-      total_rework: aggregations._sum.qty_rework || 0,
-      total_downtime_minutes: aggregations._sum.total_downtime || 0,
-    },
-    daily_trend: dailyTrend.map((d) => ({
-      date: d.tanggal,
-      total: d._sum.qty_total_prod,
-    })),
-    downtime_distribution: downtimeStats,
-  };
 };
 
 export default {
@@ -289,5 +235,4 @@ export default {
   getLrpById,
   updateLrpById,
   deleteLrpById,
-  getDashboardStats,
 };

@@ -63,16 +63,10 @@ const deleteLrp = catchAsync(async (req, res) => {
   responseApiSuccess(res, "LRP deleted successfully");
 });
 
-const getDashboardStats = catchAsync(async (req, res) => {
-  const stats = await lrpService.getDashboardStats();
-  responseApiSuccess(res, "LRP dashboard stats retrieved successfully", stats);
-});
-
 export default {
   createLrp,
   getLrps,
   getLrp,
   updateLrp,
   deleteLrp,
-  getDashboardStats,
 };

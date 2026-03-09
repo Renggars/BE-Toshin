@@ -14,6 +14,19 @@ router.post(
 );
 
 router.get(
+  "/my-rph",
+  auth("SUPERVISOR", "ADMIN", "PRODUKSI"),
+  validate(rencanaProduksiValidation.getMyRPH),
+  rencanaProduksiController.getMyRPH,
+);
+
+router.post(
+  "/close-rph/:rphId",
+  auth("PRODUKSI", "SUPERVISOR"),
+  rencanaProduksiController.closeActiveRph,
+);
+
+router.get(
   "/dashboard/summary",
   auth("SUPERVISOR"),
   rencanaProduksiController.getDashboardSummary,

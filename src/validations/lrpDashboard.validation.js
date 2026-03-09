@@ -2,56 +2,18 @@ import Joi from "joi";
 
 const getDashboardSummary = {
   query: Joi.object().keys({
-    tanggal: Joi.string().isoDate(),
-    fk_id_mesin: Joi.number().integer(),
-    fk_id_shift: Joi.number().integer(),
-    plant: Joi.string(),
-  }),
-};
-
-const getTrendBulananHarian = {
-  query: Joi.object().keys({
-    fk_id_mesin: Joi.number().integer(),
-    fk_id_shift: Joi.number().integer(),
-    plant: Joi.string(),
-  }),
-};
-
-const getTrendBulanan = {
-  query: Joi.object().keys({
-    year: Joi.number().integer().min(2000).max(2100),
-    fk_id_mesin: Joi.number().integer(),
-    fk_id_shift: Joi.number().integer(),
-    plant: Joi.string(),
-  }),
-};
-
-const getOkVsNg = {
-  query: Joi.object().keys({
-    tanggal: Joi.string().isoDate(),
-    fk_id_mesin: Joi.number().integer(),
-    fk_id_shift: Joi.number().integer(),
-    plant: Joi.string(),
-  }),
-};
-
-const getLrpList = {
-  query: Joi.object().keys({
-    tanggal: Joi.string()
-      .isoDate()
-      .description("Format: YYYY-MM-DD")
-      .allow(null, ""),
-
+    startDate: Joi.string().isoDate().allow(null, ""),
+    endDate: Joi.string().isoDate().allow(null, ""),
     fk_id_mesin: Joi.number().integer().min(1).allow(null, ""),
     fk_id_shift: Joi.number().integer().min(1).allow(null, ""),
+    fk_id_jenis_pekerjaan: Joi.number().integer().min(1).allow(null, ""),
+    fk_id_produk: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
-
-    limit: Joi.number().integer().min(1).max(100).default(10),
-    page: Joi.number().integer().min(1).default(1),
-
-    sortBy: Joi.string().allow(null, ""),
   }),
 };
+
+// Redundant validations consolidated into getDashboardSummary
+// Removing: getTrendBulananHarian, getTrendBulanan, getOkVsNg, getLrpList
 
 const getLrpDetail = {
   params: Joi.object().keys({
@@ -61,9 +23,12 @@ const getLrpDetail = {
 
 const exportData = {
   query: Joi.object().keys({
-    tanggal: Joi.string().isoDate().allow(null, ""),
+    startDate: Joi.string().isoDate().allow(null, ""),
+    endDate: Joi.string().isoDate().allow(null, ""),
     fk_id_mesin: Joi.number().integer().allow(null, ""),
-    fk_id_shift: Joi.number().integer().allow(null, ""),
+    fk_id_shift: Joi.number().integer().min(1).allow(null, ""),
+    fk_id_jenis_pekerjaan: Joi.number().integer().min(1).allow(null, ""),
+    fk_id_produk: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
     format: Joi.string().valid("excel", "pdf").default("excel"),
   }),
@@ -92,10 +57,6 @@ const deleteLrp = {
 
 export default {
   getDashboardSummary,
-  getTrendBulananHarian,
-  getTrendBulanan,
-  getOkVsNg,
-  getLrpList,
   getLrpDetail,
   exportData,
   updateLrp,

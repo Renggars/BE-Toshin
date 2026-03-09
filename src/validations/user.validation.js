@@ -33,6 +33,7 @@ const register = {
     foto_profile: Joi.string().uri().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
+    no_reg: Joi.string().optional().allow(null, ""),
   }),
 };
 
@@ -84,6 +85,7 @@ const updateUser = {
       foto_profile: Joi.string().uri().allow(null, ""),
       plant: Joi.string().valid("1", "2", "3").optional(),
       line: Joi.string().optional(),
+      no_reg: Joi.string().optional().allow(null, ""),
     })
     .min(1), // Minimal harus ada satu field yang diupdate
 };

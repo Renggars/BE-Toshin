@@ -43,4 +43,10 @@ const getDashboard = {
   }),
 };
 
-export default { trigger, call, resolve, getDashboard };
+const getActive = {
+  query: Joi.object().keys({
+    mesinId: Joi.number().integer().optional(),
+  }),
+};
+
+export default { trigger, call, resolve, getDashboard, getActive };

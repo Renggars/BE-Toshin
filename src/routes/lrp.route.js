@@ -11,7 +11,7 @@ const router = express.Router();
 router
   .route("/")
   .post(
-    auth("PRODUKSI", "SUPERVISOR", "ADMIN"), // Auth required
+    auth("PRODUKSI", "ADMIN"), // Auth required
     validate(lrpValidation.createLrp),
     lrpController.createLrp,
   )
@@ -20,8 +20,6 @@ router
     validate(lrpValidation.getLrps),
     lrpController.getLrps,
   );
-
-router.route("/dashboard/stats").get(auth(), lrpController.getDashboardStats); // Specific route before :lrpId
 
 router
   .route("/:lrpId")

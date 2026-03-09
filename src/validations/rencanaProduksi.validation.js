@@ -45,8 +45,15 @@ const deleteRencanaProduksi = {
   }),
 };
 
+const getMyRPH = {
+  query: Joi.object().keys({
+    tanggal: Joi.string().isoDate().optional(), // YYYY-MM-DD
+  }),
+};
+
 export default {
   createRencanaProduksi,
   updateRencanaProduksi,
   deleteRencanaProduksi,
+  getMyRPH,
 };
