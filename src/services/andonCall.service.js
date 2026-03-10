@@ -132,27 +132,36 @@ const createCall = async (payload) => {
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
 
-  // Send notification to production supervisors
+  // Send notification to supervisors of the TARGET division
   const supervisors = await prisma.user.findMany({
     where: {
       role: "SUPERVISOR",
-      divisi: { nama_divisi: { contains: "PRODUKSI" } },
+      divisi: { nama_divisi: { contains: target_divisi.replace("_", " ") } },
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
   });
 
   if (supervisors.length > 0) {
+    const waktuWIB = moment(currentTime).tz(TZ).format("DD-MM-YYYY HH:mm:ss");
+    const namaMesin = newCall.mesin?.nama_mesin || "-";
+    const namaOperator = newCall.operator?.nama || "-";
+    const namaShift = newCall.shift?.nama_shift || "-";
+    const plantInfo = newCall.plant || "-";
+
+    const pesan =
+      `🚨 Andon Call Baru!\n` +
+      `Mesin: ${namaMesin}\n` +
+      `Operator: ${namaOperator}\n` +
+      `Waktu: ${waktuWIB} WIB\n` +
+      `Shift: ${namaShift}\n` +
+      `Plant: ${plantInfo}\n` +
+      `Divisi Tujuan: ${target_divisi}`;
+
     await notificationService.createBulkNotifications(
       supervisors.map((s) => s.id),
       "ANDON_CALL",
-      "Andon Call Baru",
-      `Operator ${newCall.operator.nama} menekan Andon di mesin ${newCall.mesin.nama_mesin}`,
-      JSON.stringify({
-        andonCallId: newCall.id,
-        mesin: newCall.mesin.nama_mesin,
-      }),
+      `Andon Call - ${namaMesin}`,
+      pesan,
     );
   }
 
