@@ -2,6 +2,8 @@ import prisma from "../prisma/index.js";
 import app from "./app.js";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
+import tcpService from "./services/tcp.service.js";
+
 
 import { initSocket } from "./config/socket.js";
 
@@ -28,6 +30,10 @@ if (prisma) {
 
     // Initialize Socket.io
     initSocket(server);
+
+    //inisialisasi tcp server
+    const tcpServer = process.env.TCP_PORT || 8080;
+    tcpService.initTcpServer(tcpServer);
   });
 }
 
