@@ -226,14 +226,31 @@ async function main() {
     const row = rawTarget[i];
     // Headers: ["PRODUK","JENIS_PEKERJAAN","TARGET","fk_produk","fk_jenis_pekerjaan","CYCLE TIME (menit / pcs)","PEMBULATAN CYCLE TIME (menit / pcs) "]
     if (row[3] && row[4]) {
-      await prisma.target.create({
-        data: {
-          fk_produk: parseInt(row[3]),
-          fk_jenis_pekerjaan: parseInt(row[4]),
-          total_target: parseInt(row[2]) || 0,
-          ideal_cycle_time: parseFloat(row[5]) || 0,
-        },
+      const fk_produk = parseInt(row[3]);
+      const fk_jenis_pekerjaan = parseInt(row[4]);
+      
+      const existing = await prisma.target.findFirst({
+        where: { fk_produk, fk_jenis_pekerjaan }
       });
+
+      if (!existing) {
+        await prisma.target.create({
+          data: {
+            fk_produk,
+            fk_jenis_pekerjaan,
+            total_target: parseInt(row[2]) || 0,
+            ideal_cycle_time: parseFloat(row[5]) || 0,
+          },
+        });
+      } else {
+        await prisma.target.update({
+          where: { id: existing.id },
+          data: {
+            total_target: parseInt(row[2]) || 0,
+            ideal_cycle_time: parseFloat(row[5]) || 0,
+          }
+        });
+      }
     }
   }
 
