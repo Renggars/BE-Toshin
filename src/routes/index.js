@@ -14,6 +14,7 @@ import jenisPekerjaanRoute from "./jenisPekerjaan.route.js";
 import notificationRoute from "./notification.route.js";
 import healthRoute from "./health.route.js";
 import metricsRoute from "./metrics.route.js";
+import hardwareRoute from "./hardware.route.js";
 
 const router = express.Router();
 
@@ -77,6 +78,10 @@ const defaultRoutes = [
   {
     path: "/metrics",
     route: metricsRoute,
+  },
+  {
+    path: "/hardware",
+    route: hardwareRoute,
   },
 ];
 
