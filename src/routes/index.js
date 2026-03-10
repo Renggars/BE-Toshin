@@ -13,6 +13,8 @@ import lrpDashboardRoute from "./lrpDashboard.route.js";
 import divisiRoute from "./divisi.route.js";
 import jenisPekerjaanRoute from "./jenisPekerjaan.route.js";
 import notificationRoute from "./notification.route.js";
+import hardwareRoute from "./hardware.route.js";
+
 
 const router = express.Router();
 
@@ -73,6 +75,12 @@ const defaultRoutes = [
     path: "/notification",
     route: notificationRoute,
   },
+
+  {
+    path: "/hardware",
+    route: hardwareRoute,
+  },
+
 ];
 
 defaultRoutes.forEach((route) => {
