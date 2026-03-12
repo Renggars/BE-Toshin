@@ -37,7 +37,7 @@ const sendCommandToDevice = (deviceId, payload) => {
  * @param {number} port - Port yang akan digunakan (misal 8080)
  */
 
-const initTcpServer = (port = 4210) => {
+const initTcpServer = (port = 8080) => {
     const server = net.createServer((socket) => {
         let currentDeviceId = null;
         logger.info(`[TCP] Koneksi baru masuk dari: ${socket.remoteAddress}:${socket.remotePort}`);
@@ -76,7 +76,7 @@ const initTcpServer = (port = 4210) => {
         // Jalankan server di background
     });
     server.listen(port, () => {
-        logger.info(`[TCP] Server siap siaga mendengar hardware di port ${port}`);
+        logger.info(`\n🚀 [TCP] Server siap siaga mendengar hardware di port ${port}`);
     });
 
 }

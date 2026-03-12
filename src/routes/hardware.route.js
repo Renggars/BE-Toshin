@@ -6,11 +6,9 @@ import { auth } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-router.post(
-    "/trigger", 
-    auth("PRODUKSI", "SUPERVISOR", "ADMIN", "MAINTENANCE"),
-    validate(hardwareValidation.triggerHardware),
-    hardwareController.triggerHardware
-);
+router.post("/trigger", auth("PRODUKSI, SUPERVISOR, ADMIN, MAINTENANCE"),
+
+validate(hardwareValidation.triggerHardware),
+hardwareController.triggerHardware);
 
 export default router;
