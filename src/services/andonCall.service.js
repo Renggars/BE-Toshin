@@ -149,7 +149,7 @@ const createCall = async (payload) => {
     const plantInfo = newCall.plant || "-";
 
     const pesan =
-      `🚨 Andon Call Baru!\n` +
+      `Andon Call Baru!\n` +
       `Mesin: ${namaMesin}\n` +
       `Operator: ${namaOperator}\n` +
       `Waktu: ${waktuWIB} WIB\n` +
