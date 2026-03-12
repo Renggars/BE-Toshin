@@ -9,7 +9,7 @@ import httpStatus from "http-status";
  * @param {string} uid_nfc
  * @returns {Promise<User>}
  */
-const loginWithNfc = async (uid_nfc) => {
+const loginWithNfc = async (uid_nfc, req) => {
   const user = await userService.getUserByNfc(uid_nfc);
 
   if (!user) {
@@ -20,7 +20,7 @@ const loginWithNfc = async (uid_nfc) => {
     throw new ApiError(httpStatus.FORBIDDEN, "Akun Anda sedang ditangguhkan");
   }
 
-  await attendanceService.clockIn(user);
+  await attendanceService.clockIn(user, req);
 
   // Return fresh user data to include updated points
   return userService.getUserByNfc(uid_nfc);
@@ -32,7 +32,7 @@ const loginWithNfc = async (uid_nfc) => {
  * @param {string} password
  * @returns {Promise<User>}
  */
-const loginWithEmail = async (email, password) => {
+const loginWithEmail = async (email, password, req) => {
   const user = await userService.getUserByEmail(email);
 
   if (!user) {
@@ -48,7 +48,7 @@ const loginWithEmail = async (email, password) => {
     throw new ApiError(httpStatus.FORBIDDEN, "Akun Anda sedang ditangguhkan");
   }
 
-  await attendanceService.clockIn(user);
+  await attendanceService.clockIn(user, req);
 
   // Return fresh user data to include updated points
   return userService.getUserByEmail(email);
