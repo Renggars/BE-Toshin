@@ -16,8 +16,7 @@ const sendCommandToDevice = (deviceId, payload) => {
 
     if (deviceSocket) {
         try {
-            // const dataString = JSON.stringify(payload) + '\n';
-            const dataString = `${deviceId};${payload.task};${payload.cmd}\n`;
+            const dataString = JSON.stringify(payload) + '\n';
 
             deviceSocket.write(dataString);
 
@@ -38,7 +37,7 @@ const sendCommandToDevice = (deviceId, payload) => {
  * @param {number} port - Port yang akan digunakan (misal 8080)
  */
 
-const initTcpServer = (port = 4210) => {
+const initTcpServer = (port = 8080) => {
     const server = net.createServer((socket) => {
         let currentDeviceId = null;
         logger.info(`[TCP] Koneksi baru masuk dari: ${socket.remoteAddress}:${socket.remotePort}`);
@@ -48,37 +47,16 @@ const initTcpServer = (port = 4210) => {
                 const incomingMsg = data.toString().trim();
                 logger.info(`[TCP] Pesan diterima: ${incomingMsg}`);
 
-                // const parsed = JSON.parse(incomingMsg);
-                // if (parsed.type === 'register' && parsed.deviceId) {
-                //     currentDeviceId = parsed.deviceId;
+                const parsed = JSON.parse(incomingMsg);
 
-                //     connectedDevices.set(currentDeviceId, socket);
-
-                //     logger.info(`[TCP] Alat ${currentDeviceId} berhasil diregistrasi.`);
-                //     // Opsional: Kirim balasan koneksi sukses ke ESP32
-                //     socket.write(JSON.stringify({ status: 'registered', deviceId: currentDeviceId }) + '\n');
-                // }
-
-                const parts = incomingMsg.split(';');
-                if (parts[0] == 'REGISTER' && parts[1]) {
-                    currentDeviceId = parts[1];
+                if (parsed.type === 'register' && parsed.deviceId) {
+                    currentDeviceId = parsed.deviceId;
 
                     connectedDevices.set(currentDeviceId, socket);
 
                     logger.info(`[TCP] Alat ${currentDeviceId} berhasil diregistrasi.`);
-
-                    //TODO::APA PERLU WRITE RESPONSE DARI BACKEND UNTUK STATUS KONEKSI SUKSES
-                }
-                else if (parts.length >= 3) {
-                    const senderId = parts[0];
-                    const task = parts[1];
-                    const status = parts[2];
-
-                    logger.info(`[TCP] Update status dari ${senderId} -> Task: ${task}, Status: ${status}`);
-                    //TODO::SAMBUNGKAN KE DATABASE UNTUK MENCATAT DATA
-                }
-                else {
-                    logger.warn(`[TCP] Format pesan tidak dikenali: ${incomingMsg}`);
+                    // Opsional: Kirim balasan koneksi sukses ke ESP32
+                    socket.write(JSON.stringify({ status: 'registered', deviceId: currentDeviceId }) + '\n');
                 }
 
             } catch (error) {
@@ -91,20 +69,6 @@ const initTcpServer = (port = 4210) => {
             logger.error(`[TCP] Ada error pada koneksi socket: ${err.message}`);
             // Lakukan pembersihan memori juga saat error patah koneksi
             if (currentDeviceId) {
-                connectedDevices.delete(currentDeviceId);
-            }
-        });
-
-        socket.on('close', () => {
-            if (currentDeviceId) {
-                logger.info(`[TCP] alat ${currentDeviceId} terputus, menghapus dari memori`)
-            }
-        });
-
-        // 4. TAMBAHKAN INI: Event saat alat mengirim sinyal end
-        socket.on('end', () => {
-            if (currentDeviceId) {
-                logger.info(`[TCP] Alat ${currentDeviceId} mengakhiri koneksi (end).`);
                 connectedDevices.delete(currentDeviceId);
             }
         });
