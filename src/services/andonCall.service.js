@@ -128,16 +128,6 @@ const createCall = async (payload) => {
 
   // Emit WebSocket events
   emitAndonCallCreated(newCall);
-
-
-  if (newCall.mesin?.nama_mesin) {
-    tcpService.sendCommandToDevice(newCall.mesin.nama_mesin, {
-      task: "ANDON",
-      cmd: "CALL"
-    });
-  }
-
-
   const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
