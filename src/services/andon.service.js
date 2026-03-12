@@ -110,20 +110,20 @@ const fetchHistoryHelper = async (where, page, limit) => {
     downtime:
       e.waktu_resolved && e.waktu_repair
         ? Number(
-            (
-              (new Date(e.waktu_resolved) - new Date(e.waktu_repair)) /
-              60000
-            ).toFixed(2),
-          )
+          (
+            (new Date(e.waktu_resolved) - new Date(e.waktu_repair)) /
+            60000
+          ).toFixed(2),
+        )
         : e.durasi_downtime || 0,
     real_downtime:
       e.waktu_resolved && e.waktu_trigger
         ? Number(
-            (
-              (new Date(e.waktu_resolved) - new Date(e.waktu_trigger)) /
-              60000
-            ).toFixed(2),
-          )
+          (
+            (new Date(e.waktu_resolved) - new Date(e.waktu_trigger)) /
+            60000
+          ).toFixed(2),
+        )
         : e.total_duration_menit || 0,
     status: e.status,
     estimasi_menit: e.masalah?.waktu_perbaikan_menit || 0,
@@ -492,6 +492,13 @@ const startRepairAndon = async (id, data) => {
         include: { mesin: true, masalah: true, operator: true, shift: true },
       });
 
+      if (newEvent.mesin?.nama_mesin) {
+        tcpService.sendCommandToDevice(newEvent.mesin.nama_mesin, {
+          task: "ANDON",
+          cmd: "CLEAR"
+        });
+      }
+
       await tx.andonCall.update({
         where: { id: call.id },
         data: {
@@ -528,8 +535,10 @@ const startRepairAndon = async (id, data) => {
     return newEvent;
   }
 
+
+
   // 2. Fallback to existing AndonEvent logic (e.g. for PLAN_DOWNTIME)
-  const event = await prisma.andonEvent.findUnique({ where: { id } });
+  const event = await prisma.andonEvent.findUnique({ where: { id }, include: { mesin: true } });
 
   if (!event || event.status !== "ACTIVE") {
     throw new ApiError(
@@ -540,8 +549,8 @@ const startRepairAndon = async (id, data) => {
 
   const problem = fk_id_masalah
     ? await prisma.masterMasalahAndon.findUnique({
-        where: { id: fk_id_masalah },
-      })
+      where: { id: fk_id_masalah },
+    })
     : null;
 
   const updated = await prisma.andonEvent.update({
@@ -555,6 +564,13 @@ const startRepairAndon = async (id, data) => {
     },
     include: { mesin: true, masalah: true, operator: true, shift: true },
   });
+
+  if (updated.mesin?.nama_mesin) {
+    tcpService.sendCommandToDevice(updated.mesin.nama_mesin, {
+      task: "ANDON",
+      cmd: "CLEAR"
+    });
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -664,10 +680,10 @@ const resolveAndon = async (id, data) => {
         fk_id_masalah: data.fk_id_masalah || event.fk_id_masalah,
         kategori: data.fk_id_masalah
           ? (
-              await tx.masterMasalahAndon.findUnique({
-                where: { id: data.fk_id_masalah },
-              })
-            )?.kategori
+            await tx.masterMasalahAndon.findUnique({
+              where: { id: data.fk_id_masalah },
+            })
+          )?.kategori
           : event.kategori,
       },
       include: { mesin: true, masalah: true, operator: true, shift: true },
@@ -741,8 +757,7 @@ const resolveAndon = async (id, data) => {
       supervisors.map((s) => s.id),
       "ANDON_RESOLVED",
       "Andon Telah Diselesaikan",
-      `Andon di mesin ${
-        updatedEvent.mesin?.nama_mesin || "Unknown"
+      `Andon di mesin ${updatedEvent.mesin?.nama_mesin || "Unknown"
       } telah diselesaikan. Durasi downtime: ${repairDurationMinutes} menit (Total: ${realDurationMinutes} menit)`,
       JSON.stringify({
         andonId: id,
@@ -755,11 +770,11 @@ const resolveAndon = async (id, data) => {
 
   const waitTime = event.waktu_repair
     ? Number(
-        (
-          (new Date(event.waktu_repair) - new Date(event.waktu_trigger)) /
-          60000
-        ).toFixed(2),
-      )
+      (
+        (new Date(event.waktu_repair) - new Date(event.waktu_trigger)) /
+        60000
+      ).toFixed(2),
+    )
     : 0;
 
   return {
