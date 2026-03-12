@@ -9,12 +9,18 @@ const client = createClient({
 client.on("error", (err) => logger.error("Redis Client Error", err));
 
 const connectRedis = async () => {
+  if (!config.redis.enabled) {
+    logger.info("[Redis] Redis is disabled, skipping connection.");
+    return;
+  }
   if (!client.isOpen) {
     await client.connect();
+    logger.info("[Redis] Connected to Redis");
   }
 };
 
 const set = async (key, value, expirationSeconds = 3600) => {
+  if (!config.redis.enabled) return;
   try {
     await connectRedis();
     const stringValue =
@@ -28,6 +34,7 @@ const set = async (key, value, expirationSeconds = 3600) => {
 };
 
 const get = async (key) => {
+  if (!config.redis.enabled) return null;
   try {
     await connectRedis();
     const value = await client.get(key);
@@ -44,6 +51,7 @@ const get = async (key) => {
 };
 
 const del = async (key) => {
+  if (!config.redis.enabled) return;
   try {
     await connectRedis();
     await client.del(key);
@@ -53,6 +61,7 @@ const del = async (key) => {
 };
 
 const delByPattern = async (pattern) => {
+  if (!config.redis.enabled) return;
   try {
     await connectRedis();
     const keys = await client.keys(pattern);
