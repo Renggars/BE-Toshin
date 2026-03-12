@@ -38,7 +38,7 @@ if (prisma) {
     initSocket(server);
 
     //inisialisasi tcp server
-    const tcpServer = process.env.TCP_PORT || 4210;
+    const tcpServer = process.env.TCP_PORT || 8080;
     tcpService.initTcpServer(tcpServer);
   });
 }

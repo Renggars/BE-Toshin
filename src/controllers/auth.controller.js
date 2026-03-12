@@ -34,10 +34,10 @@ const login = catchAsync(async (req, res) => {
   if (req.body.uid_nfc) {
     // Login dengan NFC
     console.log(req.body.uid_nfc)
-    user = await authService.loginWithNfc(req.body.uid_nfc, req);
+    user = await authService.loginWithNfc(req.body.uid_nfc);
   } else if (req.body.email && req.body.password) {
     // Login dengan Email & Password
-    user = await authService.loginWithEmail(req.body.email, req.body.password, req);
+    user = await authService.loginWithEmail(req.body.email, req.body.password);
   } else {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
