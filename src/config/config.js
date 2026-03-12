@@ -26,6 +26,7 @@ const config = {
   ],
   redis: {
     url: process.env.REDIS_URL,
+    enabled: process.env.REDIS_ENABLED !== "false",
   },
 };
 

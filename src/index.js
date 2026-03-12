@@ -15,14 +15,9 @@ if (prisma) {
   logger.info("Connected to Database");
 
   // Connect to Redis
-  redis
-    .connectRedis()
-    .then(() => {
-      logger.info("Connected to Redis");
-    })
-    .catch((err) => {
-      logger.error("Redis connection failed", err);
-    });
+  redis.connectRedis().catch((err) => {
+    logger.error("Redis connection failed", err);
+  });
 
   server = app.listen(config.port, () => {
     logger.info(`Server is running on http://localhost:${config.port}`);
