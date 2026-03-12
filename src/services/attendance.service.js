@@ -113,7 +113,7 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
   }));
 };
 
-const clockIn = async (user) => {
+const clockIn = async (user, req) => {
   if (user.role !== "PRODUKSI") return;
 
   const now = new Date();
@@ -147,7 +147,10 @@ const clockIn = async (user) => {
       shiftStartTime.getTime() - 2 * 60 * 60 * 1000,
     );
 
-    if (now < earliestAllowed) {
+    // Bypass check if explicitly requested (useful for load testing/admin)
+    const isBypass = req?.headers && req.headers["x-bypass-attendance"] === "true";
+
+    if (now < earliestAllowed && !isBypass) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
         `Terlalu awal. Absen dibuka mulai jam ${earliestAllowed.toLocaleTimeString(
