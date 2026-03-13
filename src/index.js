@@ -19,8 +19,8 @@ if (prisma) {
     logger.error("Redis connection failed", err);
   });
 
-  server = app.listen(config.port, () => {
-    logger.info(`Server is running on http://localhost:${config.port}`);
+  server = app.listen(config.port, '0.0.0.0', () => {
+    logger.info(`Server is running on http://0.0.0.0:${config.port}`);
     console.log(`Docs available at http://localhost:${config.port}/api-docs`);
 
     // Initialize Socket.io

@@ -14,8 +14,8 @@ import {
 } from "../config/socket.js";
 
 import logger from "../config/logger.js";
-
 import notificationService from "./notification.service.js";
+import tcpService from "./tcp.service.js";
 
 const TZ = "Asia/Jakarta";
 
@@ -38,7 +38,7 @@ const getShiftInfo = async (time) => {
       "YYYY-MM-DD HH:mm",
       TZ,
     );
-    let opDate = dateStr;
+    let opDate = dateStr;      
 
     if (shiftEnd.isBefore(shiftStart)) {
       shiftEnd.add(1, "day");
@@ -154,7 +154,7 @@ const calculateAndonSummary = async (plantFilter = {}) => {
         where: {
           status: "RESOLVED",
           tanggal: operationalDate,
-          kategori: { not: "PLAN_DOWNTIME" },
+          masalah: { kategori: { not: "PLAN_DOWNTIME" } },
           ...plantFilter,
         },
       }),
@@ -163,7 +163,7 @@ const calculateAndonSummary = async (plantFilter = {}) => {
         where: {
           status: "RESOLVED",
           tanggal: operationalDate,
-          kategori: { not: "PLAN_DOWNTIME" },
+          masalah: { kategori: { not: "PLAN_DOWNTIME" } },
           ...plantFilter,
         },
       }),
@@ -171,7 +171,7 @@ const calculateAndonSummary = async (plantFilter = {}) => {
       prisma.andonEvent.count({
         where: {
           status: "IN_REPAIR",
-          kategori: { not: "PLAN_DOWNTIME" },
+          masalah: { kategori: { not: "PLAN_DOWNTIME" } },
           ...plantFilter,
         },
       }),
@@ -481,7 +481,6 @@ const startRepairAndon = async (id, data) => {
           fk_id_operator: call.fk_id_operator,
           fk_id_shift: call.fk_id_shift,
           fk_id_masalah: fk_id_masalah,
-          kategori: problem.kategori,
           waktu_trigger: call.waktu_call, // waktu_trigger = call.waktu_call
           waktu_repair: new Date(), // waktu_repair = now()
           status: "IN_REPAIR",
@@ -510,7 +509,7 @@ const startRepairAndon = async (id, data) => {
       plant: newEvent.plant || "Unknown",
       shift: newEvent.shift?.nama_shift || "Unknown",
       masalah: newEvent.masalah?.nama_masalah || "Unknown",
-      kategori: newEvent.masalah?.kategori || "UNKNOWN",
+      // kategori: newEvent.masalah?.kategori || "UNKNOWN",
       operator: newEvent.operator?.nama || "-",
       resolver: user.nama || "-",
       downtime: 0,
@@ -521,6 +520,17 @@ const startRepairAndon = async (id, data) => {
     };
 
     emitAndonRepairStarted(formattedEvent);
+
+    // Kirim perintah CLEAR (Matikan peringatan hardware)
+    if (newEvent.mesin?.nama_mesin) {
+      tcpService.broadcastCommand({
+        task: "ANDON",
+        divisi: call.target_divisi.toUpperCase(),
+        mesinName: newEvent.mesin.nama_mesin,
+        cmd: "CLEAR"
+      });
+    }
+
     const plantFilter = newEvent.plant ? { plant: newEvent.plant } : {};
     const summary = await calculateAndonSummary(plantFilter);
     emitAndonSummaryUpdated(summary);
@@ -551,7 +561,6 @@ const startRepairAndon = async (id, data) => {
       waktu_repair: new Date(),
       resolved_by: userId,
       fk_id_masalah: fk_id_masalah || event.fk_id_masalah,
-      kategori: problem ? problem.kategori : event.kategori,
     },
     include: { mesin: true, masalah: true, operator: true, shift: true },
   });
@@ -579,6 +588,20 @@ const startRepairAndon = async (id, data) => {
   };
 
   emitAndonRepairStarted(formattedEvent);
+
+  // Kirim perintah CLEAR (Matikan peringatan hardware) fallback
+  if (updated.mesin?.nama_mesin) {
+    let team = updated.masalah?.kategori ? updated.masalah.kategori.toUpperCase() : "UNKNOWN";
+    // if (team.includes("DIE_MAINT")) team = "MAINTENANCE";
+    
+    tcpService.broadcastCommand({
+      task: "ANDON",
+      divisi: team,
+      mesinName: updated.mesin.nama_mesin,
+      cmd: "CLEAR"
+    });
+  }
+
   const plantFilter = updated.plant ? { plant: updated.plant } : {};
   const summary = await calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);

@@ -8,6 +8,7 @@ import {
 } from "../config/socket.js";
 import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
+import tcpService from "./tcp.service.js";
 
 const TZ = "Asia/Jakarta";
 
@@ -128,6 +129,16 @@ const createCall = async (payload) => {
 
   // Emit WebSocket events
   emitAndonCallCreated(newCall);
+
+  if (newCall.mesin?.nama_mesin) {
+    tcpService.broadcastCommand({
+      task: "ANDON",
+      divisi: target_divisi,
+      mesinName: newCall.mesin.nama_mesin,
+      cmd: "CALL"
+    });
+  }
+
   const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
