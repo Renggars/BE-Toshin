@@ -45,6 +45,28 @@ const getUserByEmail = async (req, res) => {
   }
 };
 
+const getUserByNfc = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const user = await userService.getUserByNfc(uid);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Kartu tidak terdaftar",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (err) {
+    console.log(err);
+    responseApiFailed(res, `Failed get user by NFC ${err}`);
+  }
+};
+
 const updateUser = async (req, res) => {
   try {
     const result = await userService.updateUserById(
@@ -90,6 +112,7 @@ export default {
   getUsers,
   getUser,
   getUserByEmail,
+  getUserByNfc,
   createUser,
   updateUser,
   getCurrentUser,

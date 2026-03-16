@@ -19,7 +19,8 @@ const callAndon = catchAsync(async (req, res) => {
 
 const startRepairAndon = catchAsync(async (req, res) => {
   const result = await andonService.startRepairAndon(Number(req.params.id), {
-    userId: req.user.id,
+    //fallback tambahan
+    userId: req.body.userId || req.user.id,
     fk_id_masalah: req.body.fk_id_masalah,
   });
   responseApiSuccess(res, "Success start repair andon", result);

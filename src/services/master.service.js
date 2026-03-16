@@ -41,8 +41,7 @@ const getMesin = async () => {
       0,
     );
     logger.info(
-      `[Redis] Cache HIT: Serving Machines Data from Redis. Summary: ${count} machines in ${
-        categories.length
+      `[Redis] Cache HIT: Serving Machines Data from Redis. Summary: ${count} machines in ${categories.length
       } categories (${categories.join(", ")})`,
     );
     return cachedData;
@@ -194,9 +193,8 @@ const deleteShift = async (id) => {
 // --- Target ---
 const getTarget = async (filter, shiftId) => {
   // Check Cache First
-  const cacheKey = `${TARGET_CACHE_PREFIX}${JSON.stringify(filter)}:${
-    shiftId || "none"
-  }`;
+  const cacheKey = `${TARGET_CACHE_PREFIX}${JSON.stringify(filter)}:${shiftId || "none"
+    }`;
   const cachedData = await redis.get(cacheKey);
   if (cachedData) {
     logger.info(
@@ -324,11 +322,9 @@ const getAllMasterData = async () => {
   // Check Cache First
   const cachedData = await redis.get(MASTER_CACHE_KEY);
   if (cachedData) {
-    const summary = `Shift: ${cachedData.shift?.length || 0}, Mesin: ${
-      Object.keys(cachedData.mesin || {}).length
-    } cats, Produk: ${cachedData.produk?.length || 0}, JenisPekerjaan: ${
-      cachedData.jenisPekerjaan?.length || 0
-    }`;
+    const summary = `Shift: ${cachedData.shift?.length || 0}, Mesin: ${Object.keys(cachedData.mesin || {}).length
+      } cats, Produk: ${cachedData.produk?.length || 0}, JenisPekerjaan: ${cachedData.jenisPekerjaan?.length || 0
+      }`;
     logger.info(
       `[Redis] Cache HIT: Serving Master Data from Redis. Summary: ${summary}`,
     );

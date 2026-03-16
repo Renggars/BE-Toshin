@@ -11,11 +11,9 @@ const connectedDevices = new Set();
  * @param {Object} payload - Objek JSON perintah, misal { task: "MTC", cmd: "CALL" }
  * @returns {boolean} - true jika berhasil, false jika mesin sedang offline
  */
-
 // FUNGSI DENGAN TIPE UNICAST (SERVER - ESP)
 // const sendCommandToDevice =(deviceId, payload) => {
 //     const deviceSocket = connectedDevices.get(deviceId);
-
 //     if (deviceSocket) {
 //         try {
 //             // Format: Task;Mesin;Tim;Status (e.g. ANDON;FB1100;MAINTENANCE;CALL)
@@ -51,7 +49,7 @@ const broadcastCommand = (payload) => {
             logger.error(`[TCP] Gagal menyiarkan ke soket terhubung`, error);
         }
     }
-
+    
     if (successCount > 0) {
         logger.info(`[TCP] Sukses menyiarkan perintah ke ${successCount} alat aktif: ${dataString.trim()}`);
     } else {

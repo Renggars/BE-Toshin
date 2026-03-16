@@ -15,6 +15,8 @@ router.get(
   userController.getUserByEmail,
 );
 
+router.get("/nfc/:uid", userController.getUserByNfc);
+
 router
   .route("/:userId")
   .get(
