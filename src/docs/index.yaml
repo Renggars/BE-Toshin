@@ -8,7 +8,7 @@ info:
     email: renggarendy22@gmail.com
 
 servers:
-  - url: http://localhost:4001
+  - url: http://localhost:4002
     description: Development Server
   - url: https://lesli-thorny-bunny.ngrok-free.dev/
     description: Production Server

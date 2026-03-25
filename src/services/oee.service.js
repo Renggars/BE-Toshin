@@ -84,11 +84,11 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     const availability = loadingTime > 0 ? (runtime / loadingTime) * 100 : 0;
 
     // Performance = (Ideal Cycle Time * Total Output) / Runtime
-    // Note: User formula uses seconds vs minutes.
-    // Usually cycle time is in seconds, runtime is in minutes.
-    // (ideal_cycle_time_sec * total_output) / (runtime_min * 60)
+    // Usually cycle time is in seconds, runtime is in minutes, but our seed data uses cycle time in MINUTES.
+    // So both are in minutes. Correct formula: (ideal_cycle_time_min * total_output) / runtime_min
     const performance =
-      runtime > 0 ? ((idealCycleTime * totalOutput) / (runtime * 60)) * 100 : 0;
+      runtime > 0 ? ((idealCycleTime * totalOutput) / runtime) * 100 : 0;
+
 
     // Quality = Total OK / Total Output
     const quality = totalOutput > 0 ? (totalOk / totalOutput) * 100 : 0;

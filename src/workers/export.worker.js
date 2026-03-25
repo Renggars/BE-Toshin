@@ -14,6 +14,7 @@ import { randomBytes } from "crypto";
 import { fileURLToPath } from "url";
 import moment from "moment-timezone";
 
+import config from "../config/config.js";
 import lrpDashboardService from "../services/lrpDashboard.service.js";
 import logger from "../config/logger.js";
 import { exportQueue } from "../queues/exportQueue.js";
@@ -38,6 +39,10 @@ const ensureExportsDir = async () => {
 };
 
 export const initExportWorker = async () => {
+  if (!config.redis.enabled) {
+    logger.info("[Export Worker] Redis disabled, worker not initialized.");
+    return null;
+  }
   await ensureExportsDir();
 
   exportWorker = new Worker(
