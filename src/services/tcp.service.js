@@ -76,7 +76,7 @@ const initTcpServer = (port = 4210) => {
         // Jalankan server di background
     });
     server.listen(port, () => {
-        logger.info(`[TCP] Server siap siaga mendengar hardware di port ${port}`);
+        logger.info(`\n🚀 [TCP] Server siap siaga mendengar hardware di port ${port}`);
     });
 
 }

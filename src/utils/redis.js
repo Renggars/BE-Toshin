@@ -9,8 +9,13 @@ const client = createClient({
 client.on("error", (err) => logger.error("Redis Client Error", err));
 
 const connectRedis = async () => {
-  if (config.redis.enabled && !client.isOpen) {
+  if (!config.redis.enabled) {
+    logger.info("[Redis] Redis is disabled, skipping connection.");
+    return;
+  }
+  if (!client.isOpen) {
     await client.connect();
+    logger.info("[Redis] Connected to Redis");
   }
 };
 
