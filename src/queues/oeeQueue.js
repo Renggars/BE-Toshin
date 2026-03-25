@@ -34,6 +34,7 @@ function buildRedisConnection(redisUrl) {
     return {
       host: url.hostname,
       port: Number(url.port) || 6379,
+      username: url.username || "default",
       password: url.password || undefined,
       // BullMQ menggunakan ioredis, maxRetriesPerRequest harus null
       maxRetriesPerRequest: null,
@@ -46,21 +47,25 @@ function buildRedisConnection(redisUrl) {
   }
 }
 
-export const oeeQueue = new Queue("oee-recalc", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    removeOnComplete: true,
-    removeOnFail: 5, // simpan 5 job terakhir yang gagal untuk debugging
-    attempts: 3, // retry otomatis jika gagal (DB timeout, dsb.)
-    backoff: {
-      type: "exponential",
-      delay: 2000, // retry delay: 2s → 4s → 8s
-    },
-  },
-});
+export const oeeQueue = config.redis.enabled
+  ? new Queue("oee-recalc", {
+      connection: redisConnection,
+      defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: 5, // simpan 5 job terakhir yang gagal untuk debugging
+        attempts: 3, // retry otomatis jika gagal (DB timeout, dsb.)
+        backoff: {
+          type: "exponential",
+          delay: 2000, // retry delay: 2s → 4s → 8s
+        },
+      },
+    })
+  : null;
 
-oeeQueue.on("error", (err) => {
-  logger.error("[OEE Queue] Queue error:", err.message);
-});
+if (oeeQueue) {
+  oeeQueue.on("error", (err) => {
+    logger.error("[OEE Queue] Queue error:", err.message);
+  });
+}
 
 export { redisConnection };

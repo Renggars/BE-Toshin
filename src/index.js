@@ -16,19 +16,23 @@ let server;
 if (prisma) {
   logger.info("Connected to Database");
 
-  // Connect to Redis
-  redis
-    .connectRedis()
-    .then(() => {
-      logger.info("Connected to Redis");
+  // Connect to Redis only if enabled
+  if (config.redis.enabled) {
+    redis
+      .connectRedis()
+      .then(() => {
+        logger.info("Connected to Redis");
 
-      // Start BullMQ OEE Worker setelah Redis siap
-      initOeeWorker();
-      initExportWorker();
-    })
-    .catch((err) => {
-      logger.error("Redis connection failed", err);
-    });
+        // Start BullMQ OEE Worker setelah Redis siap
+        initOeeWorker();
+        initExportWorker();
+      })
+      .catch((err) => {
+        logger.error("Redis connection failed", err);
+      });
+  } else {
+    logger.info("Redis is disabled, skipping connection and workers.");
+  }
 
   server = app.listen(config.port, () => {
     logger.info(`Server is running on http://localhost:${config.port}`);

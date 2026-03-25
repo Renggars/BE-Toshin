@@ -11,19 +11,23 @@ import config from "../config/config.js";
 import logger from "../config/logger.js";
 import { redisConnection } from "./oeeQueue.js"; // Reuse connection yang aman dari oeeQueue
 
-export const exportQueue = new Queue("export-excel", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    removeOnComplete: true, // Untuk hemat redis memory. Metadata disimpan per user/file kalau butuh
-    removeOnFail: 10, // Simpan beberapa log kalau ekspor gagal
-    attempts: 2, // Job ekspor memory-heavy, cukup di-retry max 2x
-    backoff: {
-      type: "exponential",
-      delay: 5000,
-    },
-  },
-});
+export const exportQueue = config.redis.enabled
+  ? new Queue("export-excel", {
+      connection: redisConnection,
+      defaultJobOptions: {
+        removeOnComplete: true, // Untuk hemat redis memory. Metadata disimpan per user/file kalau butuh
+        removeOnFail: 10, // Simpan beberapa log kalau ekspor gagal
+        attempts: 2, // Job ekspor memory-heavy, cukup di-retry max 2x
+        backoff: {
+          type: "exponential",
+          delay: 5000,
+        },
+      },
+    })
+  : null;
 
-exportQueue.on("error", (err) => {
-  logger.error("[Export Queue] Queue error:", err.message);
-});
+if (exportQueue) {
+  exportQueue.on("error", (err) => {
+    logger.error("[Export Queue] Queue error:", err.message);
+  });
+}

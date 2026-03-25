@@ -51,11 +51,16 @@ const login = catchAsync(async (req, res) => {
   let dashboardData = null;
 
   if (user.role === "PRODUKSI") {
-    const today = moment().format("YYYY-MM-DD");
-    dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
-      user.id,
-      today,
-    );
+    try {
+      const today = moment().format("YYYY-MM-DD");
+      dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
+        user.id,
+        today,
+      );
+    } catch (error) {
+      // Jika gagal mengambil dashboard, biarkan null agar login tetap berhasil
+      console.error("Error fetching dashboard data during login:", error.message);
+    }
   }
 
   // Hapus password dari response (jika ada)

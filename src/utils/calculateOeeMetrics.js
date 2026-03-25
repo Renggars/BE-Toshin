@@ -28,11 +28,12 @@ const calculateOeeMetrics = (data, logs) => {
     loading_time > 0 ? (operating_time / loading_time) * 100 : 0;
 
   // ===== Performance =====
-  // (Output × CycleTime) / (OperatingTime × 60)
+  // (Output × CycleTime) / OperatingTime (both in minutes)
   const performance =
     operating_time > 0
-      ? ((data.qty_total * data.cycle_time) / (operating_time * 60)) * 100
+      ? ((data.qty_total * data.cycle_time) / operating_time) * 100
       : 0;
+
 
   // ===== Quality =====
   const quality = data.qty_total > 0 ? (data.qty_ok / data.qty_total) * 100 : 0;

@@ -2,10 +2,61 @@
 import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
-import { sendAlertEmail } from "../utils/email.js";
-import { getEmailTemplate } from "../utils/emailTemplate.js";
+import {
+  sendAlertEmail,
+  EMAIL_AM_PER_PLANT,
+  EMAIL_HR,
+} from "../utils/email.js";
+import {
+  getAMEmailTemplate,
+  getHREmailTemplate,
+} from "../utils/emailTemplate.js";
 
 const BASE_POINT = 100;
+
+const STATUS_LEVEL_MAP = {
+  AMAN: 5,
+  TEGURAN: 4,
+  SP1: 3,
+  SP2: 2,
+  SP3: 1,
+};
+
+const poinAwalStatus = (status) => {
+  if (status === "AMAN") return 100;
+  if (status === "TEGURAN") return 70;
+  if (status === "SP1") return 50;
+  if (status === "SP2") return 30;
+  if (status === "SP3") return 0;
+  return 100;
+};
+
+const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
+  const history = await prisma.poinDisiplin.findMany({
+    where: { fk_id_operator: operatorId },
+    include: { tipe_disiplin: true },
+    orderBy: { tanggal: "desc" },
+  });
+
+  let riwayat = [];
+  let totalMinus = 0;
+
+  for (const item of history) {
+    const tanggal = new Date(item.tanggal).toLocaleDateString("id-ID");
+    const pelanggaran = item.tipe_disiplin.nama_tipe_disiplin;
+    const potong = Math.abs(item.poin_berubah);
+
+    riwayat.push(`${tanggal} – ${pelanggaran} (-${potong} poin)`);
+    totalMinus += potong;
+
+    if (totalMinus >= targetMinus) break;
+  }
+
+  return {
+    teks: riwayat.reverse().join("\n"),
+    total: totalMinus,
+  };
+};
 
 /**
  * Get form data for discipline points input
@@ -89,6 +140,14 @@ const getUserCurrentPoin = async (userId) => {
   return currentTotal;
 };
 
+const getStatusFromPoin = (poin) => {
+  if (poin < 0) return "SP3";
+  if (poin < 30) return "SP2";
+  if (poin < 50) return "SP1";
+  if (poin < 70) return "TEGURAN";
+  return "AMAN";
+};
+
 const createPelanggaran = async (payload, staffId, imageFile = null) => {
   let fk_id_operator;
 
@@ -138,18 +197,18 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
   }
 
   const { fk_tipe_disiplin, fk_id_shift, keterangan } = payload;
-  const hariIni = new Date();
-  hariIni.setHours(0, 0, 0, 0);
 
   // Ensure IDs are integers
   const tipeId = parseInt(fk_tipe_disiplin);
 
-  const [tipe, operator] = await Promise.all([
+  const [tipe, operator, staff, currentShift] = await Promise.all([
     prisma.tipeDisiplin.findUnique({ where: { id: tipeId } }),
     prisma.user.findUnique({
       where: { id: fk_id_operator },
       include: { divisi: true },
     }),
+    prisma.user.findUnique({ where: { id: staffId } }),
+    prisma.shift.findUnique({ where: { id: parseInt(fk_id_shift) } }),
   ]);
 
   if (!operator) {
@@ -166,37 +225,46 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     );
   }
 
+  const statusLama = getStatusFromPoin(operator.current_point);
+  const poinSebelum = operator.current_point;
   const isReward = tipe.kategori?.toLowerCase().includes("penghargaan");
 
   const nilaiPerubahan = isReward ? Math.abs(tipe.poin) : -Math.abs(tipe.poin);
   const poinSetelahUpdate = operator.current_point + nilaiPerubahan;
 
-  let status_level = "AMAN";
+  const statusBaru = getStatusFromPoin(poinSetelahUpdate);
   let alertType = "";
 
-  if (poinSetelahUpdate < 0) {
-    status_level = "SP3";
+  if (statusBaru === "SP3") {
     alertType = "SURAT PERINGATAN 3 (SP3)";
-  } else if (poinSetelahUpdate < 30) {
-    status_level = "SP2";
+  } else if (statusBaru === "SP2") {
     alertType = "SURAT PERINGATAN 2 (SP2)";
-  } else if (poinSetelahUpdate < 50) {
-    status_level = "SP1";
+  } else if (statusBaru === "SP1") {
     alertType = "SURAT PERINGATAN 1 (SP1)";
-  } else if (poinSetelahUpdate < 70) {
-    status_level = "TEGURAN";
   }
 
   const bukti_foto = imageFile
     ? `/uploads/poin-images/${imageFile.filename}`
     : null;
 
+  const now = new Date();
+  let suspended_until = operator.suspended_until;
+
+  // Logic: Set masa SP 6 bulan jika masuk SP1 atau SP2
+  if (statusBaru === "SP1" || statusBaru === "SP2") {
+    suspended_until = new Date(now);
+    suspended_until.setMonth(suspended_until.getMonth() + 6);
+  }
+
   // 3. Simpan Transaksi & Update Saldo User secara Atomik (Transaction)
   const result = await prisma.$transaction(async (tx) => {
-    // Kurangi poin di tabel User
+    // Update data di tabel User
     await tx.user.update({
       where: { id: fk_id_operator },
-      data: { current_point: poinSetelahUpdate },
+      data: {
+        current_point: poinSetelahUpdate,
+        suspended_until,
+      },
     });
 
     // Catat riwayat pelanggaran
@@ -205,37 +273,73 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
         fk_id_operator,
         fk_id_staff: staffId,
         fk_tipe_disiplin,
-        fk_id_shift: fk_id_shift,
+        fk_id_shift: parseInt(fk_id_shift),
         poin_berubah: nilaiPerubahan,
-        status_level,
-        tanggal: new Date(),
+        status_level: statusBaru,
+        tanggal: now,
         bukti_foto,
-        keterangan,
+        keterangan: keterangan || "-",
       },
       include: { tipe_disiplin: true, operator: true },
     });
   });
 
-  if (poinSetelahUpdate < 50) {
-    const plantEmails = {
-      1: "khoerunnisautami22@gmail.com, khoerunnisautami22@gmail.com",
-      2: "khoerunnisautami22@gmail.com, khoerunnisautami22@gmail.com",
-      3: "khoerunnisautami22@gmail.com, khoerunnisautami22@gmail.com",
+  // Notifikasi jika status memburuk
+  if (STATUS_LEVEL_MAP[statusBaru] < STATUS_LEVEL_MAP[statusLama]) {
+    const poinAwalLama = poinAwalStatus(statusLama);
+    const targetMinus = poinAwalLama - poinSetelahUpdate;
+    const historyResult = await ambilRiwayatPelanggaran(
+      fk_id_operator,
+      targetMinus,
+    );
+
+    const payloadEmail = {
+      statusBaru,
+      namaOperator: operator.nama,
+      no_reg: operator.no_reg || "-",
+      plant: operator.plant,
+      shift: currentShift?.nama_shift || "-",
+      supervisor: staff?.nama || "-",
+      pelanggaran: tipe.nama_tipe_disiplin,
+      keterangan: keterangan || "-",
+      poinSebelum,
+      poinSesudah: poinSetelahUpdate,
+      timestamp: now,
+      riwayatPelanggaran: historyResult.teks,
+      totalMinusRiwayat: historyResult.total,
     };
 
-    const recipient = plantEmails[operator.plant];
+    const plantKey = parseInt(operator.plant);
+    const amEmails = EMAIL_AM_PER_PLANT[plantKey] || [];
 
-    if (recipient) {
-      const subject = `NOTIFIKASI ${alertType}: ${operator.nama} (Plant ${operator.plant})`;
-      const htmlContent = getEmailTemplate(
-        operator,
-        result.tipe_disiplin.nama_tipe_disiplin,
-        poinSetelahUpdate,
-        alertType,
-      );
+    // Teguran → Assistant Manager Plant
+    if (statusBaru === "TEGURAN") {
+      if (amEmails.length > 0) {
+        const subject = `[${statusBaru}] ${operator.nama} (${
+          operator.no_reg || "-"
+        })`;
+        const html = getAMEmailTemplate(payloadEmail);
+        sendAlertEmail(amEmails.join(","), subject, html);
+      }
+    }
 
-      // Kirim email tanpa await agar tidak memperlambat respon API utama
-      sendAlertEmail(recipient, subject, htmlContent);
+    // SP1 / SP2 / SP3 → HR + Assistant Manager Plant
+    if (["SP1", "SP2", "SP3"].includes(statusBaru)) {
+      const subject = `[${statusBaru}] ${operator.nama} (${
+        operator.no_reg || "-"
+      })`;
+
+      // To AMs
+      if (amEmails.length > 0) {
+        const htmlAM = getAMEmailTemplate(payloadEmail);
+        sendAlertEmail(amEmails.join(","), subject, htmlAM);
+      }
+
+      // To HR
+      if (EMAIL_HR.length > 0) {
+        const htmlHR = getHREmailTemplate(payloadEmail);
+        sendAlertEmail(EMAIL_HR.join(","), subject, htmlHR);
+      }
     }
   }
 

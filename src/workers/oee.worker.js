@@ -11,6 +11,7 @@
  */
 
 import { Worker } from "bullmq";
+import config from "../config/config.js";
 import oeeService from "../services/oee.service.js";
 import logger from "../config/logger.js";
 import { redisConnection } from "../queues/oeeQueue.js";
@@ -18,6 +19,10 @@ import { redisConnection } from "../queues/oeeQueue.js";
 let oeeWorker = null;
 
 export const initOeeWorker = () => {
+  if (!config.redis.enabled) {
+    logger.info("[OEE Worker] Redis disabled, worker not initialized.");
+    return null;
+  }
   oeeWorker = new Worker(
     "oee-recalc",
     async (job) => {
