@@ -3,6 +3,7 @@ import app from "./app.js";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
 import tcpService from "./services/tcp.service.js";
+
 import { initSocket } from "./config/socket.js";
 import redis from "./utils/redis.js";
 import { initOeeWorker, closeOeeWorker } from "./workers/oee.worker.js";
