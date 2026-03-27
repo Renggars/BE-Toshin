@@ -41,9 +41,9 @@ components:
           type: string
         email:
           type: string
-        uid_nfc:
+        uidNfc:
           type: string
-        foto_profile:
+        fotoProfile:
           type: string
           nullable: true
         role:
@@ -51,7 +51,7 @@ components:
           enum: [PRODUKSI, SUPERVISOR, ENGINEERING, MAINTENANCE]
         plant:
           type: string
-        no_reg:
+        noReg:
           type: string
           nullable: true
         line:
@@ -60,14 +60,14 @@ components:
           type: integer
         status:
           type: string
-        fk_id_divisi:
+        divisiId:
           type: integer
         divisi:
           type: object
           properties:
             id:
               type: integer
-            nama_divisi:
+            namaDivisi:
               type: string
 
     TipeDisiplin:
@@ -77,7 +77,7 @@ components:
           type: integer
         kode:
           type: string
-        nama_tipe_disiplin:
+        namaTipeDisiplin:
           type: string
         poin:
           type: integer
@@ -90,7 +90,7 @@ components:
       properties:
         id:
           type: integer
-        nama_divisi:
+        namaDivisi:
           type: string
 
     AndonEventCompact:
@@ -101,8 +101,8 @@ components:
         mesin: { type: string }
         masalah: { type: string }
         kategori: { type: string }
-        waktu_trigger: { type: string, format: date-time }
-        waktu_resolved: { type: string, format: date-time, nullable: true }
+        waktuTrigger: { type: string, format: date-time }
+        waktuResolved: { type: string, format: date-time, nullable: true }
         durasi: { type: number }
         status: { type: string, enum: [ACTIVE, IN_REPAIR, RESOLVED] }
 
@@ -110,10 +110,10 @@ components:
       type: object
       properties:
         id: { type: integer }
-        fk_id_mesin: { type: integer }
-        fk_id_operator: { type: integer }
-        fk_id_shift: { type: integer, nullable: true }
-        fk_id_target_divisi: { type: integer }
+        mesinId: { type: integer }
+        operatorId: { type: integer }
+        shiftId: { type: integer, nullable: true }
+        targetDivisiId: { type: integer }
         target_divisi:
           { type: string, enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT] }
         waktu_call: { type: string, format: date-time }
@@ -125,25 +125,25 @@ components:
       type: object
       properties:
         id: { type: integer }
-        fk_id_mesin: { type: integer }
-        fk_id_operator: { type: integer }
-        fk_id_shift: { type: integer, nullable: true }
-        fk_id_masalah: { type: integer }
-        waktu_trigger: { type: string, format: date-time }
+        mesinId: { type: integer }
+        operatorId: { type: integer }
+        shiftId: { type: integer, nullable: true }
+        masalahId: { type: integer }
+        waktuTrigger: { type: string, format: date-time }
         waktu_start_perbaikan:
           { type: string, format: date-time, nullable: true }
-        waktu_resolved: { type: string, format: date-time, nullable: true }
+        waktuResolved: { type: string, format: date-time, nullable: true }
         status: { type: string, enum: [ACTIVE, IN_REPAIR, RESOLVED] }
         catatan: { type: string, nullable: true }
-        durasi_downtime: { type: number, nullable: true }
+        durasiDowntime: { type: number, nullable: true }
         mesin:
           type: object
           properties:
-            nama_mesin: { type: string }
+            namaMesin: { type: string }
         masalah:
           type: object
           properties:
-            nama_masalah: { type: string }
+            namaMasalah: { type: string }
             kategori: { type: string }
             waktu_perbaikan_menit: { type: integer }
         operator:
@@ -153,14 +153,14 @@ components:
         shift:
           type: object
           properties:
-            nama_shift: { type: string }
+            namaShift: { type: string }
 
     JenisPekerjaan:
       type: object
       properties:
         id:
           type: integer
-        nama_pekerjaan:
+        namaPekerjaan:
           type: string
 
     Notification:
@@ -169,7 +169,7 @@ components:
         id:
           type: integer
           example: 1
-        fk_id_user:
+        userId:
           type: integer
           example: 3
         tipe:
@@ -286,7 +286,7 @@ paths:
       description: |
         Register a new user account with email and password.
         - Email and password are required
-        - uid_nfc is not required during registration (will be added separately)
+        - uidNfc is not required during registration (will be added separately)
         - Returns user data without password
       tags: [Auth]
       security: []
@@ -296,7 +296,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama, email, password, fk_id_divisi, role, plant, line]
+              required: [nama, email, password, divisiId, role, plant, line]
               properties:
                 nama:
                   type: string
@@ -310,7 +310,7 @@ paths:
                   format: password
                   example: "Password123!"
                   description: "Minimum 8 characters, must contain at least one letter and one number"
-                fk_id_divisi:
+                divisiId:
                   type: integer
                   example: 1
                 role:
@@ -337,7 +337,7 @@ paths:
                       ADMIN,
                     ]
                   example: "PRODUKSI"
-                foto_profile:
+                fotoProfile:
                   type: string
                   format: uri
                   nullable: true
@@ -349,7 +349,7 @@ paths:
                 line:
                   type: string
                   example: "Line A"
-                no_reg:
+                noReg:
                   type: string
                   example: "REG12345"
                   nullable: true
@@ -381,7 +381,7 @@ paths:
       summary: User Login
       description: |
         Login with either NFC card or email/password combination.
-        - NFC Login: Provide uid_nfc only
+        - NFC Login: Provide uidNfc only
         - Email Login: Provide email and password
         - Returns user data, JWT tokens, and dashboard data (for PRODUKSI role)
       tags: [Auth]
@@ -393,9 +393,9 @@ paths:
             schema:
               oneOf:
                 - type: object
-                  required: [uid_nfc]
+                  required: [uidNfc]
                   properties:
-                    uid_nfc:
+                    uidNfc:
                       type: string
                       example: "ABC123DEF456"
                 - type: object
@@ -477,11 +477,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fk_id_mesin, fk_id_masalah]
+              required: [mesinId, masalahId]
               properties:
-                fk_id_mesin: { type: integer, example: 1 }
-                fk_id_masalah: { type: integer, example: 1 }
-                fk_id_operator: { type: integer, nullable: true }
+                mesinId: { type: integer, example: 1 }
+                masalahId: { type: integer, example: 1 }
+                operatorId: { type: integer, nullable: true }
       responses:
         "201":
           description: Andon triggered successfully
@@ -511,9 +511,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fk_id_mesin, target_divisi]
+              required: [mesinId, target_divisi]
               properties:
-                fk_id_mesin: { type: integer, example: 1 }
+                mesinId: { type: integer, example: 1 }
                 target_divisi:
                   type: string
                   enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT]
@@ -551,7 +551,7 @@ paths:
             schema:
               type: object
               properties:
-                fk_id_masalah:
+                masalahId:
                   {
                     type: integer,
                     description: "Optionally update the problem type",
@@ -599,7 +599,7 @@ paths:
                     type: object
                     properties:
                       andon_event: { $ref: "#/components/schemas/AndonEvent" }
-                      durasi_downtime: { type: number }
+                      durasiDowntime: { type: number }
                       affected_shift: { type: array, items: { type: object } }
 
   /andon/active:
@@ -764,34 +764,34 @@ paths:
                 activeEvents:
                   calls:
                     - id: 16
-                      fk_id_mesin: 1
-                      fk_id_operator: 9
+                      mesinId: 1
+                      operatorId: 9
                       target_divisi: "MAINTENANCE"
                       waktu_call: "2026-02-18T04:39:13.766Z"
                       status: "WAITING"
                       plant: "3"
-                      mesin: { nama_mesin: "FB800" }
+                      mesin: { namaMesin: "FB800" }
                       operator: { nama: "DEDDY PRASETYO" }
-                      shift: { nama_shift: "Shift 1" }
+                      shift: { namaShift: "Shift 1" }
                   repairs:
                     - id: 550
                       status: "IN_REPAIR"
-                      waktu_trigger: "2026-02-04T10:30:00.000Z"
+                      waktuTrigger: "2026-02-04T10:30:00.000Z"
                       elapsed_minutes: 5.5
                       live_sla_status: "ON_TIME"
                       estimasi_menit: 30
                       mesin:
                         id: 1
-                        nama_mesin: "CNC-01"
+                        namaMesin: "CNC-01"
                       masalah:
-                        nama_masalah: "Motor Rusak"
+                        namaMasalah: "Motor Rusak"
                         kategori: "BREAKDOWN"
                       operator:
                         nama: "Budi"
                       resolver:
                         nama: "Technician A"
                       shift:
-                        nama_shift: "Shift 1"
+                        namaShift: "Shift 1"
                 history:
                   data:
                     - id: 549
@@ -808,7 +808,7 @@ paths:
                       status: "RESOLVED"
                       respon_status: "ON_TIME"
                       estimasi_menit: 20
-                      waktu_resolved: "2026-02-04T09:15:00.000Z"
+                      waktuResolved: "2026-02-04T09:15:00.000Z"
                   meta:
                     totalItems: 1
                     totalPages: 1
@@ -866,7 +866,7 @@ paths:
                           properties:
                             id: { type: integer }
                             status: { type: string }
-                            waktu_trigger: { type: string, format: date-time }
+                            waktuTrigger: { type: string, format: date-time }
                             elapsed_minutes:
                               {
                                 type: number,
@@ -879,11 +879,11 @@ paths:
                               type: object
                               properties:
                                 id: { type: integer }
-                                nama_mesin: { type: string }
+                                namaMesin: { type: string }
                             masalah:
                               type: object
                               properties:
-                                nama_masalah: { type: string }
+                                namaMasalah: { type: string }
                                 kategori: { type: string }
                             operator:
                               type: object
@@ -896,7 +896,7 @@ paths:
                             shift:
                               type: object
                               properties:
-                                nama_shift: { type: string }
+                                namaShift: { type: string }
                   history:
                     type: object
                     description: "History events (RESOLVED & ACTIVE based on status filter)"
@@ -942,7 +942,7 @@ paths:
                           type: object
                           properties:
                             id: { type: integer }
-                            nama_shift: { type: string }
+                            namaShift: { type: string }
                       categories:
                         type: array
                         items:
@@ -961,7 +961,7 @@ paths:
                           type: object
                           properties:
                             id: { type: integer }
-                            nama_mesin: { type: string }
+                            namaMesin: { type: string }
 
   /andon/trigger-master:
     get:
@@ -1002,7 +1002,7 @@ paths:
                           type: object
                           properties:
                             id: { type: integer }
-                            nama_masalah: { type: string }
+                            namaMasalah: { type: string }
                             kategori: { type: string }
                             waktu_perbaikan_menit: { type: integer }
 
@@ -1322,7 +1322,7 @@ paths:
                     quality: { type: number }
                     oee_score: { type: number }
                     tanggal: { type: string, format: date }
-                    fk_id_shift: { type: integer }
+                    shiftId: { type: integer }
 
   /oee/mesin/{id}:
     get:
@@ -1367,13 +1367,13 @@ paths:
                         id: { type: integer }
                         nama: { type: string }
                         role: { type: string }
-                        foto_profile: { type: string, nullable: true }
+                        fotoProfile: { type: string, nullable: true }
                         current_point: { type: integer }
                         divisi:
                           type: object
                           properties:
                             id: { type: integer }
-                            nama_divisi: { type: string }
+                            namaDivisi: { type: string }
 
   /user/searchByEmail:
     get:
@@ -1431,9 +1431,9 @@ paths:
                   type: string
                 password:
                   type: string
-                uid_nfc:
+                uidNfc:
                   type: string
-                foto_profile:
+                fotoProfile:
                   type: string
                 role:
                   type: string
@@ -1761,7 +1761,7 @@ paths:
                       - name: "Penghargaan"
                         data: [2, 3, 1, 4, 5, 1, 2, 3, 5, 4, 2, 6]
 
-  /poin/user/by-nfc/{uid_nfc}:
+  /poin/user/by-nfc/{uidNfc}:
     get:
       summary: Get user data by NFC UID
       description: Mencari data operator berdasarkan UID NFC untuk preview sebelum input pelanggaran.
@@ -1771,7 +1771,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: uid_nfc
+          name: uidNfc
           required: true
           schema:
             type: string
@@ -1796,20 +1796,20 @@ paths:
       summary: Input Pelanggaran/Penghargaan (Hybrid NFC/Manual)
       description: |
         Mencatat pelanggaran atau penghargaan dengan **dua cara input**:
-        1. **Via NFC**: Kirim `uid_nfc` untuk lookup operator otomatis
-        2. **Via Manual**: Kirim `fk_id_operator` langsung (dari dropdown/form)
+        1. **Via NFC**: Kirim `uidNfc` untuk lookup operator otomatis
+        2. **Via Manual**: Kirim `operatorId` langsung (dari dropdown/form)
 
         **Validasi:**
-        - Minimal salah satu dari `uid_nfc` atau `fk_id_operator` harus ada
-        - Jika `uid_nfc` dikirim, sistem akan:
+        - Minimal salah satu dari `uidNfc` atau `operatorId` harus ada
+        - Jika `uidNfc` dikirim, sistem akan:
           - Mencari operator berdasarkan UID NFC
           - Validasi role harus `PRODUKSI`
           - Validasi status harus `active`
           - Cek apakah sedang suspend
 
         **Database:**
-        - Yang tersimpan di database adalah `fk_id_operator` (ID user)
-        - `uid_nfc` hanya digunakan untuk lookup
+        - Yang tersimpan di database adalah `operatorId` (ID user)
+        - `uidNfc` hanya digunakan untuk lookup
 
         **Side Effects:**
         - Update `current_point` di tabel `user`
@@ -1835,21 +1835,21 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [fk_tipe_disiplin, fk_id_shift]
+              required: [tipeDisiplinId, shiftId]
               properties:
-                uid_nfc:
+                uidNfc:
                   type: string
                   description: UID NFC operator (untuk input via NFC reader)
                   example: "ABC123456"
-                fk_id_operator:
+                operatorId:
                   type: integer
                   description: ID operator (untuk input manual via dropdown)
                   example: 13
-                fk_tipe_disiplin:
+                tipeDisiplinId:
                   type: integer
                   description: ID tipe pelanggaran/penghargaan
                   example: 1
-                fk_id_shift:
+                shiftId:
                   type: integer
                   description: ID shift saat kejadian
                   example: 2
@@ -1861,16 +1861,16 @@ paths:
               viaNFC:
                 summary: Input via NFC (Hardware/IoT)
                 value:
-                  uid_nfc: "ABC123456"
-                  fk_tipe_disiplin: 1
-                  fk_id_shift: 2
+                  uidNfc: "ABC123456"
+                  tipeDisiplinId: 1
+                  shiftId: 2
                   foto: "(upload file here)"
               viaManual:
                 summary: Input Manual (Web/Mobile)
                 value:
-                  fk_id_operator: 13
-                  fk_tipe_disiplin: 1
-                  fk_id_shift: 2
+                  operatorId: 13
+                  tipeDisiplinId: 1
+                  shiftId: 2
                   foto: "(upload file here)"
       responses:
         "201":
@@ -1905,13 +1905,13 @@ paths:
                       id:
                         type: integer
                         example: 1
-                      fk_id_operator:
+                      operatorId:
                         type: integer
                         example: 13
-                      fk_tipe_disiplin:
+                      tipeDisiplinId:
                         type: integer
                         example: 1
-                      fk_id_shift:
+                      shiftId:
                         type: integer
                         example: 2
                       poin_berubah:
@@ -1943,9 +1943,9 @@ paths:
                     example: 400
               examples:
                 missingBoth:
-                  summary: Tidak ada uid_nfc atau fk_id_operator
+                  summary: Tidak ada uidNfc atau operatorId
                   value:
-                    message: "Harus menyertakan uid_nfc atau fk_id_operator"
+                    message: "Harus menyertakan uidNfc atau operatorId"
                     code: 400
                 notProduksi:
                   summary: Target bukan operator produksi
@@ -1986,24 +1986,24 @@ paths:
             schema:
               type: object
               required:
-                - fk_id_user
-                - fk_id_mesin
-                - fk_id_produk
-                - fk_id_shift
-                - fk_id_target
+                - userId
+                - mesinId
+                - produkId
+                - shiftId
+                - targetId
                 - tanggal
               properties:
-                fk_id_user:
+                userId:
                   type: integer
-                fk_id_mesin:
+                mesinId:
                   type: integer
-                fk_id_produk:
+                produkId:
                   type: integer
-                fk_id_shift:
+                shiftId:
                   type: integer
-                fk_id_target:
+                targetId:
                   type: integer
-                fk_id_jenis_pekerjaan:
+                jenisPekerjaanId:
                   type: integer
                   description: (Optional) Auto-derived from target if not provided
                 tanggal:
@@ -2361,12 +2361,12 @@ paths:
             schema:
               type: object
               properties:
-                fk_id_user: { type: integer }
-                fk_id_mesin: { type: integer }
-                fk_id_produk: { type: integer }
-                fk_id_shift: { type: integer }
-                fk_id_target: { type: integer }
-                fk_id_jenis_pekerjaan: { type: integer }
+                userId: { type: integer }
+                mesinId: { type: integer }
+                produkId: { type: integer }
+                shiftId: { type: integer }
+                targetId: { type: integer }
+                jenisPekerjaanId: { type: integer }
                 tanggal: { type: string, format: date }
                 keterangan: { type: string, nullable: true }
                 status:
@@ -2436,7 +2436,7 @@ paths:
                               type: integer
                             tipe_shift:
                               type: string
-                            nama_shift:
+                            namaShift:
                               type: string
                             jam_masuk:
                               type: string
@@ -2450,7 +2450,7 @@ paths:
                             type: object
                             properties:
                               id: { type: integer }
-                              nama_mesin: { type: string }
+                              namaMesin: { type: string }
                               kategori: { type: string }
                       jenisPekerjaan:
                         type: array
@@ -2459,7 +2459,7 @@ paths:
                           properties:
                             id:
                               type: integer
-                            nama_pekerjaan:
+                            namaPekerjaan:
                               type: string
                       produk:
                         type: array
@@ -2468,7 +2468,7 @@ paths:
                           properties:
                             id:
                               type: integer
-                            nama_produk:
+                            namaProduk:
                               type: string
 
   /master/mesin:
@@ -2497,7 +2497,7 @@ paths:
                         type: object
                         properties:
                           id: { type: integer }
-                          nama_mesin: { type: string }
+                          namaMesin: { type: string }
                           kategori: { type: string }
                           ideal_cycle_time: { type: number }
                 example:
@@ -2506,11 +2506,11 @@ paths:
                   data:
                     press:
                       - id: 1
-                        nama_mesin: "A-01"
+                        namaMesin: "A-01"
                         kategori: "PRESS"
                     secondary:
                       - id: 10
-                        nama_mesin: "S-01"
+                        namaMesin: "S-01"
                         kategori: "SECONDARY"
 
     post:
@@ -2524,9 +2524,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_mesin, kategori]
+              required: [namaMesin, kategori]
               properties:
-                nama_mesin:
+                namaMesin:
                   type: string
                 kategori:
                   type: string
@@ -2554,7 +2554,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_mesin: { type: string }
+                namaMesin: { type: string }
                 kategori:
                   type: string
                   enum:
@@ -2590,7 +2590,7 @@ paths:
         - `qty_total_prod` = qty_ok + qty_ng_proses + qty_rework
         - `loading_time` = dihitung dari `start_time` → `end_time` RPH
         - `cycle_time` = diambil dari `target.ideal_cycle_time` RPH
-        - `status_lrp` = default "SUBMITTED"
+        - `statusLrp` = default "SUBMITTED"
       tags: [LRP]
       security:
         - bearerAuth: []
@@ -2601,29 +2601,29 @@ paths:
             schema:
               type: object
               required:
-                - fk_id_rph
-                - fk_id_mesin
-                - fk_id_shift
-                - fk_id_operator
+                - rphId
+                - mesinId
+                - shiftId
+                - operatorId
                 - tanggal
                 - no_kanagata
                 - no_lot
-                - no_reg
+                - noReg
                 - qty_ok
               properties:
-                fk_id_rph:
+                rphId:
                   type: integer
                   description: "ID Rencana Produksi Harian (RPH) yang sedang ACTIVE"
                   example: 1
-                fk_id_mesin:
+                mesinId:
                   type: integer
                   description: "ID Mesin"
                   example: 3
-                fk_id_shift:
+                shiftId:
                   type: integer
                   description: "ID Shift"
                   example: 2
-                fk_id_operator:
+                operatorId:
                   type: integer
                   description: "ID User operator PRODUKSI"
                   example: 5
@@ -2640,7 +2640,7 @@ paths:
                   type: string
                   description: "Nomor lot produksi"
                   example: "LOT-001"
-                no_reg:
+                noReg:
                   type: string
                   description: "Nomor registrasi operator"
                   example: "REG-1234"
@@ -2671,14 +2671,14 @@ paths:
                   description: "Counter mesin saat selesai produksi (opsional)"
                   example: 500
             example:
-              fk_id_rph: 1
-              fk_id_mesin: 3
-              fk_id_shift: 2
-              fk_id_operator: 5
+              rphId: 1
+              mesinId: 3
+              shiftId: 2
+              operatorId: 5
               tanggal: "2026-02-23"
               no_kanagata: "K-2024-01"
               no_lot: "LOT-001"
-              no_reg: "REG-1234"
+              noReg: "REG-1234"
               qty_ok: 100
               qty_ng_prev: 0
               qty_ng_proses: 2
@@ -2695,7 +2695,7 @@ paths:
                 properties:
                   id:
                     type: integer
-                  no_reg:
+                  noReg:
                     type: string
                   qty_ok:
                     type: integer
@@ -2705,11 +2705,11 @@ paths:
                     type: number
                   cycle_time:
                     type: number
-                  status_lrp:
+                  statusLrp:
                     type: string
                     example: "SUBMITTED"
         "400":
-          description: Validasi gagal (no_reg kosong, RPH tidak ditemukan, atau status RPH tidak valid)
+          description: Validasi gagal (noReg kosong, RPH tidak ditemukan, atau status RPH tidak valid)
         "409":
           description: LRP untuk RPH ini sudah pernah dibuat (1 RPH = 1 LRP)
 
@@ -2725,7 +2725,7 @@ paths:
             type: string
             format: date
         - in: query
-          name: fk_id_shift
+          name: shiftId
           schema:
             type: integer
         - in: query
@@ -2826,9 +2826,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_produk]
+              required: [namaProduk]
               properties:
-                nama_produk: { type: string }
+                namaProduk: { type: string }
       responses:
         "201":
           description: Created
@@ -2850,7 +2850,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_produk: { type: string }
+                namaProduk: { type: string }
       responses:
         "200":
           description: Success
@@ -2890,7 +2890,7 @@ paths:
                       type: integer
                     tipe_shift:
                       type: string
-                    nama_shift:
+                    namaShift:
                       type: string
                     jam_masuk:
                       type: string
@@ -2908,9 +2908,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_shift, tipe_shift, jam_masuk, jam_keluar]
+              required: [namaShift, tipe_shift, jam_masuk, jam_keluar]
               properties:
-                nama_shift: { type: string }
+                namaShift: { type: string }
                 tipe_shift: { type: string }
                 jam_masuk: { type: string, example: "07:30" }
                 jam_keluar: { type: string, example: "15:30" }
@@ -2935,7 +2935,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_shift: { type: string }
+                namaShift: { type: string }
                 tipe_shift: { type: string }
                 jam_masuk: { type: string }
                 jam_keluar: { type: string }
@@ -2974,7 +2974,7 @@ paths:
           schema:
             type: integer
         - in: query
-          name: fk_id_shift
+          name: shiftId
           schema:
             type: integer
       responses:
@@ -2997,9 +2997,9 @@ paths:
                           fk_produk: { type: integer, example: 1 }
                           total_target: { type: integer, example: 5400 }
                           ideal_cycle_time: { type: number, example: 0.07 }
-                          nama_pekerjaan:
+                          namaPekerjaan:
                             { type: string, example: "Pemasangan" }
-                          nama_produk: { type: string, example: "Produk A" }
+                          namaProduk: { type: string, example: "Produk A" }
                           target_normal: { type: integer, example: 5000 }
                           target_lembur: { type: integer, example: 400 }
                       - type: array
@@ -3011,9 +3011,9 @@ paths:
                             fk_produk: { type: integer, example: 1 }
                             total_target: { type: integer, example: 5400 }
                             ideal_cycle_time: { type: number, example: 0.07 }
-                            nama_pekerjaan:
+                            namaPekerjaan:
                               { type: string, example: "Pemasangan" }
-                            nama_produk: { type: string, example: "Produk A" }
+                            namaProduk: { type: string, example: "Produk A" }
                             target_normal: { type: integer, example: 5000 }
                             target_lembur: { type: integer, example: 400 }
 
@@ -3100,7 +3100,7 @@ paths:
                       properties:
                         id:
                           type: integer
-                        nama_masalah:
+                        namaMasalah:
                           type: string
                         kategori:
                           type: string
@@ -3119,9 +3119,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_masalah, kategori, waktu_perbaikan_menit]
+              required: [namaMasalah, kategori, waktu_perbaikan_menit]
               properties:
-                nama_masalah: { type: string }
+                namaMasalah: { type: string }
                 kategori: { type: string }
                 waktu_perbaikan_menit:
                   {
@@ -3150,7 +3150,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_masalah: { type: string }
+                namaMasalah: { type: string }
                 kategori: { type: string }
                 waktu_perbaikan_menit:
                   {
@@ -3217,10 +3217,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [kode, nama_tipe_disiplin, poin, kategori]
+              required: [kode, namaTipeDisiplin, poin, kategori]
               properties:
                 kode: { type: string }
-                nama_tipe_disiplin: { type: string }
+                namaTipeDisiplin: { type: string }
                 poin: { type: integer }
                 kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
       responses:
@@ -3245,7 +3245,7 @@ paths:
               type: object
               properties:
                 kode: { type: string }
-                nama_tipe_disiplin: { type: string }
+                namaTipeDisiplin: { type: string }
                 poin: { type: integer }
                 kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
       responses:
@@ -3301,16 +3301,16 @@ paths:
                       type: integer
                     nama:
                       type: string
-                    uid_nfc:
+                    uidNfc:
                       type: string
-                    fk_id_divisi:
+                    divisiId:
                       type: integer
                     divisi:
                       type: object
                       properties:
                         id:
                           type: integer
-                        nama_divisi:
+                        namaDivisi:
                           type: string
                     mesin:
                       type: string
@@ -3364,16 +3364,16 @@ paths:
                           type: integer
                         nama:
                           type: string
-                        uid_nfc:
+                        uidNfc:
                           type: string
-                        fk_id_divisi:
+                        divisiId:
                           type: integer
                         divisi:
                           type: object
                           properties:
                             id:
                               type: integer
-                            nama_divisi:
+                            namaDivisi:
                               type: string
                     shift:
                       type: string
@@ -3401,18 +3401,18 @@ paths:
           schema: { type: string, format: date }
           description: End date for filter range
         - in: query
-          name: fk_id_jenis_pekerjaan
+          name: jenisPekerjaanId
           schema: { type: integer }
           description: Filter by Work Type ID
         - in: query
-          name: fk_id_produk
+          name: produkId
           schema: { type: integer }
           description: Filter by Product ID
         - in: query
-          name: fk_id_mesin
+          name: mesinId
           schema: { type: integer }
         - in: query
-          name: fk_id_shift
+          name: shiftId
           schema: { type: integer }
         - in: query
           name: plant
@@ -3474,8 +3474,8 @@ paths:
                           properties:
                             id: { type: integer }
                             tanggal: { type: string, format: date }
-                            nama_shift: { type: string }
-                            nama_mesin: { type: string }
+                            namaShift: { type: string }
+                            namaMesin: { type: string }
                             no_kanagata: { type: string }
                             no_lot: { type: string }
                             qty_ok: { type: integer }
@@ -3485,7 +3485,7 @@ paths:
                             jenis_pekerjaan: { type: string }
                             counter_end_formatted: { type: string }
                             jam_kerja: { type: string }
-                            status_lrp: { type: string }
+                            statusLrp: { type: string }
                       trend_produksi_press:
                         type: object
                         properties:
@@ -3519,16 +3519,16 @@ paths:
           schema: { type: string, format: date }
           description: End date for filter range
         - in: query
-          name: fk_id_mesin
+          name: mesinId
           schema: { type: integer }
         - in: query
-          name: fk_id_shift
+          name: shiftId
           schema: { type: integer }
         - in: query
-          name: fk_id_jenis_pekerjaan
+          name: jenisPekerjaanId
           schema: { type: integer }
         - in: query
-          name: fk_id_produk
+          name: produkId
           schema: { type: integer }
         - in: query
           name: plant
@@ -3622,7 +3622,7 @@ paths:
                 qty_rework:
                   type: integer
                   minimum: 0
-                status_lrp:
+                statusLrp:
                   type: string
                   enum: [SUBMITTED, VERIFIED]
       responses:
@@ -3701,12 +3701,12 @@ paths:
                               type: string
                             plant:
                               type: string
-                            fk_id_divisi:
+                            divisiId:
                               type: integer
                             divisi:
                               type: object
                               properties:
-                                nama_divisi:
+                                namaDivisi:
                                   type: string
                       tipe_disiplin:
                         type: array
@@ -3719,7 +3719,7 @@ paths:
                           properties:
                             id:
                               type: integer
-                            nama_shift:
+                            namaShift:
                               type: string
                             tipe_shift:
                               type: string
@@ -3758,9 +3758,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_divisi]
+              required: [namaDivisi]
               properties:
-                nama_divisi: { type: string, example: "Production" }
+                namaDivisi: { type: string, example: "Production" }
       responses:
         "201":
           description: Created
@@ -3805,7 +3805,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_divisi: { type: string, example: "Maintenance" }
+                namaDivisi: { type: string, example: "Maintenance" }
       responses:
         "200":
           description: Updated
@@ -3862,9 +3862,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama_pekerjaan]
+              required: [namaPekerjaan]
               properties:
-                nama_pekerjaan: { type: string, example: "Production" }
+                namaPekerjaan: { type: string, example: "Production" }
       responses:
         "201":
           description: Created
@@ -3909,7 +3909,7 @@ paths:
             schema:
               type: object
               properties:
-                nama_pekerjaan: { type: string, example: "Maintenance" }
+                namaPekerjaan: { type: string, example: "Maintenance" }
       responses:
         "200":
           description: Updated

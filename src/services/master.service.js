@@ -209,9 +209,9 @@ const getTarget = async (filter, shiftId) => {
 
   logger.info("[Redis] Cache MISS: Fetching Target Data from Database...");
   // 1. Ambil data dari database dengan relasi
-  const include = { jenis_pekerjaan: true, produk: true };
+  const include = { jenisPekerjaan: true, produk: true };
   const targetData =
-    filter.fk_produk && filter.fk_jenis_pekerjaan
+    filter.produkId && filter.jenisPekerjaanId
       ? await prisma.target.findFirst({ where: filter, include })
       : await prisma.target.findMany({ where: filter, include });
 
@@ -226,19 +226,19 @@ const getTarget = async (filter, shiftId) => {
   const formatTarget = (t) => {
     const formatted = {
       ...t,
-      nama_pekerjaan: t.jenis_pekerjaan?.nama_pekerjaan,
-      nama_produk: t.produk?.nama_produk,
+      namaPekerjaan: t.jenisPekerjaan?.namaPekerjaan,
+      namaProduk: t.produk?.namaProduk,
     };
 
     // Hapus objek relasi agar response bersih
-    delete formatted.jenis_pekerjaan;
+    delete formatted.jenisPekerjaan;
     delete formatted.produk;
 
     // Hitung kalkulasi target jika data shift tersedia
     if (shift) {
       Object.assign(
         formatted,
-        calculateProductionTarget(t.total_target, shift.tipe_shift),
+        calculateProductionTarget(t.totalTarget, shift.tipeShift),
       );
     }
 

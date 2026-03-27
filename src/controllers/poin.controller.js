@@ -5,7 +5,7 @@ import poinService from "../services/poin.service.js";
 
 const getMyPoin = catchAsync(async (req, res) => {
   const totalPoin = await poinService.getUserCurrentPoin(req.user.id);
-  res.send({ status: true, total_poin: totalPoin });
+  res.send({ status: true, totalPoin: totalPoin });
 });
 
 // PASTIKAN FUNGSI INI ADA DAN NAMANYA SAMA PERSIS
@@ -13,7 +13,7 @@ const getPoinByUserId = catchAsync(async (req, res) => {
   const { userId } = req.params;
 
   const totalPoin = await poinService.getUserCurrentPoin(parseInt(userId));
-  res.send({ status: true, total_poin: totalPoin });
+  res.send({ status: true, totalPoin: totalPoin });
 });
 
 const postPelanggaran = catchAsync(async (req, res) => {
@@ -26,10 +26,10 @@ const postPelanggaran = catchAsync(async (req, res) => {
     status: true,
     message: "Pelanggaran berhasil dicatat",
     operator: {
-      id: result.fk_id_operator,
+      id: result.operatorId,
       nama: result.operator?.nama || "Operator",
-      current_point: await poinService.getUserCurrentPoin(
-        result.fk_id_operator,
+      currentPoint: await poinService.getUserCurrentPoin(
+        result.operatorId,
       ),
     },
     data: result,
@@ -87,8 +87,8 @@ const getMonthlyStats = catchAsync(async (req, res) => {
 });
 
 const getUserByNfc = catchAsync(async (req, res) => {
-  const { uid_nfc } = req.params;
-  const user = await poinService.getUserByNfc(uid_nfc);
+  const { uidNfc } = req.params;
+  const user = await poinService.getUserByNfc(uidNfc);
   res.send({ status: true, data: user });
 });
 

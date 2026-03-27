@@ -16,7 +16,7 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
   }
 
   if (shiftId) {
-    where.fk_id_shift = parseInt(shiftId);
+    where.shiftId = parseInt(shiftId);
   }
 
   if (divisiId) {
@@ -32,27 +32,27 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
         select: {
           id: true,
           nama: true,
-          uid_nfc: true,
-          fk_id_divisi: true,
+          uidNfc: true,
+          divisiId: true,
           divisi: true,
         },
       },
       mesin: true,
       produk: true,
-      attendances: true,
+      attendance: true,
     },
   });
 
   return result
     .filter((r) => r.user)
     .map((r) => {
-      const attendance = r.attendances.length > 0 ? r.attendances[0] : null;
+      const attendance = r.attendance.length > 0 ? r.attendance[0] : null;
 
       return {
         nama: r.user.nama,
-        status_absen: attendance ? "Hadir" : "Belum Hadir",
-        is_terlambat: attendance ? attendance.is_terlambat : false,
-        jam_tap: attendance ? attendance.jam_tap : null,
+        statusAbsen: attendance ? "Hadir" : "Belum Hadir",
+        is_terlambat: attendance ? attendance.isTerlambat : false,
+        jam_tap: attendance ? attendance.jamTap : null,
       };
     });
 };
@@ -71,14 +71,14 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
 
   ``; // Filter based on related RencanaProduksi's shift
   if (shiftId) {
-    where.rencana_produksi = {
-      fk_id_shift: parseInt(shiftId),
+    where.rencanaProduksi = {
+      shiftId: parseInt(shiftId),
     };
   }
 
   if (divisiId) {
     where.user = {
-      fk_id_divisi: parseInt(divisiId),
+      divisiId: parseInt(divisiId),
     };
   }
 
@@ -89,12 +89,12 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
         select: {
           id: true,
           nama: true,
-          uid_nfc: true,
-          fk_id_divisi: true,
+          uidNfc: true,
+          divisiId: true,
           divisi: true,
         },
       },
-      rencana_produksi: {
+      rencanaProduksi: {
         include: {
           mesin: true,
           shift: true,
@@ -105,11 +105,11 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
 
   return result.map((a) => ({
     id: a.id,
-    jam_tap: a.jam_tap,
-    is_terlambat: a.is_terlambat,
+    jam_tap: a.jamTap,
+    is_terlambat: a.isTerlambat,
     user: a.user,
-    shift: a.rencana_produksi?.shift?.nama_shift,
-    mesin: a.rencana_produksi?.mesin?.nama_mesin,
+    shift: a.rencanaProduksi?.shift?.namaShift,
+    mesin: a.rencanaProduksi?.mesin?.namaMesin,
   }));
 };
 
@@ -122,7 +122,7 @@ const clockIn = async (user, req) => {
   // 1. Cari RPH hari ini
   const rph = await prisma.rencanaProduksi.findFirst({
     where: {
-      fk_id_user: user.id,
+      userId: user.id,
       tanggal: new Date(dateStr),
     },
     include: { shift: true },
@@ -132,11 +132,11 @@ const clockIn = async (user, req) => {
 
   // 2. Cek apakah sudah ada absen untuk rencana produksi ini
   const existing = await prisma.attendance.findFirst({
-    where: { fk_id_rencana_produksi: rph.id },
+    where: { rencanaProduksiId: rph.id },
   });
 
   if (!existing) {
-    const [h, m] = rph.shift.jam_masuk.split(":");
+    const [h, m] = rph.shift.jamMasuk.split(":");
 
     // Set jam masuk shift berdasarkan tanggal hari ini
     const shiftStartTime = new Date(now);
@@ -161,20 +161,20 @@ const clockIn = async (user, req) => {
     }
 
     // Tentukan status terlambat
-    const is_terlambat = now > shiftStartTime;
+    const isTerlambat = now > shiftStartTime;
 
     await prisma.attendance.create({
       data: {
-        fk_id_user: user.id,
-        fk_id_rencana_produksi: rph.id,
-        jam_tap: now,
+        userId: user.id,
+        rencanaProduksiId: rph.id,
+        jamTap: now,
         tanggal: new Date(dateStr),
-        is_terlambat,
+        isTerlambat: isTerlambat,
       },
     });
 
     // LOGIKA FITUR: Otomatis kurangi poin jika terlambat
-    if (is_terlambat) {
+    if (isTerlambat) {
       try {
         const tipeDisiplin = await prisma.tipeDisiplin.findUnique({
           where: { kode: "P01" },
@@ -192,14 +192,14 @@ const clockIn = async (user, req) => {
               {
                 fk_id_operator: user.id,
                 fk_tipe_disiplin: tipeDisiplin.id,
-                fk_id_shift: rph.fk_id_shift,
+                fk_id_shift: rph.shiftId,
                 keterangan: `Sistem: Terlambat login pada ${now.toLocaleTimeString(
                   "id-ID",
                   {
                     hour: "2-digit",
                     minute: "2-digit",
                   },
-                )} (Shift: ${rph.shift.jam_masuk})`,
+                )} (Shift: ${rph.shift.jamMasuk})`,
               },
               adminStaff.id,
             );

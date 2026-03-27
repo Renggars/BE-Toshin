@@ -9,10 +9,10 @@ const getDashboardSummary = catchAsync(async (req, res) => {
   const filter = pick(req.query, [
     "startDate",
     "endDate",
-    "fk_id_mesin",
-    "fk_id_shift",
-    "fk_id_jenis_pekerjaan",
-    "fk_id_produk",
+    "mesinId",
+    "shiftId",
+    "jenisPekerjaanId",
+    "produkId",
     "plant",
   ]);
 

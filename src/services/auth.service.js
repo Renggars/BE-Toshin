@@ -9,8 +9,8 @@ import httpStatus from "http-status";
  * @param {string} uid_nfc
  * @returns {Promise<User>}
  */
-const loginWithNfc = async (uid_nfc, req) => {
-  const user = await userService.getUserByNfc(uid_nfc);
+const loginWithNfc = async (uidNfc, req) => {
+  const user = await userService.getUserByNfc(uidNfc);
 
   if (!user) {
     throw new ApiError(httpStatus.UNAUTHORIZED, "Kartu akses tidak dikenal");
@@ -23,7 +23,7 @@ const loginWithNfc = async (uid_nfc, req) => {
   await attendanceService.clockIn(user, req);
 
   // Return fresh user data to include updated points
-  return userService.getUserByNfc(uid_nfc);
+  return userService.getUserByNfc(uidNfc);
 };
 
 /**

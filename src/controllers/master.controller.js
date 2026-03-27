@@ -78,13 +78,13 @@ const deleteShift = catchAsync(async (req, res) => {
 // --- Target ---
 const getTarget = catchAsync(async (req, res) => {
   const filter = {};
-  if (req.query.fk_produk) filter.fk_produk = parseInt(req.query.fk_produk);
-  if (req.query.fk_jenis_pekerjaan)
-    filter.fk_jenis_pekerjaan = parseInt(req.query.fk_jenis_pekerjaan);
+  if (req.query.produkId) filter.produkId = parseInt(req.query.produkId);
+  if (req.query.jenisPekerjaanId)
+    filter.jenisPekerjaanId = parseInt(req.query.jenisPekerjaanId);
 
   // Ambil ID Shift dari query untuk keperluan kalkulasi
-  const shiftId = req.query.fk_id_shift
-    ? parseInt(req.query.fk_id_shift)
+  const shiftId = req.query.shiftId
+    ? parseInt(req.query.shiftId)
     : null;
 
   const result = await masterService.getTarget(filter, shiftId);

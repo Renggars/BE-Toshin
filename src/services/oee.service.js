@@ -2,16 +2,16 @@ import moment from "moment";
 import prisma from "../../prisma/index.js";
 
 const calculateLoadingTime = (shift) => {
-  const start = moment(shift.jam_masuk, "HH:mm");
-  const end = moment(shift.jam_keluar, "HH:mm");
+  const start = moment(shift.jamMasuk, "HH:mm");
+  const end = moment(shift.jamKeluar, "HH:mm");
   let dur = end.diff(start, "minutes");
   if (dur < 0) dur += 1440;
 
   const allowance =
-    shift.break_duration +
-    shift.cleaning_duration +
-    shift.briefing_duration +
-    Math.round(dur * shift.toilet_tolerance_pct);
+    shift.breakDuration +
+    shift.cleaningDuration +
+    shift.briefingDuration +
+    Math.round(dur * shift.toiletTolerancePct);
 
   return dur - allowance;
 };
@@ -28,13 +28,13 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     // 1. Get Downtime Data with Andon Category
     const downtimeData = await prisma.andonDowntimeShift.findMany({
       where: {
-        fk_id_mesin: mesinId,
-        fk_id_shift: shift.id,
+        mesinId,
+        shiftId: shift.id,
         tanggal: targetDate,
       },
       include: {
-        andon: {
-          include: { masalah: true },
+        andonEvent: {
+          include: { masterMasalahAndon: true },
         },
       },
     });
@@ -43,10 +43,10 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     let unplannedDowntime = 0;
 
     downtimeData.forEach((d) => {
-      if (d.andon?.masalah?.kategori === "PLAN_DOWNTIME") {
-        plannedDowntime += d.durasi_menit;
+      if (d.andonEvent?.masterMasalahAndon?.kategori === "PLAN_DOWNTIME") {
+        plannedDowntime += d.durasiMenit;
       } else {
-        unplannedDowntime += d.durasi_menit;
+        unplannedDowntime += d.durasiMenit;
       }
     });
 
@@ -56,8 +56,8 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     // ... (rest of production data logic remains same)
     const lrpData = await prisma.laporanRealisasiProduksi.findMany({
       where: {
-        fk_id_mesin: mesinId,
-        fk_id_shift: shift.id,
+        mesinId: mesinId,
+        shiftId: shift.id,
         tanggal: targetDate,
       },
     });
@@ -67,9 +67,9 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     let idealCycleTime = 0;
 
     lrpData.forEach((l) => {
-      totalOk += l.qty_ok;
-      totalOutput += l.qty_total_prod;
-      if (l.cycle_time > 0) idealCycleTime = l.cycle_time;
+      totalOk += l.qtyOk;
+      totalOutput += l.qtyTotalProd;
+      if (l.cycleTime > 0) idealCycleTime = l.cycleTime;
     });
 
     // 3. Constants and Adjusted OEE Logic
@@ -101,35 +101,35 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     const oeeRecord = await prisma.oEE.upsert({
       where: {
         fk_id_mesin_tanggal_fk_id_shift: {
-          fk_id_mesin: mesinId,
+          mesinId: mesinId,
           tanggal: targetDate,
-          fk_id_shift: shift.id,
+          shiftId: shift.id,
         },
       },
       update: {
         availability: Number(availability.toFixed(1)),
         performance: Number(performance.toFixed(1)),
         quality: Number(quality.toFixed(1)),
-        oee_score: Number(oeeScore.toFixed(1)),
-        loading_time: loadingTime,
+        oeeScore: Number(oeeScore.toFixed(1)),
+        loadingTime: loadingTime,
         downtime: totalDowntime,
-        total_output: totalOutput,
-        total_ok: totalOk,
-        ideal_cycle_time: idealCycleTime,
+        totalOutput: totalOutput,
+        totalOk: totalOk,
+        idealCycleTime: idealCycleTime,
       },
       create: {
-        fk_id_mesin: mesinId,
-        fk_id_shift: shift.id,
+        mesinId: mesinId,
+        shiftId: shift.id,
         tanggal: targetDate,
         availability: Number(availability.toFixed(1)),
         performance: Number(performance.toFixed(1)),
         quality: Number(quality.toFixed(1)),
-        oee_score: Number(oeeScore.toFixed(1)),
-        loading_time: loadingTime,
+        oeeScore: Number(oeeScore.toFixed(1)),
+        loadingTime: loadingTime,
         downtime: totalDowntime,
-        total_output: totalOutput,
-        total_ok: totalOk,
-        ideal_cycle_time: idealCycleTime,
+        totalOutput: totalOutput,
+        totalOk: totalOk,
+        idealCycleTime: idealCycleTime,
       },
     });
 
@@ -144,10 +144,10 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
 };
 
 const getOEEByMesin = (mesinId) =>
-  prisma.oEE.findMany({ where: { fk_id_mesin: Number(mesinId) } });
+  prisma.oEE.findMany({ where: { mesinId: Number(mesinId) } });
 
 const getOEEByShift = (shiftId) =>
-  prisma.oEE.findMany({ where: { fk_id_shift: Number(shiftId) } });
+  prisma.oEE.findMany({ where: { shiftId: Number(shiftId) } });
 
 const getPlantOEE = () =>
   prisma.oEE.aggregate({
@@ -155,7 +155,7 @@ const getPlantOEE = () =>
       availability: true,
       performance: true,
       quality: true,
-      oee_score: true,
+      oeeScore: true,
     },
   });
 
@@ -179,11 +179,11 @@ const getOEESummary = async (tanggal, plant) => {
   if (plant) {
     const rencanaInPlant = await prisma.rencanaProduksi.findMany({
       where: { user: { plant: plant }, tanggal: targetDate },
-      select: { fk_id_mesin: true },
-      distinct: ["fk_id_mesin"],
+      select: { mesinId: true },
+      distinct: ["mesinId"],
     });
-    const machineIds = rencanaInPlant.map((r) => r.fk_id_mesin);
-    where.fk_id_mesin = { in: machineIds };
+    const machineIds = rencanaInPlant.map((r) => r.mesinId);
+    where.mesinId = { in: machineIds };
   }
 
   const oeeData = await prisma.oEE.findMany({
@@ -192,8 +192,8 @@ const getOEESummary = async (tanggal, plant) => {
       availability: true,
       performance: true,
       quality: true,
-      oee_score: true,
-      loading_time: true,
+      oeeScore: true,
+      loadingTime: true,
     },
   });
 
@@ -214,12 +214,12 @@ const getOEESummary = async (tanggal, plant) => {
   let weightedOee = 0;
 
   oeeData.forEach((item) => {
-    const lt = item.loading_time || 0;
+    const lt = item.loadingTime || 0;
     totalLoadingTime += lt;
     weightedAvail += item.availability * lt;
     weightedPerf += item.performance * lt;
     weightedQual += item.quality * lt;
-    weightedOee += item.oee_score * lt;
+    weightedOee += item.oeeScore * lt;
   });
 
   if (totalLoadingTime === 0) {
@@ -235,7 +235,7 @@ const getOEESummary = async (tanggal, plant) => {
         (oeeData.reduce((s, i) => s + i.quality, 0) / count).toFixed(1),
       ),
       oee: Number(
-        (oeeData.reduce((s, i) => s + i.oee_score, 0) / count).toFixed(1),
+        (oeeData.reduce((s, i) => s + i.oeeScore, 0) / count).toFixed(1),
       ),
     };
     return { ...result, status: determineStatus(result.oee) };
@@ -277,35 +277,35 @@ const getOEETrend = async (tanggal, shiftIds, plant) => {
           lte: endDate.toDate(),
         },
       },
-      select: { fk_id_mesin: true },
-      distinct: ["fk_id_mesin"],
+      select: { mesinId: true },
+      distinct: ["mesinId"],
     });
-    const machineIds = rencanaInPlant.map((r) => r.fk_id_mesin);
-    where.fk_id_mesin = { in: machineIds };
+    const machineIds = rencanaInPlant.map((r) => r.mesinId);
+    where.mesinId = { in: machineIds };
   }
 
   if (shiftIds && shiftIds.length > 0) {
     const ids = Array.isArray(shiftIds)
       ? shiftIds.map(Number)
       : [Number(shiftIds)];
-    where.fk_id_shift = { in: ids };
+    where.shiftId = { in: ids };
   }
 
   const oeeRecords = await prisma.oEE.findMany({
     where,
-    select: { fk_id_shift: true, oee_score: true, tanggal: true },
+    select: { shiftId: true, oeeScore: true, tanggal: true },
     orderBy: { tanggal: "asc" },
   });
 
   const trendData = {}; // { shift_id: { dateStr: [scores] } }
 
   oeeRecords.forEach((item) => {
-    const shiftKey = `shift_${item.fk_id_shift}`;
+    const shiftKey = `shift_${item.shiftId}`;
     const dateStr = moment(item.tanggal).format("DD");
 
     if (!trendData[shiftKey]) trendData[shiftKey] = {};
     if (!trendData[shiftKey][dateStr]) trendData[shiftKey][dateStr] = [];
-    trendData[shiftKey][dateStr].push(item.oee_score);
+    trendData[shiftKey][dateStr].push(item.oeeScore);
   });
 
   const response = { labels: dateLabels };
@@ -333,13 +333,13 @@ const getDowntimeHistory = async (tanggal, plant) => {
 
   const andonEvents = await prisma.andonEvent.findMany({
     where,
-    include: { masalah: true },
+    include: { masterMasalahAndon: true },
   });
 
   const groupData = {};
   andonEvents.forEach((event) => {
-    const label = event.masalah.nama_masalah;
-    const hours = (event.durasi_downtime || 0) / 60;
+    const label = event.masterMasalahAndon.namaMasalah;
+    const hours = (event.durasiDowntime || 0) / 60;
     groupData[label] = (groupData[label] || 0) + hours;
   });
 
@@ -367,47 +367,47 @@ const getMachineDetail = async (tanggal, plant) => {
   const [oeeRecords, lrpRecords, downtimeShifts, rencanaProduksis] =
     await Promise.all([
       prisma.oEE.findMany({
-        where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
+        where: { tanggal: targetDate, mesinId: { in: machineIds } },
       }),
       prisma.laporanRealisasiProduksi.findMany({
-        where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
+        where: { tanggal: targetDate, mesinId: { in: machineIds } },
       }),
       prisma.andonDowntimeShift.findMany({
-        where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
+        where: { tanggal: targetDate, mesinId: { in: machineIds } },
       }),
       prisma.rencanaProduksi.findMany({
-        where: { tanggal: targetDate, fk_id_mesin: { in: machineIds } },
+        where: { tanggal: targetDate, mesinId: { in: machineIds } },
         include: { target: true },
       }),
     ]);
 
   return machines.map((mesin) => {
-    const mcOee = oeeRecords.filter((r) => r.fk_id_mesin === mesin.id);
-    const mcLrp = lrpRecords.filter((r) => r.fk_id_mesin === mesin.id);
-    const mcDt = downtimeShifts.filter((r) => r.fk_id_mesin === mesin.id);
+    const mcOee = oeeRecords.filter((r) => r.mesinId === mesin.id);
+    const mcLrp = lrpRecords.filter((r) => r.mesinId === mesin.id);
+    const mcDt = downtimeShifts.filter((r) => r.mesinId === mesin.id);
     const mcRencana = rencanaProduksis.filter(
-      (r) => r.fk_id_mesin === mesin.id,
+      (r) => r.mesinId === mesin.id,
     );
 
     const shifts = {};
     [1, 2, 3].forEach((shiftId) => {
       const shiftKey = `shift_${shiftId}`;
-      const lrp = mcLrp.find((l) => l.fk_id_shift === shiftId);
+      const lrp = mcLrp.find((l) => l.shiftId === shiftId);
       const dt = mcDt
-        .filter((d) => d.fk_id_shift === shiftId)
-        .reduce((sum, d) => sum + d.durasi_menit, 0);
-      const rencana = mcRencana.find((r) => r.fk_id_shift === shiftId);
+        .filter((d) => d.shiftId === shiftId)
+        .reduce((sum, d) => sum + d.durasiMenit, 0);
+      const rencana = mcRencana.find((r) => r.shiftId === shiftId);
 
       shifts[shiftKey] = {
-        ok: lrp ? lrp.qty_ok : 0,
-        ng: lrp ? lrp.qty_ng_proses + lrp.qty_ng_prev : 0,
+        ok: lrp ? lrp.qtyOk : 0,
+        ng: lrp ? lrp.qtyNgProses + lrp.qtyNgPrev : 0,
         downtime: dt,
-        target: rencana && rencana.target ? rencana.target.total_target : 0,
+        target: rencana && rencana.target ? rencana.target.totalTarget : 0,
       };
     });
 
-    const validOee = mcOee.filter((o) => (o.loading_time || 0) > 0);
-    const totalLt = validOee.reduce((sum, r) => sum + (r.loading_time || 0), 0);
+    const validOee = mcOee.filter((o) => (o.loadingTime || 0) > 0);
+    const totalLt = validOee.reduce((sum, r) => sum + (r.loadingTime || 0), 0);
 
     const summary =
       totalLt > 0
@@ -415,7 +415,7 @@ const getMachineDetail = async (tanggal, plant) => {
             availability: Number(
               (
                 validOee.reduce(
-                  (s, r) => s + r.availability * r.loading_time,
+                  (s, r) => s + r.availability * r.loadingTime,
                   0,
                 ) / totalLt
               ).toFixed(1),
@@ -423,20 +423,20 @@ const getMachineDetail = async (tanggal, plant) => {
             performance: Number(
               (
                 validOee.reduce(
-                  (s, r) => s + r.performance * r.loading_time,
+                  (s, r) => s + r.performance * r.loadingTime,
                   0,
                 ) / totalLt
               ).toFixed(1),
             ),
             quality: Number(
               (
-                validOee.reduce((s, r) => s + r.quality * r.loading_time, 0) /
+                validOee.reduce((s, r) => s + r.quality * r.loadingTime, 0) /
                 totalLt
               ).toFixed(1),
             ),
             oee: Number(
               (
-                validOee.reduce((s, r) => s + r.oee_score * r.loading_time, 0) /
+                validOee.reduce((s, r) => s + r.oeeScore * r.loadingTime, 0) /
                 totalLt
               ).toFixed(1),
             ),
@@ -448,7 +448,7 @@ const getMachineDetail = async (tanggal, plant) => {
             oee: 0,
           };
 
-    return { mesin: mesin.nama_mesin, shift: shifts, summary };
+    return { mesin: mesin.namaMesin, shift: shifts, summary };
   });
 };
 

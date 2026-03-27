@@ -19,7 +19,7 @@ const invalidateDivisiCache = async () => {
 const createDivisi = async (divisiBody) => {
   // Check if divisi already exists
   const existingDivisi = await prisma.divisi.findUnique({
-    where: { nama_divisi: divisiBody.nama_divisi },
+    where: { namaDivisi: divisiBody.namaDivisi },
   });
 
   if (existingDivisi) {
@@ -28,7 +28,7 @@ const createDivisi = async (divisiBody) => {
 
   const result = await prisma.divisi.create({
     data: {
-      nama_divisi: divisiBody.nama_divisi,
+      namaDivisi: divisiBody.namaDivisi,
     },
   });
 
@@ -53,7 +53,7 @@ const queryDivisi = async () => {
   logger.info("[Redis] Cache MISS: Fetching Divisi List from Database...");
   const result = await prisma.divisi.findMany({
     orderBy: {
-      nama_divisi: "asc",
+      namaDivisi: "asc",
     },
   });
 
@@ -90,10 +90,10 @@ const getDivisiById = async (divisiId) => {
 const updateDivisiById = async (divisiId, updateBody) => {
   await getDivisiById(divisiId);
 
-  // Check if new nama_divisi already exists
-  if (updateBody.nama_divisi) {
+  // Check if new namaDivisi already exists
+  if (updateBody.namaDivisi) {
     const existingDivisi = await prisma.divisi.findUnique({
-      where: { nama_divisi: updateBody.nama_divisi },
+      where: { namaDivisi: updateBody.namaDivisi },
     });
 
     if (existingDivisi && existingDivisi.id !== divisiId) {
@@ -120,7 +120,7 @@ const deleteDivisiById = async (divisiId) => {
 
   // Check if divisi has users
   const userCount = await prisma.user.count({
-    where: { fk_id_divisi: divisiId },
+    where: { divisiId: divisiId },
   });
 
   if (userCount > 0) {

@@ -29,16 +29,16 @@ const createUser = async (userBody) => {
       nama: userBody.nama,
       email: userBody.email,
       password: hashedPassword,
-      uid_nfc: userBody.uid_nfc || null,
+      uidNfc: userBody.uidNfc || null,
       role: userBody.role,
-      fk_id_divisi: userBody.fk_id_divisi,
-      foto_profile: userBody.foto_profile || null,
+      divisiId: userBody.divisiId,
+      fotoProfile: userBody.fotoProfile || null,
       plant: userBody.plant,
       line: userBody.line,
       status: "active",
-      no_reg: userBody.no_reg || null,
+      noReg: userBody.noReg || null,
       // Set cycle start jika role-nya PRODUKSI
-      point_cycle_start:
+      pointCycleStart:
         userBody.role === "PRODUKSI" ? new Date(new Date().setDate(1)) : null,
     },
     include: {
@@ -74,21 +74,21 @@ const queryUsers = async (filter) => {
     where: filter,
     select: {
       id: true,
-      foto_profile: true,
+      fotoProfile: true,
       nama: true,
       email: true,
       role: true,
       divisi: {
         select: {
           id: true,
-          nama_divisi: true,
+          namaDivisi: true,
         },
       },
       plant: true,
       line: true,
       status: true,
-      current_point: true,
-      no_reg: true,
+      currentPoint: true,
+      noReg: true,
     },
   });
 
@@ -112,18 +112,18 @@ const getUserByEmail = async (email) => {
       nama: true,
       email: true,
       password: true,
-      foto_profile: true,
+      fotoProfile: true,
       role: true,
       plant: true,
-      current_point: true,
+      currentPoint: true,
       status: true,
-      suspended_until: true,
-      fk_id_divisi: true,
-      no_reg: true,
+      suspendedUntil: true,
+      divisiId: true,
+      noReg: true,
       divisi: {
         select: {
           id: true,
-          nama_divisi: true,
+          namaDivisi: true,
         },
       },
     },
@@ -135,24 +135,24 @@ const getUserByEmail = async (email) => {
  * @param {string} uid_nfc
  * @returns {Promise<User>}
  */
-const getUserByNfc = async (uid_nfc) => {
+const getUserByNfc = async (uidNfc) => {
   return prisma.user.findUnique({
-    where: { uid_nfc },
+    where: { uidNfc },
     select: {
       id: true,
       nama: true,
-      foto_profile: true,
+      fotoProfile: true,
       role: true,
       status: true,
       plant: true,
-      current_point: true,
-      suspended_until: true,
-      fk_id_divisi: true,
-      no_reg: true,
+      currentPoint: true,
+      suspendedUntil: true,
+      divisiId: true,
+      noReg: true,
       divisi: {
         select: {
           id: true,
-          nama_divisi: true,
+          namaDivisi: true,
         },
       },
     },
@@ -191,20 +191,20 @@ const getCurrentUserData = async (userId) => {
       id: true,
       nama: true,
       email: true,
-      uid_nfc: true,
-      foto_profile: true,
+      uidNfc: true,
+      fotoProfile: true,
       role: true,
       plant: true,
-      current_point: true,
+      currentPoint: true,
       status: true,
-      suspended_until: true,
-      point_cycle_start: true,
-      fk_id_divisi: true,
-      no_reg: true,
+      suspendedUntil: true,
+      pointCycleStart: true,
+      divisiId: true,
+      noReg: true,
       divisi: {
         select: {
           id: true,
-          nama_divisi: true,
+          namaDivisi: true,
         },
       },
     },
@@ -226,15 +226,15 @@ const getCurrentUserData = async (userId) => {
 const updateUserById = async (userId, updateBody) => {
   await getUserById(userId);
 
-  // Jika ada uid_nfc, cek apakah sudah digunakan oleh user lain
-  if (updateBody.uid_nfc) {
+  // Jika ada uidNfc, cek apakah sudah digunakan oleh user lain
+  if (updateBody.uidNfc) {
     const userWithNfc = await prisma.user.findFirst({
       where: {
-        uid_nfc: updateBody.uid_nfc,
+        uidNfc: updateBody.uidNfc,
         id: { not: userId }, // Pastikan bukan user yang sedang diupdate
       },
     });
-
+ 
     if (userWithNfc) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
@@ -272,7 +272,7 @@ const deactivateUserById = async (userId) => {
     where: { id: userId },
     data: {
       status: "inactive",
-      suspended_until: null,
+      suspendedUntil: null,
     },
   });
 

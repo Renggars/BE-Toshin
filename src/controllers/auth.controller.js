@@ -31,16 +31,16 @@ const login = catchAsync(async (req, res) => {
   let user;
 
   // Deteksi metode login: NFC atau Email
-  if (req.body.uid_nfc) {
+  if (req.body.uidNfc) {
     // Login dengan NFC
-    user = await authService.loginWithNfc(req.body.uid_nfc, req);
+    user = await authService.loginWithNfc(req.body.uidNfc, req);
   } else if (req.body.email && req.body.password) {
     // Login dengan Email & Password
     user = await authService.loginWithEmail(req.body.email, req.body.password, req);
   } else {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      "Harus menyertakan uid_nfc atau (email dan password)",
+      "Harus menyertakan uidNfc atau (email dan password)",
     );
   }
 

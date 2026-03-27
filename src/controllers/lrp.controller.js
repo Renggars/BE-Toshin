@@ -14,16 +14,16 @@ const createLrp = catchAsync(async (req, res) => {
 
   // Emit realtime update to OEE dashboard
   emitOeeUpdate({
-    mesinId: lrp.fk_id_mesin,
+    mesinId: lrp.mesinId,
     tanggal: lrp.tanggal,
-    shiftId: lrp.fk_id_shift,
+    shiftId: lrp.shiftId,
   });
 
   responseApiCreateSuccess(res, "LRP created successfully", lrp);
 });
 
 const getLrps = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ["tanggal", "fk_id_shift", "no_kanagata"]);
+  const filter = pick(req.query, ["tanggal", "shiftId", "noKanagata"]);
   const options = pick(req.query, ["sortBy", "limit", "page"]);
   const result = await lrpService.queryLrps(filter, options);
   responseApiSuccess(res, "LRPs retrieved successfully", result);
@@ -42,9 +42,9 @@ const updateLrp = catchAsync(async (req, res) => {
 
   // Emit realtime update to OEE dashboard
   emitOeeUpdate({
-    mesinId: lrp.fk_id_mesin,
+    mesinId: lrp.mesinId,
     tanggal: lrp.tanggal,
-    shiftId: lrp.fk_id_shift,
+    shiftId: lrp.shiftId,
   });
 
   responseApiSuccess(res, "LRP updated successfully", lrp);
@@ -55,9 +55,9 @@ const deleteLrp = catchAsync(async (req, res) => {
 
   // Emit realtime update to OEE dashboard
   emitOeeUpdate({
-    mesinId: lrp.fk_id_mesin,
+    mesinId: lrp.mesinId,
     tanggal: lrp.tanggal,
-    shiftId: lrp.fk_id_shift,
+    shiftId: lrp.shiftId,
   });
 
   responseApiSuccess(res, "LRP deleted successfully");

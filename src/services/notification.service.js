@@ -3,11 +3,11 @@ import { emitNotification } from "../config/socket.js";
 import logger from "../config/logger.js";
 
 // buat notifikasi
-const createNotification = async ({ fk_id_user, tipe, judul, pesan }) => {
+const createNotification = async ({ userId, tipe, judul, pesan }) => {
     //save to db
     const notification = await prisma.notification.create({
         data: {
-            fk_id_user,
+            userId,
             tipe,
             judul,
             pesan,
@@ -15,7 +15,7 @@ const createNotification = async ({ fk_id_user, tipe, judul, pesan }) => {
     });
 
     // kirim ke user via socket.io room
-    emitNotification(fk_id_user, notification);
+    emitNotification(userId, notification);
     return notification;
 
 };
@@ -26,7 +26,7 @@ const createBulkNotifications = async (userIds, tipe, judul, pesan) => {
 
     for (const userId of userIds) {
         const notif = await createNotification({
-            fk_id_user: userId,
+            userId: userId,
             tipe,
             judul,
             pesan,
@@ -46,13 +46,13 @@ const getNotifications = async (userId, { page = 1, limit = 20 }) => {
 
     const [data, totalItems] = await Promise.all([
         prisma.notification.findMany({
-            where: { fk_id_user: userId },
-            orderBy: { created_at: "desc" },
+            where: { userId: userId },
+            orderBy: { createdAt: "desc" },
             skip,
             take,
         }),
         prisma.notification.count({
-            where: { fk_id_user: userId },
+            where: { userId: userId },
         }),
     ]);
 
@@ -69,14 +69,14 @@ const getNotifications = async (userId, { page = 1, limit = 20 }) => {
 //tandai sudah dibaca
 const markAsRead = async (id, userId) => {
     return prisma.notification.updateMany({
-        where: { id: Number(id), fk_id_user: userId },
-        data: { is_read: true },
+        where: { id: Number(id), userId: userId },
+        data: { isRead: true },
     });
 };
 
 const getUnreadCount = async (userId) => {
     const count = await prisma.notification.count({
-        where: { fk_id_user: userId, is_read: false },
+        where: { userId: userId, isRead: false },
     });
     return { unreadCount: count };
 };

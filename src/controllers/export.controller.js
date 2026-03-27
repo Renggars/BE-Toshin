@@ -20,11 +20,11 @@ const requestExport = catchAsync(async (req, res) => {
   const filter = {
     startDate: req.query.startDate,
     endDate: req.query.endDate,
-    fk_id_mesin: req.query.fk_id_mesin,
-    fk_id_shift: req.query.fk_id_shift,
+    mesinId: req.query.mesinId,
+    shiftId: req.query.shiftId,
     plant: req.query.plant,
-    fk_id_jenis_pekerjaan: req.query.fk_id_jenis_pekerjaan,
-    fk_id_produk: req.query.fk_id_produk,
+    jenisPekerjaanId: req.query.jenisPekerjaanId,
+    produkId: req.query.produkId,
   };
 
   // 1. Cek apakah user memiliki tugas yang sedang aktif/menunggu untuk Export

@@ -25,20 +25,20 @@ const buildFilterWhereClause = (filter) => {
   }
 
   // 2. Filter ID (Foreign Keys)
-  if (filter.fk_id_mesin) where.fk_id_mesin = Number(filter.fk_id_mesin);
-  if (filter.fk_id_shift) where.fk_id_shift = Number(filter.fk_id_shift);
+  if (filter.mesinId) where.mesinId = Number(filter.mesinId);
+  if (filter.shiftId) where.shiftId = Number(filter.shiftId);
 
   // 3. Filter Relation (Jenis Pekerjaan & Produk)
-  // Filter ini ada di model RencanaProduksi (fk_id_rph)
-  if (filter.fk_id_jenis_pekerjaan || filter.fk_id_produk) {
-    where.rencana_produksi = {};
-    if (filter.fk_id_jenis_pekerjaan) {
-      where.rencana_produksi.fk_id_jenis_pekerjaan = Number(
-        filter.fk_id_jenis_pekerjaan,
+  // Filter ini ada di model RencanaProduksi
+  if (filter.jenisPekerjaanId || filter.produkId) {
+    where.rencanaProduksi = {};
+    if (filter.jenisPekerjaanId) {
+      where.rencanaProduksi.jenisPekerjaanId = Number(
+        filter.jenisPekerjaanId,
       );
     }
-    if (filter.fk_id_produk) {
-      where.rencana_produksi.fk_id_produk = Number(filter.fk_id_produk);
+    if (filter.produkId) {
+      where.rencanaProduksi.produkId = Number(filter.produkId);
     }
   }
 
@@ -50,10 +50,10 @@ const buildFilterWhereClause = (filter) => {
   }
 
   // 5. Pencarian (Optional)
-  if (filter.no_kanagata)
-    where.no_kanagata = { contains: filter.no_kanagata, mode: "insensitive" };
-  if (filter.no_lot)
-    where.no_lot = { contains: filter.no_lot, mode: "insensitive" };
+  if (filter.noKanagata)
+    where.noKanagata = { contains: filter.noKanagata, mode: "insensitive" };
+  if (filter.noLot)
+    where.noLot = { contains: filter.noLot, mode: "insensitive" };
 
   return where;
 };
@@ -70,34 +70,34 @@ const buildFilterWhereClause = (filter) => {
  */
 const getDashboardSummary = async (filter) => {
   const where = buildFilterWhereClause(filter);
-  where.status_lrp = "VERIFIED";
+  where.statusLrp = "VERIFIED";
 
   const aggregate = await prisma.laporanRealisasiProduksi.aggregate({
     where,
     _sum: {
-      qty_ok: true,
-      qty_ng_prev: true,
-      qty_ng_proses: true,
-      qty_rework: true,
+      qtyOk: true,
+      qtyNgPrev: true,
+      qtyNgProses: true,
+      qtyRework: true,
     },
     _count: { id: true },
   });
 
-  const total_ok = aggregate._sum.qty_ok || 0;
+  const total_ok = aggregate._sum.qtyOk || 0;
   const total_ng =
-    (aggregate._sum.qty_ng_prev || 0) + (aggregate._sum.qty_ng_proses || 0);
-  const total_rework = aggregate._sum.qty_rework || 0;
+    (aggregate._sum.qtyNgPrev || 0) + (aggregate._sum.qtyNgProses || 0);
+  const total_rework = aggregate._sum.qtyRework || 0;
 
   // Total Quantity based on formula
   const total_qty = total_ok + total_ng + total_rework;
   const laporan_hari_ini = aggregate._count.id || 0;
 
   return {
-    total_ok,
-    total_ng,
-    total_rework,
-    total_qty,
-    laporan_hari_ini,
+    totalOk: total_ok,
+    totalNg: total_ng,
+    totalRework: total_rework,
+    totalQty: total_qty,
+    laporanHariIni: laporan_hari_ini,
   };
 };
 
@@ -115,7 +115,7 @@ const getTrendBulananHarian = async (filter) => {
 
   // Build base filter and override date to full month range
   const baseWhere = buildFilterWhereClause(filter);
-  baseWhere.status_lrp = "VERIFIED";
+  baseWhere.statusLrp = "VERIFIED";
   baseWhere.tanggal = {
     gte: firstDay.toDate(),
     lte: lastDay.toDate(),
@@ -124,10 +124,10 @@ const getTrendBulananHarian = async (filter) => {
   const data = await prisma.laporanRealisasiProduksi.groupBy({
     by: ["tanggal"],
     _sum: {
-      qty_ok: true,
-      qty_ng_prev: true,
-      qty_ng_proses: true,
-      qty_rework: true,
+      qtyOk: true,
+      qtyNgPrev: true,
+      qtyNgProses: true,
+      qtyRework: true,
     },
     where: baseWhere,
     orderBy: { tanggal: "asc" },
@@ -147,15 +147,15 @@ const getTrendBulananHarian = async (filter) => {
 
     resultData.push({
       day: d,
-      ok: existing?._sum.qty_ok || 0,
+      ok: existing?._sum.qtyOk || 0,
       ng:
-        (existing?._sum.qty_ng_prev || 0) + (existing?._sum.qty_ng_proses || 0),
-      rework: existing?._sum.qty_rework || 0,
+        (existing?._sum.qtyNgPrev || 0) + (existing?._sum.qtyNgProses || 0),
+      rework: existing?._sum.qtyRework || 0,
       total:
-        (existing?._sum.qty_ok || 0) +
-        (existing?._sum.qty_ng_prev || 0) +
-        (existing?._sum.qty_ng_proses || 0) +
-        (existing?._sum.qty_rework || 0),
+        (existing?._sum.qtyOk || 0) +
+        (existing?._sum.qtyNgPrev || 0) +
+        (existing?._sum.qtyNgProses || 0) +
+        (existing?._sum.qtyRework || 0),
     });
   }
 
@@ -190,14 +190,14 @@ const getTrendBulanan = async (filter) => {
     Prisma.sql`lrp.status_lrp = 'VERIFIED'`,
   ];
 
-  if (filter.fk_id_mesin) {
+  if (filter.mesinId) {
     conditions.push(
-      Prisma.sql`lrp.fk_id_mesin = ${Number(filter.fk_id_mesin)}`,
+      Prisma.sql`lrp.fk_id_mesin = ${Number(filter.mesinId)}`,
     );
   }
-  if (filter.fk_id_shift) {
+  if (filter.shiftId) {
     conditions.push(
-      Prisma.sql`lrp.fk_id_shift = ${Number(filter.fk_id_shift)}`,
+      Prisma.sql`lrp.fk_id_shift = ${Number(filter.shiftId)}`,
     );
   }
 
@@ -220,21 +220,21 @@ const getTrendBulanan = async (filter) => {
   }
 
   // Filter by jenis_pekerjaan / produk (via rencana_produksi relation)
-  if (filter.fk_id_jenis_pekerjaan || filter.fk_id_produk) {
+  if (filter.jenisPekerjaanId || filter.produkId) {
     addJoin(
       "rph",
       Prisma.sql`JOIN rencana_produksi rph ON rph.id = lrp.fk_id_rph`,
     );
-    if (filter.fk_id_jenis_pekerjaan) {
+    if (filter.jenisPekerjaanId) {
       conditions.push(
         Prisma.sql`rph.fk_id_jenis_pekerjaan = ${Number(
-          filter.fk_id_jenis_pekerjaan,
+          filter.jenisPekerjaanId,
         )}`,
       );
     }
-    if (filter.fk_id_produk) {
+    if (filter.produkId) {
       conditions.push(
-        Prisma.sql`rph.fk_id_produk = ${Number(filter.fk_id_produk)}`,
+        Prisma.sql`rph.fk_id_produk = ${Number(filter.produkId)}`,
       );
     }
   }
@@ -303,16 +303,16 @@ const getLrpList = async (filter) => {
       mesin: true,
       shift: true,
       operator: true,
-      rencana_produksi: { include: { jenis_pekerjaan: true } },
+      rencanaProduksi: { include: { jenisPekerjaan: true } },
     },
-    orderBy: { created_at: "desc" },
+    orderBy: { createdAt: "desc" },
   });
 
   const transformedData = data.map((lrp) => {
-    const totalMinutes = lrp.loading_time || 0;
+    const totalMinutes = lrp.loadingTime || 0;
     const hours = Math.floor(totalMinutes / 60);
     const minutes = Math.round(totalMinutes % 60);
-    const counterEnd = lrp.counter_end;
+    const counterEnd = lrp.counterEnd;
     const counterEndFormatted =
       counterEnd != null
         ? `${Math.floor(counterEnd / 60)} h ${counterEnd % 60} m`
@@ -320,19 +320,19 @@ const getLrpList = async (filter) => {
     return {
       id: lrp.id,
       tanggal: lrp.tanggal,
-      nama_shift: lrp.shift?.nama_shift || "-",
-      nama_mesin: lrp.mesin?.nama_mesin || "-",
-      no_kanagata: lrp.no_kanagata,
-      no_lot: lrp.no_lot,
-      qty_ok: lrp.qty_ok,
-      qty_ng: (lrp.qty_ng_prev || 0) + (lrp.qty_ng_proses || 0),
-      qty_rework: lrp.qty_rework,
-      qty_total_prod: lrp.qty_total_prod,
-      jenis_pekerjaan:
-        lrp.rencana_produksi?.jenis_pekerjaan?.nama_pekerjaan || "-",
-      counter_end_formatted: counterEndFormatted,
-      jam_kerja: `${hours}h ${minutes}m`,
-      status_lrp: lrp.status_lrp,
+      namaShift: lrp.shift?.namaShift || "-",
+      namaMesin: lrp.mesin?.namaMesin || "-",
+      noKanagata: lrp.noKanagata,
+      noLot: lrp.noLot,
+      qtyOk: lrp.qtyOk,
+      qtyNg: (lrp.qtyNgPrev || 0) + (lrp.qtyNgProses || 0),
+      qtyRework: lrp.qtyRework,
+      qtyTotalProd: lrp.qtyTotalProd,
+      jenisPekerjaan:
+        lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
+      counterEndFormatted: counterEndFormatted,
+      jamKerja: `${hours}h ${minutes}m`,
+      statusLrp: lrp.statusLrp,
     };
   });
 
@@ -357,16 +357,16 @@ const getLrpDetail = async (id) => {
   }
 
   // Summary Waktu (Placeholder since logs are removed)
-  const summary_waktu = {
-    runtime: lrp.loading_time || 0,
+  const summaryWaktu = {
+    runtime: lrp.loadingTime || 0,
     breakdown: 0,
-    plan_downtime: 0,
+    planDowntime: 0,
   };
 
   return {
     header: lrp,
     logs: [],
-    summary_waktu,
+    summaryWaktu,
   };
 };
 
@@ -388,7 +388,7 @@ const exportData = async (filter) => {
           mesin: true,
           shift: true,
           operator: true,
-          rencana_produksi: { include: { jenis_pekerjaan: true } },
+          rencanaProduksi: { include: { jenisPekerjaan: true } },
         },
         orderBy: { tanggal: "desc" },
       }),
@@ -481,11 +481,11 @@ const exportData = async (filter) => {
   ws1["B1"] = { v: "", s: hdr() };
 
   const summaryRows = [
-    ["Total OK", summary.total_ok, C.okGreen],
-    ["Total NG", summary.total_ng, C.ngRed],
-    ["Total Rework", summary.total_rework, C.rwOrang],
-    ["Total Produksi", summary.total_qty, C.totDark],
-    ["Laporan Hari Ini", summary.laporan_hari_ini, C.blueBg],
+    ["Total OK", summary.totalOk, C.okGreen],
+    ["Total NG", summary.totalNg, C.ngRed],
+    ["Total Rework", summary.totalRework, C.rwOrang],
+    ["Total Produksi", summary.totalQty, C.totDark],
+    ["Laporan Hari Ini", summary.laporanHariIni, C.blueBg],
   ];
   summaryRows.forEach(([label, val, color], i) => {
     const row = i + 3;
@@ -604,29 +604,29 @@ const exportData = async (filter) => {
     const tgl = lrp.tanggal
       ? moment(lrp.tanggal).utcOffset(7).format("DD/MM/YYYY")
       : "-";
-    const ng = (lrp.qty_ng_prev || 0) + (lrp.qty_ng_proses || 0);
-    const totalMins = lrp.loading_time || 0;
+    const ng = (lrp.qtyNgPrev || 0) + (lrp.qtyNgProses || 0);
+    const totalMins = lrp.loadingTime || 0;
     const jamKerja = `${Math.floor(totalMins / 60)}h ${Math.round(
       totalMins % 60,
     )}m`;
-    const ce = lrp.counter_end;
+    const ce = lrp.counterEnd;
     const counterEndFmt =
       ce != null ? `${Math.floor(ce / 60)}h ${ce % 60}m` : "-";
-    const jp = lrp.rencana_produksi?.jenis_pekerjaan?.nama_pekerjaan || "-";
+    const jp = lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-";
     ws4[`A${row}`] = { v: tgl, s: cellS(isAlt) };
     ws4[`B${row}`] = { v: lrp.operator?.nama || "-", s: cellS(isAlt, "left") };
-    ws4[`C${row}`] = { v: lrp.shift?.nama_shift || "-", s: cellS(isAlt) };
-    ws4[`D${row}`] = { v: lrp.mesin?.nama_mesin || "-", s: cellS(isAlt) };
+    ws4[`C${row}`] = { v: lrp.shift?.namaShift || "-", s: cellS(isAlt) };
+    ws4[`D${row}`] = { v: lrp.mesin?.namaMesin || "-", s: cellS(isAlt) };
     ws4[`E${row}`] = { v: jp, s: cellS(isAlt) };
-    ws4[`F${row}`] = { v: lrp.no_kanagata || "-", s: cellS(isAlt) };
-    ws4[`G${row}`] = { v: lrp.no_lot || "-", s: cellS(isAlt) };
-    ws4[`H${row}`] = { v: lrp.qty_ok || 0, s: numS(C.okGreen, isAlt) };
+    ws4[`F${row}`] = { v: lrp.noKanagata || "-", s: cellS(isAlt) };
+    ws4[`G${row}`] = { v: lrp.noLot || "-", s: cellS(isAlt) };
+    ws4[`H${row}`] = { v: lrp.qtyOk || 0, s: numS(C.okGreen, isAlt) };
     ws4[`I${row}`] = { v: ng, s: numS(C.ngRed, isAlt) };
-    ws4[`J${row}`] = { v: lrp.qty_rework || 0, s: numS(C.rwOrang, isAlt) };
-    ws4[`K${row}`] = { v: lrp.qty_total_prod || 0, s: numS(C.totDark, isAlt) };
+    ws4[`J${row}`] = { v: lrp.qtyRework || 0, s: numS(C.rwOrang, isAlt) };
+    ws4[`K${row}`] = { v: lrp.qtyTotalProd || 0, s: numS(C.totDark, isAlt) };
     ws4[`L${row}`] = { v: counterEndFmt, s: cellS(isAlt) };
     ws4[`M${row}`] = { v: jamKerja, s: cellS(isAlt) };
-    ws4[`N${row}`] = { v: lrp.status_lrp || "SUBMITTED", s: cellS(isAlt) };
+    ws4[`N${row}`] = { v: lrp.statusLrp || "SUBMITTED", s: cellS(isAlt) };
   });
   ws4["!ref"] = `A1:N${lrpRaw.length + 2}`;
   ws4["!cols"] = [
@@ -715,7 +715,7 @@ const getTrendPress = async (filter) => {
 
   const where = {
     ...buildFilterWhereClause(innerFilter),
-    status_lrp: "VERIFIED",
+    statusLrp: "VERIFIED",
     mesin: { kategori: "PRESS" },
     tanggal: {
       gte: start.toDate(),
@@ -726,10 +726,10 @@ const getTrendPress = async (filter) => {
   const data = await prisma.laporanRealisasiProduksi.groupBy({
     by: ["tanggal"],
     _sum: {
-      qty_ok: true,
-      qty_ng_prev: true,
-      qty_ng_proses: true,
-      qty_rework: true,
+      qtyOk: true,
+      qtyNgPrev: true,
+      qtyNgProses: true,
+      qtyRework: true,
     },
     where,
     orderBy: { tanggal: "asc" },
@@ -750,15 +750,15 @@ const getTrendPress = async (filter) => {
     resultData.push({
       date: dateStr, // Returning full date for flexibility
       day: current.date(),
-      ok: existing?._sum.qty_ok || 0,
+      ok: existing?._sum.qtyOk || 0,
       ng:
-        (existing?._sum.qty_ng_prev || 0) + (existing?._sum.qty_ng_proses || 0),
-      rework: existing?._sum.qty_rework || 0,
+        (existing?._sum.qtyNgPrev || 0) + (existing?._sum.qtyNgProses || 0),
+      rework: existing?._sum.qtyRework || 0,
       total:
-        (existing?._sum.qty_ok || 0) +
-        (existing?._sum.qty_ng_prev || 0) +
-        (existing?._sum.qty_ng_proses || 0) +
-        (existing?._sum.qty_rework || 0),
+        (existing?._sum.qtyOk || 0) +
+        (existing?._sum.qtyNgPrev || 0) +
+        (existing?._sum.qtyNgProses || 0) +
+        (existing?._sum.qtyRework || 0),
     });
   }
 

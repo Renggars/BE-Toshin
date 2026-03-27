@@ -2,7 +2,7 @@ import Joi from "joi";
 
 const createJenisPekerjaan = {
   body: Joi.object().keys({
-    nama_pekerjaan: Joi.string().required(),
+    namaPekerjaan: Joi.string().required(),
   }),
 };
 
@@ -11,7 +11,7 @@ const updateJenisPekerjaan = {
     jenisPekerjaanId: Joi.number().integer().required(),
   }),
   body: Joi.object().keys({
-    nama_pekerjaan: Joi.string(),
+    namaPekerjaan: Joi.string(),
   }),
 };
 

@@ -7,348 +7,373 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model andon_call {
-  id                  Int                      @id @default(autoincrement())
-  fk_id_mesin         Int
-  fk_id_shift         Int?
-  fk_id_operator      Int
-  waktu_call          DateTime                 @default(now())
-  status              andon_call_status        @default(WAITING)
-  converted_event     Int?
-  tanggal             DateTime                 @db.Date
-  plant               String?
-  target_divisi       andon_call_target_divisi
-  fk_id_target_divisi Int
-  andon_event         andon_event?             @relation(fields: [converted_event], references: [id])
-  mesin               mesin                    @relation(fields: [fk_id_mesin], references: [id])
-  user                user                     @relation(fields: [fk_id_operator], references: [id])
-  shift               shift?                   @relation(fields: [fk_id_shift], references: [id])
-  divisi              divisi                   @relation(fields: [fk_id_target_divisi], references: [id])
+model AndonCall {
+  id               Int                      @id @default(autoincrement())
+  mesinId          Int                      @map("fk_id_mesin")
+  shiftId          Int?                     @map("fk_id_shift")
+  operatorId       Int                      @map("fk_id_operator")
+  waktuCall        DateTime                 @default(now()) @map("waktu_call")
+  status           AndonCallStatus          @default(WAITING)
+  convertedEventId Int?                     @map("converted_event")
+  tanggal          DateTime                 @db.Date
+  plant            String?
+  targetDivisi     AndonCallTargetDivisi    @map("target_divisi")
+  targetDivisiId   Int                      @map("fk_id_target_divisi")
+  andonEvent       AndonEvent?              @relation(fields: [convertedEventId], references: [id])
+  mesin            Mesin                    @relation(fields: [mesinId], references: [id])
+  operator         User                     @relation(fields: [operatorId], references: [id])
+  shift            Shift?                   @relation(fields: [shiftId], references: [id])
+  divisi           Divisi                   @relation(fields: [targetDivisiId], references: [id])
 
-  @@index([converted_event], map: "andon_call_converted_event_fkey")
-  @@index([fk_id_mesin], map: "andon_call_fk_id_mesin_fkey")
-  @@index([fk_id_operator], map: "andon_call_fk_id_operator_fkey")
-  @@index([fk_id_shift], map: "andon_call_fk_id_shift_fkey")
-  @@index([fk_id_target_divisi])
+  @@index([convertedEventId], map: "andon_call_converted_event_fkey")
+  @@index([mesinId], map: "andon_call_fk_id_mesin_fkey")
+  @@index([operatorId], map: "andon_call_fk_id_operator_fkey")
+  @@index([shiftId], map: "andon_call_fk_id_shift_fkey")
+  @@index([targetDivisiId])
   @@index([status])
   @@index([tanggal])
-  @@index([target_divisi])
+  @@index([targetDivisi])
+  @@map("andon_call")
 }
 
-model andon_downtime_shift {
-  id               Int               @id @default(autoincrement())
-  fk_id_andon      Int
-  fk_id_shift      Int
-  fk_id_mesin      Int
-  waktu_start      DateTime
-  waktu_end        DateTime
-  durasi_menit     Float
-  tanggal          DateTime          @db.Date
-  created_at       DateTime          @default(now())
-  fk_id_rph        Int?
-  andon_event      andon_event       @relation(fields: [fk_id_andon], references: [id])
-  mesin            mesin             @relation(fields: [fk_id_mesin], references: [id])
-  rencana_produksi rencana_produksi? @relation(fields: [fk_id_rph], references: [id])
-  shift            shift             @relation(fields: [fk_id_shift], references: [id])
+model AndonDowntimeShift {
+  id              Int              @id @default(autoincrement())
+  andonEventId    Int              @map("fk_id_andon")
+  shiftId         Int              @map("fk_id_shift")
+  mesinId         Int              @map("fk_id_mesin")
+  waktuStart      DateTime         @map("waktu_start")
+  waktuEnd        DateTime         @map("waktu_end")
+  durasiMenit     Float            @map("durasi_menit")
+  tanggal         DateTime         @db.Date
+  createdAt       DateTime         @default(now()) @map("created_at")
+  rphId           Int?             @map("fk_id_rph")
+  andonEvent      AndonEvent       @relation(fields: [andonEventId], references: [id])
+  mesin           Mesin            @relation(fields: [mesinId], references: [id])
+  rencanaProduksi RencanaProduksi? @relation(fields: [rphId], references: [id])
+  shift           Shift            @relation(fields: [shiftId], references: [id])
 
-  @@index([fk_id_andon], map: "andon_downtime_shift_fk_id_andon_fkey")
-  @@index([fk_id_mesin], map: "andon_downtime_shift_fk_id_mesin_fkey")
-  @@index([fk_id_rph], map: "andon_downtime_shift_fk_id_rph_fkey")
-  @@index([fk_id_shift], map: "andon_downtime_shift_fk_id_shift_fkey")
+  @@index([andonEventId], map: "andon_downtime_shift_fk_id_andon_fkey")
+  @@index([mesinId], map: "andon_downtime_shift_fk_id_mesin_fkey")
+  @@index([rphId], map: "andon_downtime_shift_fk_id_rph_fkey")
+  @@index([shiftId], map: "andon_downtime_shift_fk_id_shift_fkey")
   @@index([tanggal])
+  @@map("andon_downtime_shift")
 }
 
-model andon_event {
-  id                                    Int                        @id @default(autoincrement())
-  fk_id_mesin                           Int
-  fk_id_masalah                         Int
-  fk_id_operator                        Int?
-  status                                andon_event_status         @default(ACTIVE)
-  waktu_trigger                         DateTime                   @default(now())
-  waktu_resolved                        DateTime?
-  durasi_downtime                       Float?
-  resolved_by                           Int?
-  fk_id_shift                           Int?
-  plant                                 String?
-  respon_status                         andon_event_respon_status?
-  tanggal                               DateTime                   @db.Date
-  waktu_repair                          DateTime?
-  fk_id_rph_closed                      Int?
-  fk_id_rph_opened                      Int?
-  is_late                               Boolean                    @default(false)
-  late_menit                            Float?
-  total_duration_menit                  Float?
-  kategori                              String?
-  andon_call                            andon_call[]
-  andon_downtime_shift                  andon_downtime_shift[]
-  master_masalah_andon                  master_masalah_andon       @relation(fields: [fk_id_masalah], references: [id])
-  mesin                                 mesin                      @relation(fields: [fk_id_mesin], references: [id])
-  user_andon_event_fk_id_operatorTouser user?                      @relation("andon_event_fk_id_operatorTouser", fields: [fk_id_operator], references: [id])
-  shift                                 shift?                     @relation(fields: [fk_id_shift], references: [id])
-  user_andon_event_resolved_byTouser    user?                      @relation("andon_event_resolved_byTouser", fields: [resolved_by], references: [id])
+model AndonEvent {
+  id                 Int                      @id @default(autoincrement())
+  mesinId            Int                      @map("fk_id_mesin")
+  masalahId          Int                      @map("fk_id_masalah")
+  operatorId         Int?                     @map("fk_id_operator")
+  status             AndonEventStatus         @default(ACTIVE)
+  waktuTrigger       DateTime                 @default(now()) @map("waktu_trigger")
+  waktuResolved      DateTime?                @map("waktu_resolved")
+  durasiDowntime     Float?                   @map("durasi_downtime")
+  resolvedById       Int?                     @map("resolved_by")
+  shiftId            Int?                     @map("fk_id_shift")
+  plant              String?
+  responStatus       AndonEventResponStatus?  @map("respon_status")
+  tanggal            DateTime                 @db.Date
+  waktuRepair        DateTime?                @map("waktu_repair")
+  rphClosedId        Int?                     @map("fk_id_rph_closed")
+  rphOpenedId        Int?                     @map("fk_id_rph_opened")
+  isLate             Boolean                  @default(false) @map("is_late")
+  lateMenit          Float?                   @map("late_menit")
+  totalDurationMenit Float?                   @map("total_duration_menit")
+  kategori           String?
+  andonCall          AndonCall[]
+  andonDowntimeShift AndonDowntimeShift[]
+  masterMasalahAndon MasterMasalahAndon       @relation(fields: [masalahId], references: [id])
+  mesin              Mesin                    @relation(fields: [mesinId], references: [id])
+  operator           User?                    @relation("andon_event_fk_id_operatorTouser", fields: [operatorId], references: [id])
+  shift              Shift?                   @relation(fields: [shiftId], references: [id])
+  resolvedBy         User?                    @relation("andon_event_resolved_byTouser", fields: [resolvedById], references: [id])
 
-  @@index([fk_id_masalah], map: "andon_event_fk_id_masalah_fkey")
-  @@index([fk_id_mesin], map: "andon_event_fk_id_mesin_fkey")
-  @@index([fk_id_operator], map: "andon_event_fk_id_operator_fkey")
-  @@index([fk_id_shift])
+  @@index([masalahId], map: "andon_event_fk_id_masalah_fkey")
+  @@index([mesinId], map: "andon_event_fk_id_mesin_fkey")
+  @@index([operatorId], map: "andon_event_fk_id_operator_fkey")
+  @@index([shiftId])
   @@index([plant])
-  @@index([resolved_by], map: "andon_event_resolved_by_fkey")
+  @@index([resolvedById], map: "andon_event_resolved_by_fkey")
   @@index([status])
-  @@index([status, waktu_trigger, fk_id_mesin])
+  @@index([status, waktuTrigger, mesinId])
   @@index([tanggal])
-  @@index([waktu_trigger])
+  @@index([waktuTrigger])
+  @@map("andon_event")
 }
 
-model attendance {
-  id                     Int              @id @default(autoincrement())
-  fk_id_user             Int
-  fk_id_rencana_produksi Int
-  jam_tap                DateTime
-  tanggal                DateTime         @db.Date
-  is_terlambat           Boolean          @default(false)
-  rencana_produksi       rencana_produksi @relation(fields: [fk_id_rencana_produksi], references: [id])
-  user                   user             @relation(fields: [fk_id_user], references: [id])
+model Attendance {
+  id              Int             @id @default(autoincrement())
+  userId          Int             @map("fk_id_user")
+  rphId           Int             @map("fk_id_rencana_produksi")
+  jamTap          DateTime        @map("jam_tap")
+  tanggal         DateTime        @db.Date
+  isTerlambat     Boolean         @default(false) @map("is_terlambat")
+  rencanaProduksi RencanaProduksi @relation(fields: [rphId], references: [id])
+  operator        User            @relation(fields: [userId], references: [id])
 
-  @@index([fk_id_rencana_produksi], map: "attendance_fk_id_rencana_produksi_fkey")
-  @@index([fk_id_user], map: "attendance_fk_id_user_fkey")
+  @@index([rphId], map: "attendance_fk_id_rencana_produksi_fkey")
+  @@index([userId], map: "attendance_fk_id_user_fkey")
+  @@map("attendance")
 }
 
-model divisi {
-  id          Int          @id @default(autoincrement())
-  nama_divisi String       @unique
-  andon_call  andon_call[]
-  user        user[]
+model Divisi {
+  id          Int         @id @default(autoincrement())
+  namaDivisi  String      @unique @map("nama_divisi")
+  andonCall   AndonCall[]
+  user        User[]
+
+  @@map("divisi")
 }
 
-model jenis_pekerjaan {
-  id               Int                @id @default(autoincrement())
-  nama_pekerjaan   String             @unique
-  rencana_produksi rencana_produksi[]
-  target           target[]
+model JenisPekerjaan {
+  id              Int               @id @default(autoincrement())
+  namaPekerjaan   String            @unique @map("nama_pekerjaan")
+  rencanaProduksi RencanaProduksi[]
+  target          Target[]
+
+  @@map("jenis_pekerjaan")
 }
 
-model laporan_realisasi_produksi {
-  id               Int              @id @default(autoincrement())
-  tanggal          DateTime         @db.Date
-  fk_id_mesin      Int
-  fk_id_shift      Int
-  fk_id_operator   Int
-  no_kanagata      String
-  no_lot           String
-  qty_ok           Int              @default(0)
-  qty_ng_prev      Int              @default(0)
-  qty_ng_proses    Int              @default(0)
-  qty_rework       Int              @default(0)
-  qty_total_prod   Int              @default(0)
-  loading_time     Float            @default(0)
-  cycle_time       Float            @default(0)
-  created_at       DateTime         @default(now())
-  updated_at       DateTime
-  status_lrp       String           @default("SUBMITTED")
-  fk_id_rph        Int              @unique
-  counter_end      Int?
-  counter_start    Int?
-  no_reg           String
-  mesin            mesin            @relation(fields: [fk_id_mesin], references: [id])
-  user             user             @relation(fields: [fk_id_operator], references: [id])
-  rencana_produksi rencana_produksi @relation(fields: [fk_id_rph], references: [id])
-  shift            shift            @relation(fields: [fk_id_shift], references: [id])
+model LaporanRealisasiProduksi {
+  id              Int             @id @default(autoincrement())
+  tanggal         DateTime        @db.Date
+  mesinId         Int             @map("fk_id_mesin")
+  shiftId         Int             @map("fk_id_shift")
+  operatorId      Int             @map("fk_id_operator")
+  noKanagata      String          @map("no_kanagata")
+  noLot           String          @map("no_lot")
+  qtyOk           Int             @default(0) @map("qty_ok")
+  qtyNgPrev       Int             @default(0) @map("qty_ng_prev")
+  qtyNgProses     Int             @default(0) @map("qty_ng_proses")
+  qtyRework       Int             @default(0) @map("qty_rework")
+  qtyTotalProd    Int             @default(0) @map("qty_total_prod")
+  loadingTime     Float           @default(0) @map("loading_time")
+  cycleTime       Float           @default(0) @map("cycle_time")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @map("updated_at")
+  statusLrp       String          @default("SUBMITTED") @map("status_lrp")
+  rphId           Int             @unique @map("fk_id_rph")
+  counterEnd      Int?            @map("counter_end")
+  counterStart    Int?            @map("counter_start")
+  noReg           String          @map("no_reg")
+  mesin           Mesin           @relation(fields: [mesinId], references: [id])
+  operator        User            @relation(fields: [operatorId], references: [id])
+  rencanaProduksi RencanaProduksi @relation(fields: [rphId], references: [id])
+  shift           Shift           @relation(fields: [shiftId], references: [id])
 
-  @@index([created_at])
-  @@index([fk_id_mesin], map: "laporan_realisasi_produksi_fk_id_mesin_fkey")
-  @@index([fk_id_operator], map: "laporan_realisasi_produksi_fk_id_operator_fkey")
-  @@index([fk_id_shift], map: "laporan_realisasi_produksi_fk_id_shift_fkey")
+  @@index([createdAt])
+  @@index([mesinId], map: "laporan_realisasi_produksi_fk_id_mesin_fkey")
+  @@index([operatorId], map: "laporan_realisasi_produksi_fk_id_operator_fkey")
+  @@index([shiftId], map: "laporan_realisasi_produksi_fk_id_shift_fkey")
+  @@map("laporan_realisasi_produksi")
 }
 
-model master_masalah_andon {
-  id                    Int                           @id @default(autoincrement())
-  nama_masalah          String
-  kategori              master_masalah_andon_kategori
-  waktu_perbaikan_menit Int
-  andon_event           andon_event[]
+model MasterMasalahAndon {
+  id                  Int                        @id @default(autoincrement())
+  namaMasalah          String                     @map("nama_masalah")
+  kategori            MasterMasalahAndonKategori
+  waktuPerbaikanMenit Int                        @map("waktu_perbaikan_menit")
+  andonEvent          AndonEvent[]
+
+  @@map("master_masalah_andon")
 }
 
-model mesin {
-  id                         Int                          @id @default(autoincrement())
-  nama_mesin                 String                       @unique
-  kategori                   mesin_kategori               @default(PRESS)
-  andon_call                 andon_call[]
-  andon_downtime_shift       andon_downtime_shift[]
-  andon_event                andon_event[]
-  laporan_realisasi_produksi laporan_realisasi_produksi[]
-  oee                        oee[]
-  rencana_produksi           rencana_produksi[]
+model Mesin {
+  id                        Int                        @id @default(autoincrement())
+  namaMesin                 String                     @unique @map("nama_mesin")
+  kategori                  MesinKategori              @default(PRESS)
+  andonCall                 AndonCall[]
+  andonDowntimeShift        AndonDowntimeShift[]
+  andonEvent                AndonEvent[]
+  laporanRealisasiProduksi  LaporanRealisasiProduksi[]
+  oee                       Oee[]
+  rencanaProduksi           RencanaProduksi[]
+
+  @@map("mesin")
 }
 
-model notification {
-  id         Int               @id @default(autoincrement())
-  fk_id_user Int
-  tipe       notification_tipe
-  judul      String
-  pesan      String            @db.Text
-  is_read    Boolean           @default(false)
-  created_at DateTime          @default(now())
-  user       user              @relation(fields: [fk_id_user], references: [id])
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("fk_id_user")
+  tipe      NotificationTipe
+  judul     String
+  pesan     String           @db.Text
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id])
 
-  @@index([created_at])
-  @@index([fk_id_user])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("notification")
 }
 
-model oee {
-  id               Int      @id @default(autoincrement())
-  fk_id_mesin      Int
-  fk_id_shift      Int?
-  availability     Float    @default(0)
-  performance      Float    @default(0)
-  quality          Float    @default(0)
-  oee_score        Float    @default(0)
-  loading_time     Int
-  downtime         Int      @default(0)
-  total_output     Int      @default(0)
-  total_ok         Int      @default(0)
-  tanggal          DateTime @db.Date
-  created_at       DateTime @default(now())
-  ideal_cycle_time Float?
-  mesin            mesin    @relation(fields: [fk_id_mesin], references: [id])
-  shift            shift?   @relation(fields: [fk_id_shift], references: [id])
+model Oee {
+  id              Int      @id @default(autoincrement())
+  mesinId         Int      @map("fk_id_mesin")
+  shiftId         Int?     @map("fk_id_shift")
+  availability    Float    @default(0)
+  performance     Float    @default(0)
+  quality         Float    @default(0)
+  oeeScore        Float    @default(0) @map("oee_score")
+  loadingTime     Int      @map("loading_time")
+  downtime        Int      @default(0)
+  totalOutput     Int      @default(0) @map("total_output")
+  totalOk         Int      @default(0) @map("total_ok")
+  tanggal         DateTime @db.Date
+  createdAt       DateTime @default(now()) @map("created_at")
+  idealCycleTime  Float?   @map("ideal_cycle_time")
+  mesin           Mesin    @relation(fields: [mesinId], references: [id])
+  shift           Shift?   @relation(fields: [shiftId], references: [id])
 
-  @@unique([fk_id_mesin, tanggal, fk_id_shift])
-  @@index([fk_id_shift], map: "oee_fk_id_shift_fkey")
+  @@unique([mesinId, tanggal, shiftId])
+  @@index([shiftId], map: "oee_fk_id_shift_fkey")
+  @@map("oee")
 }
 
-model poin_disiplin {
-  id                                      Int           @id @default(autoincrement())
-  poin_berubah                            Int
-  status_level                            String
-  fk_id_operator                          Int
-  fk_id_staff                             Int
-  fk_tipe_disiplin                        Int
-  tanggal                                 DateTime      @default(now())
-  fk_id_shift                             Int?
-  bukti_foto                              String?
-  keterangan                              String?       @db.Text
-  user_poin_disiplin_fk_id_operatorTouser user          @relation("poin_disiplin_fk_id_operatorTouser", fields: [fk_id_operator], references: [id])
-  shift                                   shift?        @relation(fields: [fk_id_shift], references: [id])
-  user_poin_disiplin_fk_id_staffTouser    user          @relation("poin_disiplin_fk_id_staffTouser", fields: [fk_id_staff], references: [id])
-  tipe_disiplin                           tipe_disiplin @relation(fields: [fk_tipe_disiplin], references: [id])
+model PoinDisiplin {
+  id             Int          @id @default(autoincrement())
+  poinBerubah    Int          @map("poin_berubah")
+  statusLevel    String       @map("status_level")
+  operatorId     Int          @map("fk_id_operator")
+  staffId        Int          @map("fk_id_staff")
+  tipeDisiplinId Int          @map("fk_tipe_disiplin")
+  tanggal        DateTime     @default(now())
+  shiftId        Int?         @map("fk_id_shift")
+  buktiFoto      String?      @map("bukti_foto")
+  keterangan     String?      @db.Text
+  operator       User         @relation("poin_disiplin_fk_id_operatorTouser", fields: [operatorId], references: [id])
+  shift          Shift?       @relation(fields: [shiftId], references: [id])
+  staff          User         @relation("poin_disiplin_fk_id_staffTouser", fields: [staffId], references: [id])
+  tipeDisiplin   TipeDisiplin @relation(fields: [tipeDisiplinId], references: [id])
 
-  @@index([fk_id_operator], map: "poin_disiplin_fk_id_operator_fkey")
-  @@index([fk_id_shift], map: "poin_disiplin_fk_id_shift_fkey")
-  @@index([fk_id_staff], map: "poin_disiplin_fk_id_staff_fkey")
-  @@index([fk_tipe_disiplin], map: "poin_disiplin_fk_tipe_disiplin_fkey")
+  @@index([operatorId], map: "poin_disiplin_fk_id_operator_fkey")
+  @@index([shiftId], map: "poin_disiplin_fk_id_shift_fkey")
+  @@index([staffId], map: "poin_disiplin_fk_id_staff_fkey")
+  @@index([tipeDisiplinId], map: "poin_disiplin_fk_tipe_disiplin_fkey")
+  @@map("poin_disiplin")
 }
 
-model produk {
-  id               Int                @id @default(autoincrement())
-  nama_produk      String             @unique
-  rencana_produksi rencana_produksi[]
-  target           target[]
+model Produk {
+  id              Int               @id @default(autoincrement())
+  namaProduk      String            @unique @map("nama_produk")
+  rencanaProduksi RencanaProduksi[]
+  target          Target[]
+
+  @@map("produk")
 }
 
-model rencana_produksi {
-  id                         Int                         @id @default(autoincrement())
-  fk_id_user                 Int
-  fk_id_mesin                Int
-  fk_id_produk               Int
-  fk_id_shift                Int
-  fk_id_target               Int
-  tanggal                    DateTime                    @db.Date
-  keterangan                 String?                     @db.Text
-  fk_id_jenis_pekerjaan      Int
-  end_time                   DateTime?
-  start_time                 DateTime?
-  status                     rencana_produksi_status     @default(PLANNED)
-  andon_downtime_shift       andon_downtime_shift[]
-  attendance                 attendance[]
-  laporan_realisasi_produksi laporan_realisasi_produksi?
-  jenis_pekerjaan            jenis_pekerjaan             @relation(fields: [fk_id_jenis_pekerjaan], references: [id])
-  mesin                      mesin                       @relation(fields: [fk_id_mesin], references: [id])
-  produk                     produk                      @relation(fields: [fk_id_produk], references: [id])
-  shift                      shift                       @relation(fields: [fk_id_shift], references: [id])
-  target                     target                      @relation(fields: [fk_id_target], references: [id])
-  user                       user                        @relation(fields: [fk_id_user], references: [id])
+model RencanaProduksi {
+  id                       Int                        @id @default(autoincrement())
+  userId                   Int                        @map("fk_id_user")
+  mesinId                  Int                        @map("fk_id_mesin")
+  produkId                 Int                        @map("fk_id_produk")
+  shiftId                  Int                        @map("fk_id_shift")
+  targetId                 Int                        @map("fk_id_target")
+  tanggal                  DateTime                   @db.Date
+  keterangan               String?                    @db.Text
+  jenisPekerjaanId         Int                        @map("fk_id_jenis_pekerjaan")
+  endTime                  DateTime?                  @map("end_time")
+  startTime                DateTime?                  @map("start_time")
+  status                   RencanaProduksiStatus      @default(PLANNED)
+  andonDowntimeShift       AndonDowntimeShift[]
+  attendance               Attendance[]
+  laporanRealisasiProduksi LaporanRealisasiProduksi?
+  jenisPekerjaan           JenisPekerjaan             @relation(fields: [jenisPekerjaanId], references: [id])
+  mesin                    Mesin                      @relation(fields: [mesinId], references: [id])
+  produk                   Produk                     @relation(fields: [produkId], references: [id])
+  shift                    Shift                      @relation(fields: [shiftId], references: [id])
+  target                   Target                     @relation(fields: [targetId], references: [id])
+  operator                 User                       @relation(fields: [userId], references: [id])
 
-  @@index([fk_id_jenis_pekerjaan], map: "rencana_produksi_fk_id_jenis_pekerjaan_fkey")
-  @@index([fk_id_mesin], map: "rencana_produksi_fk_id_mesin_fkey")
-  @@index([fk_id_produk], map: "rencana_produksi_fk_id_produk_fkey")
-  @@index([fk_id_shift], map: "rencana_produksi_fk_id_shift_fkey")
-  @@index([fk_id_target], map: "rencana_produksi_fk_id_target_fkey")
-  @@index([fk_id_user], map: "rencana_produksi_fk_id_user_fkey")
+  @@index([jenisPekerjaanId], map: "rencana_produksi_fk_id_jenis_pekerjaan_fkey")
+  @@index([mesinId], map: "rencana_produksi_fk_id_mesin_fkey")
+  @@index([produkId], map: "rencana_produksi_fk_id_produk_fkey")
+  @@index([shiftId], map: "rencana_produksi_fk_id_shift_fkey")
+  @@index([targetId], map: "rencana_produksi_fk_id_target_fkey")
+  @@index([userId], map: "rencana_produksi_fk_id_user_fkey")
+  @@map("rencana_produksi")
 }
 
-model shift {
-  id                         Int                          @id @default(autoincrement())
-  tipe_shift                 String
-  nama_shift                 String
-  jam_masuk                  String
-  jam_keluar                 String
-  break_duration             Int                          @default(60)
-  briefing_duration          Int                          @default(10)
-  cleaning_duration          Int                          @default(10)
-  toilet_tolerance_pct       Float                        @default(0.1)
-  andon_call                 andon_call[]
-  andon_downtime_shift       andon_downtime_shift[]
-  andon_event                andon_event[]
-  laporan_realisasi_produksi laporan_realisasi_produksi[]
-  oee                        oee[]
-  poin_disiplin              poin_disiplin[]
-  rencana_produksi           rencana_produksi[]
+model Shift {
+  id                       Int                        @id @default(autoincrement())
+  tipeShift                String                     @map("tipe_shift")
+  namaShift                String                     @map("nama_shift")
+  jamMasuk                 String                     @map("jam_masuk")
+  jamKeluar                String                     @map("jam_keluar")
+  breakDuration            Int                        @default(60) @map("break_duration")
+  briefingDuration         Int                        @default(10) @map("briefing_duration")
+  cleaningDuration         Int                        @default(10) @map("cleaning_duration")
+  toiletTolerancePct       Float                      @default(0.1) @map("toilet_tolerance_pct")
+  andonCall                AndonCall[]
+  andonDowntimeShift       AndonDowntimeShift[]
+  andonEvent               AndonEvent[]
+  laporanRealisasiProduksi LaporanRealisasiProduksi[]
+  oee                      Oee[]
+  poinDisiplin             PoinDisiplin[]
+  rencanaProduksi          RencanaProduksi[]
+
+  @@map("shift")
 }
 
-model target {
-  id                 Int                @id @default(autoincrement())
-  fk_jenis_pekerjaan Int
-  fk_produk          Int
-  total_target       Int
-  ideal_cycle_time   Float?
-  rencana_produksi   rencana_produksi[]
-  jenis_pekerjaan    jenis_pekerjaan    @relation(fields: [fk_jenis_pekerjaan], references: [id])
-  produk             produk             @relation(fields: [fk_produk], references: [id])
+model Target {
+  id               Int               @id @default(autoincrement())
+  jenisPekerjaanId Int               @map("fk_jenis_pekerjaan")
+  produkId         Int               @map("fk_produk")
+  totalTarget      Int               @map("total_target")
+  idealCycleTime   Float?            @map("ideal_cycle_time")
+  rencanaProduksi  RencanaProduksi[]
+  jenisPekerjaan   JenisPekerjaan    @relation(fields: [jenisPekerjaanId], references: [id])
+  produk           Produk            @relation(fields: [produkId], references: [id])
 
-  @@index([fk_jenis_pekerjaan], map: "target_fk_jenis_pekerjaan_fkey")
-  @@index([fk_produk], map: "target_fk_produk_fkey")
+  @@index([jenisPekerjaanId], map: "target_fk_jenis_pekerjaan_fkey")
+  @@index([produkId], map: "target_fk_produk_fkey")
+  @@map("target")
 }
 
-model tipe_disiplin {
-  id                 Int                    @id @default(autoincrement())
-  kode               String                 @unique
-  nama_tipe_disiplin String                 @unique
-  poin               Int
-  kategori           tipe_disiplin_kategori
-  poin_disiplin      poin_disiplin[]
+model TipeDisiplin {
+  id               Int                  @id @default(autoincrement())
+  kode             String               @unique
+  namaTipeDisiplin String               @unique @map("nama_tipe_disiplin")
+  poin             Int
+  kategori         TipeDisiplinKategori
+  poinDisiplin     PoinDisiplin[]
+
+  @@map("tipe_disiplin")
 }
 
-model user {
-  id                                               Int                          @id @default(autoincrement())
-  role                                             user_role                    @default(PRODUKSI)
-  current_point                                    Int                          @default(100)
-  fk_id_divisi                                     Int
-  foto_profile                                     String?
-  nama                                             String
-  point_cycle_start                                DateTime?                    @default(now())
-  status                                           String?                      @default("active")
-  suspended_until                                  DateTime?
-  uid_nfc                                          String?                      @unique
-  email                                            String                       @unique
-  password                                         String
-  plant                                            String
-  line                                             String
-  no_reg                                           String?
-  andon_call                                       andon_call[]
-  andon_event_andon_event_fk_id_operatorTouser     andon_event[]                @relation("andon_event_fk_id_operatorTouser")
-  andon_event_andon_event_resolved_byTouser        andon_event[]                @relation("andon_event_resolved_byTouser")
-  attendance                                       attendance[]
-  laporan_realisasi_produksi                       laporan_realisasi_produksi[]
-  notification                                     notification[]
-  poin_disiplin_poin_disiplin_fk_id_operatorTouser poin_disiplin[]              @relation("poin_disiplin_fk_id_operatorTouser")
-  poin_disiplin_poin_disiplin_fk_id_staffTouser    poin_disiplin[]              @relation("poin_disiplin_fk_id_staffTouser")
-  rencana_produksi                                 rencana_produksi[]
-  divisi                                           divisi                       @relation(fields: [fk_id_divisi], references: [id])
+model User {
+  id                                    Int                        @id @default(autoincrement())
+  role                                  UserRole                   @default(PRODUKSI)
+  currentPoint                          Int                        @default(100) @map("current_point")
+  divisiId                              Int                        @map("fk_id_divisi")
+  fotoProfile                           String?                    @map("foto_profile")
+  nama                                  String
+  pointCycleStart                       DateTime?                  @default(now()) @map("point_cycle_start")
+  status                                String?                    @default("active")
+  suspendedUntil                        DateTime?                  @map("suspended_until")
+  uidNfc                                String?                    @unique @map("uid_nfc")
+  email                                 String                     @unique
+  password                              String
+  plant                                 String
+  line                                  String
+  noReg                                 String?                    @map("no_reg")
+  andonCall                             AndonCall[]
+  andonEventOperator                    AndonEvent[]               @relation("andon_event_fk_id_operatorTouser")
+  andonEventResolvedBy                  AndonEvent[]               @relation("andon_event_resolved_byTouser")
+  attendance                            Attendance[]
+  laporanRealisasiProduksi              LaporanRealisasiProduksi[]
+  notification                          Notification[]
+  poinDisiplinOperator                  PoinDisiplin[]             @relation("poin_disiplin_fk_id_operatorTouser")
+  poinDisiplinStaff                     PoinDisiplin[]             @relation("poin_disiplin_fk_id_staffTouser")
+  rencanaProduksi                       RencanaProduksi[]
+  divisi                                Divisi                     @relation(fields: [divisiId], references: [id])
 
-  @@index([fk_id_divisi], map: "user_fk_id_divisi_fkey")
+  @@index([divisiId], map: "user_fk_id_divisi_fkey")
+  @@map("user")
 }
 
-enum user_role {
+enum UserRole {
   PRODUKSI
   QUALITY
   MAINTENANCE
@@ -367,61 +392,81 @@ enum user_role {
   FINANCE
   SUPERVISOR
   ADMIN
+
+  @@map("user_role")
 }
 
-enum master_masalah_andon_kategori {
+enum MasterMasalahAndonKategori {
   MAINTENANCE
   QUALITY
   DIE_MAINT
   PRODUKSI
   PLAN_DOWNTIME
+
+  @@map("master_masalah_andon_kategori")
 }
 
-enum mesin_kategori {
+enum MesinKategori {
   PROGRESIVE_TRANSFER
   FINE_BLANKING
   SECONDARY
   PRESS
   TACI
+
+  @@map("mesin_kategori")
 }
 
-enum notification_tipe {
+enum NotificationTipe {
   RPH_ASSIGNED
   ANDON_CALL
   ANDON_RESOLVED
+
+  @@map("notification_tipe")
 }
 
-enum andon_event_status {
+enum AndonEventStatus {
   ACTIVE
   IN_REPAIR
   RESOLVED
+
+  @@map("andon_event_status")
 }
 
-enum tipe_disiplin_kategori {
+enum TipeDisiplinKategori {
   PELANGGARAN
   PENGHARGAAN
+
+  @@map("tipe_disiplin_kategori")
 }
 
-enum andon_call_status {
+enum AndonCallStatus {
   WAITING
   CONVERTED
   CANCELLED
+
+  @@map("andon_call_status")
 }
 
-enum andon_call_target_divisi {
+enum AndonCallTargetDivisi {
   MAINTENANCE
   QUALITY
   PRODUKSI
   DIE_MAINT
+
+  @@map("andon_call_target_divisi")
 }
 
-enum andon_event_respon_status {
+enum AndonEventResponStatus {
   ON_TIME
   OVER_TIME
+
+  @@map("andon_event_respon_status")
 }
 
-enum rencana_produksi_status {
+enum RencanaProduksiStatus {
   PLANNED
   ACTIVE
   CLOSED
+
+  @@map("rencana_produksi_status")
 }

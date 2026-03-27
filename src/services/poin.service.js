@@ -33,8 +33,8 @@ const poinAwalStatus = (status) => {
 
 const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
   const history = await prisma.poinDisiplin.findMany({
-    where: { fk_id_operator: operatorId },
-    include: { tipe_disiplin: true },
+    where: { operatorId: operatorId },
+    include: { tipeDisiplin: true },
     orderBy: { tanggal: "desc" },
   });
 
@@ -43,8 +43,8 @@ const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
 
   for (const item of history) {
     const tanggal = new Date(item.tanggal).toLocaleDateString("id-ID");
-    const pelanggaran = item.tipe_disiplin.nama_tipe_disiplin;
-    const potong = Math.abs(item.poin_berubah);
+    const pelanggaran = item.tipeDisiplin.namaTipeDisiplin;
+    const potong = Math.abs(item.poinBerubah);
 
     riwayat.push(`${tanggal} – ${pelanggaran} (-${potong} poin)`);
     totalMinus += potong;
@@ -71,10 +71,10 @@ const getFormData = async () => {
         id: true,
         nama: true,
         plant: true,
-        fk_id_divisi: true,
+        divisiId: true,
         divisi: {
           select: {
-            nama_divisi: true,
+            namaDivisi: true,
           },
         },
       },
@@ -82,16 +82,16 @@ const getFormData = async () => {
     }),
     // Get all discipline types
     prisma.tipeDisiplin.findMany({
-      orderBy: { nama_tipe_disiplin: "asc" },
+      orderBy: { namaTipeDisiplin: "asc" },
     }),
     // Get all shifts
     prisma.shift.findMany({
       select: {
         id: true,
-        nama_shift: true,
-        tipe_shift: true,
-        jam_masuk: true,
-        jam_keluar: true,
+        namaShift: true,
+        tipeShift: true,
+        jamMasuk: true,
+        jamKeluar: true,
       },
       orderBy: { id: "asc" },
     }),
@@ -99,7 +99,7 @@ const getFormData = async () => {
 
   return {
     operators,
-    tipe_disiplin: tipeDisiplin,
+    tipeDisiplin: tipeDisiplin,
     shifts,
   };
 };
@@ -107,32 +107,32 @@ const getFormData = async () => {
 const getUserCurrentPoin = async (userId) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { point_cycle_start: true },
+    select: { pointCycleStart: true },
   });
 
   const sekarang = new Date();
   const selisihHari = Math.floor(
-    (sekarang - user.point_cycle_start) / (1000 * 60 * 60 * 24),
+    (sekarang - user.pointCycleStart) / (1000 * 60 * 60 * 24),
   );
 
-  console.log(user.point_cycle_start);
+  console.log(user.pointCycleStart);
 
   // Ambil total perubahan dari history
   const history = await prisma.poinDisiplin.aggregate({
-    _sum: { poin_berubah: true },
+    _sum: { poinBerubah: true },
     where: {
-      fk_id_operator: userId,
-      tanggal: { gte: user.point_cycle_start },
+      operatorId: userId,
+      tanggal: { gte: user.pointCycleStart },
     },
   });
 
-  let currentTotal = BASE_POINT + (history._sum.poin_berubah || 0);
+  let currentTotal = BASE_POINT + (history._sum.poinBerubah || 0);
 
   // Logic Reset 30 Hari: Jika < 100 reset, jika >= 100 pertahankan prestasi
   if (selisihHari >= 30 && currentTotal < 100) {
     await prisma.user.update({
       where: { id: userId },
-      data: { point_cycle_start: sekarang },
+      data: { pointCycleStart: sekarang },
     });
     return BASE_POINT;
   }
@@ -149,74 +149,61 @@ const getStatusFromPoin = (poin) => {
 };
 
 const createPelanggaran = async (payload, staffId, imageFile = null) => {
-  let fk_id_operator;
+  let operator; // Changed from fk_id_operator to operator
 
-  // Support both uid_nfc and fk_id_operator
-  if (payload.uid_nfc) {
-    // Convert uid_nfc to operator ID
-    const operator = await prisma.user.findUnique({
-      where: { uid_nfc: payload.uid_nfc },
-      include: { divisi: true },
-    });
-
-    if (!operator) {
-      throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
-    }
-
-    if (operator.role !== "PRODUKSI") {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        "Target bukan operator produksi",
-      );
-    }
-
-    if (operator.status !== "active") {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Operator tidak aktif");
-    }
-
-    // Check suspension
-    if (
-      operator.suspended_until &&
-      new Date(operator.suspended_until) > new Date()
-    ) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        "Operator sedang dalam masa suspend",
-      );
-    }
-
-    fk_id_operator = operator.id;
-  } else if (payload.fk_id_operator) {
-    // Use provided operator ID directly
-    fk_id_operator = payload.fk_id_operator;
-  } else {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "Harus menyertakan uid_nfc atau fk_id_operator",
-    );
-  }
-
-  const { fk_tipe_disiplin, fk_id_shift, keterangan } = payload;
-
-  // Ensure IDs are integers
-  const tipeId = parseInt(fk_tipe_disiplin);
-
-  const [tipe, operator, staff, currentShift] = await Promise.all([
-    prisma.tipeDisiplin.findUnique({ where: { id: tipeId } }),
-    prisma.user.findUnique({
-      where: { id: fk_id_operator },
-      include: { divisi: true },
-    }),
-    prisma.user.findUnique({ where: { id: staffId } }),
-    prisma.shift.findUnique({ where: { id: parseInt(fk_id_shift) } }),
-  ]);
+  // Support both uidNfc and operatorId
+  // The new logic combines the search for operator
+  operator = await prisma.user.findFirst({
+    where: {
+      OR: [{ uidNfc: payload.uidNfc }, { id: payload.operatorId }],
+    },
+    include: { divisi: true },
+  });
 
   if (!operator) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
+  }
+
+  if (operator.role !== "PRODUKSI") {
     throw new ApiError(
-      httpStatus.NOT_FOUND,
-      "Operator tidak ditemukan (ID: " + fk_id_operator + ")",
+      httpStatus.BAD_REQUEST,
+      "Target bukan operator produksi",
     );
   }
+
+  if (operator.status !== "active") {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Operator tidak aktif");
+  }
+
+  // Check suspension
+  if (
+    operator.suspendedUntil &&
+    new Date(operator.suspendedUntil) > new Date()
+  ) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Operator sedang dalam masa suspend",
+    );
+  }
+
+  const { tipeDisiplinId, shiftId, keterangan } = payload; // Changed fk_tipe_disiplin, fk_id_shift to camelCase
+
+  // Ensure IDs are integers
+  const tipeId = parseInt(tipeDisiplinId);
+
+  const [tipe, staff, currentShift] = await Promise.all([
+    prisma.tipeDisiplin.findUnique({ where: { id: tipeId } }),
+    prisma.user.findUnique({ where: { id: staffId } }),
+    prisma.shift.findUnique({ where: { id: parseInt(shiftId) } }),
+  ]);
+
+  // Operator is already fetched above, no need to fetch again.
+  // if (!operator) { // This check is now redundant due to the initial findFirst
+  //   throw new ApiError(
+  //     httpStatus.NOT_FOUND,
+  //     "Operator tidak ditemukan (ID: " + operator.id + ")", // Use operator.id
+  //   );
+  // }
 
   if (!tipe) {
     throw new ApiError(
@@ -225,12 +212,12 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     );
   }
 
-  const statusLama = getStatusFromPoin(operator.current_point);
-  const poinSebelum = operator.current_point;
+  const statusLama = getStatusFromPoin(operator.currentPoint);
+  const poinSebelum = operator.currentPoint;
   const isReward = tipe.kategori?.toLowerCase().includes("penghargaan");
 
   const nilaiPerubahan = isReward ? Math.abs(tipe.poin) : -Math.abs(tipe.poin);
-  const poinSetelahUpdate = operator.current_point + nilaiPerubahan;
+  const poinSetelahUpdate = operator.currentPoint + nilaiPerubahan;
 
   const statusBaru = getStatusFromPoin(poinSetelahUpdate);
   let alertType = "";
@@ -248,39 +235,39 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     : null;
 
   const now = new Date();
-  let suspended_until = operator.suspended_until;
+  let suspendedUntil = operator.suspendedUntil;
 
   // Logic: Set masa SP 6 bulan jika masuk SP1 atau SP2
   if (statusBaru === "SP1" || statusBaru === "SP2") {
-    suspended_until = new Date(now);
-    suspended_until.setMonth(suspended_until.getMonth() + 6);
+    suspendedUntil = new Date(now);
+    suspendedUntil.setMonth(suspendedUntil.getMonth() + 6);
   }
 
   // 3. Simpan Transaksi & Update Saldo User secara Atomik (Transaction)
   const result = await prisma.$transaction(async (tx) => {
     // Update data di tabel User
     await tx.user.update({
-      where: { id: fk_id_operator },
+      where: { id: operator.id }, // Use operator.id
       data: {
-        current_point: poinSetelahUpdate,
-        suspended_until,
+        currentPoint: poinSetelahUpdate,
+        suspendedUntil,
       },
     });
 
     // Catat riwayat pelanggaran
     return tx.poinDisiplin.create({
       data: {
-        fk_id_operator,
-        fk_id_staff: staffId,
-        fk_tipe_disiplin,
-        fk_id_shift: parseInt(fk_id_shift),
-        poin_berubah: nilaiPerubahan,
-        status_level: statusBaru,
+        operatorId: operator.id, // Changed from fk_id_operator to operator.id
+        staffId: staffId,
+        tipeDisiplinId: payload.tipeDisiplinId, // Changed from fk_tipe_disiplin to payload.tipeDisiplinId
+        shiftId: payload.shiftId, // Changed from parseInt(fk_id_shift) to payload.shiftId
+        poinBerubah: nilaiPerubahan,
+        statusLevel: statusBaru,
         tanggal: now,
-        bukti_foto,
+        buktiFoto: bukti_foto,
         keterangan: keterangan || "-",
       },
-      include: { tipe_disiplin: true, operator: true },
+      include: { tipeDisiplin: true, operator: true },
     });
   });
 
@@ -296,9 +283,9 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     const payloadEmail = {
       statusBaru,
       namaOperator: operator.nama,
-      no_reg: operator.no_reg || "-",
+      noReg: operator.noReg || "-",
       plant: operator.plant,
-      shift: currentShift?.nama_shift || "-",
+      shift: currentShift?.namaShift || "-",
       supervisor: staff?.nama || "-",
       pelanggaran: tipe.nama_tipe_disiplin,
       keterangan: keterangan || "-",
@@ -316,7 +303,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     if (statusBaru === "TEGURAN") {
       if (amEmails.length > 0) {
         const subject = `[${statusBaru}] ${operator.nama} (${
-          operator.no_reg || "-"
+          operator.noReg || "-"
         })`;
         const html = getAMEmailTemplate(payloadEmail);
         sendAlertEmail(amEmails.join(","), subject, html);
@@ -326,7 +313,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     // SP1 / SP2 / SP3 → HR + Assistant Manager Plant
     if (["SP1", "SP2", "SP3"].includes(statusBaru)) {
       const subject = `[${statusBaru}] ${operator.nama} (${
-        operator.no_reg || "-"
+        operator.noReg || "-"
       })`;
 
       // To AMs
@@ -357,17 +344,17 @@ const getPoinDashboardStats = async (plant, tanggal) => {
     where: whereOperator,
     select: {
       id: true, // WAJIB ADA agar targetUserIds tidak undefined
-      current_point: true,
+      currentPoint: true,
     },
   });
 
   const summary = {
-    total_operator: users.length,
-    aman: users.filter((u) => u.current_point >= 70).length,
+    totalOperator: users.length,
+    aman: users.filter((u) => u.currentPoint >= 70).length,
     peringatan: users.filter(
-      (u) => u.current_point >= 50 && u.current_point < 70,
+      (u) => u.currentPoint >= 50 && u.currentPoint < 70,
     ).length,
-    kritis: users.filter((u) => u.current_point < 50).length,
+    kritis: users.filter((u) => u.currentPoint < 50).length,
   };
 
   // Jika tidak ada user di plant tersebut, kembalikan response kosong lebih awal
@@ -404,19 +391,19 @@ const getPoinDashboardStats = async (plant, tanggal) => {
     await Promise.all([
       // Group by Shift
       prisma.poinDisiplin.groupBy({
-        by: ["fk_id_shift"],
+        by: ["shiftId"],
         _count: { id: true },
         where: {
-          fk_id_operator: { in: targetUserIds },
+          operatorId: { in: targetUserIds },
           ...dateFilter,
         },
       }),
       // Top Violations
       prisma.poinDisiplin.groupBy({
-        by: ["fk_tipe_disiplin"],
+        by: ["tipeDisiplinId"],
         _count: { id: true },
         where: {
-          fk_id_operator: { in: targetUserIds },
+          operatorId: { in: targetUserIds },
           ...dateFilter,
         },
         orderBy: { _count: { id: "desc" } },
@@ -429,17 +416,17 @@ const getPoinDashboardStats = async (plant, tanggal) => {
 
   // 4. Mapping Data
   const shift_stats = shiftStatsRaw.map((stat) => {
-    const shiftInfo = masterShift.find((s) => s.id === stat.fk_id_shift);
+    const shiftInfo = masterShift.find((s) => s.id === stat.shiftId);
     return {
-      label: shiftInfo?.nama_shift || "Tanpa Shift",
-      tipe_shift: shiftInfo?.tipe_shift || "N/A",
+      label: shiftInfo?.namaShift || "Tanpa Shift",
+      tipeShift: shiftInfo?.tipeShift || "N/A",
       value: stat._count.id,
     };
   });
 
   const top_violations = topViolationsRaw.map((v) => ({
     label:
-      masterTipe.find((t) => t.id === v.fk_tipe_disiplin)?.nama_tipe_disiplin ||
+      masterTipe.find((t) => t.id === v.tipeDisiplinId)?.namaTipeDisiplin ||
       "Lainnya",
     value: v._count.id,
   }));
@@ -456,21 +443,21 @@ const getPoinRankings = async (plant) => {
   const [worstUsers, bestUsers] = await Promise.all([
     prisma.user.findMany({
       where: whereClause,
-      orderBy: { current_point: "asc" },
+      orderBy: { currentPoint: "asc" },
       take: 3,
       include: {
         _count: {
-          select: { poin_disiplins_diterima: true },
+          select: { poinDisiplinsDiterima: true },
         },
       },
     }),
     prisma.user.findMany({
       where: whereClause,
-      orderBy: { current_point: "desc" },
+      orderBy: { currentPoint: "desc" },
       take: 3,
       include: {
         _count: {
-          select: { poin_disiplins_diterima: true },
+          select: { poinDisiplinsDiterima: true },
         },
       },
     }),
@@ -478,9 +465,9 @@ const getPoinRankings = async (plant) => {
 
   const formatUser = (user) => ({
     nama: user.nama,
-    poin: user.current_point,
-    total_pelanggaran: user._count?.poin_disiplins_diterima ?? 0,
-    uid_nfc: user.uid_nfc, // Tambahan informasi untuk dashboard
+    poin: user.currentPoint,
+    total_pelanggaran: user._count?.poinDisiplinsDiterima ?? 0,
+    uidNfc: user.uidNfc, // Tambahan informasi untuk dashboard
   });
 
   return {
@@ -527,7 +514,7 @@ const getPoinHistory = async (filter, options) => {
 
   // Fetch history with pagination
   const whereClause = {
-    fk_id_operator: { in: operatorIds },
+    operatorId: { in: operatorIds },
   };
 
   // Add date filtering if provided
@@ -556,12 +543,12 @@ const getPoinHistory = async (filter, options) => {
         },
         shift: {
           select: {
-            nama_shift: true,
+            namaShift: true,
           },
         },
-        tipe_disiplin: {
+        tipeDisiplin: {
           select: {
-            nama_tipe_disiplin: true,
+            namaTipeDisiplin: true,
             kategori: true,
           },
         },
@@ -582,13 +569,13 @@ const getPoinHistory = async (filter, options) => {
     id: item.id,
     nama_operator: item.operator.nama,
     plant: item.operator.plant,
-    shift: item.shift?.nama_shift || "N/A",
-    tipe_disiplin: item.tipe_disiplin.nama_tipe_disiplin,
-    kategori: item.tipe_disiplin.kategori,
-    poin_berubah: item.poin_berubah,
-    status_level: item.status_level,
+    shift: item.shift?.namaShift || "N/A",
+    tipe_disiplin: item.tipeDisiplin.namaTipeDisiplin,
+    kategori: item.tipeDisiplin.kategori,
+    poin_berubah: item.poinBerubah,
+    status_level: item.statusLevel,
     tanggal: item.tanggal,
-    bukti_foto: item.bukti_foto,
+    bukti_foto: item.buktiFoto,
     keterangan: item.keterangan,
   }));
 
@@ -649,10 +636,10 @@ const getWeeklyStats = async (plant) => {
         gte: sevenDaysAgo,
         lte: today,
       },
-      fk_id_operator: { in: operatorIds },
+      operatorId: { in: operatorIds },
     },
     include: {
-      tipe_disiplin: true,
+      tipeDisiplin: true,
     },
   });
 
@@ -687,7 +674,7 @@ const getWeeklyStats = async (plant) => {
     const dateStr = `${year}-${month}-${day}`;
 
     if (statsMap[dateStr]) {
-      const kategori = item.tipe_disiplin.kategori;
+      const kategori = item.tipeDisiplin.kategori;
       if (kategori === "PELANGGARAN") {
         statsMap[dateStr].pelanggaran++;
       } else if (kategori === "PENGHARGAAN") {
@@ -780,10 +767,10 @@ const getMonthlyStats = async (plant) => {
         gte: startOfYear,
         lte: endOfYear,
       },
-      fk_id_operator: { in: operatorIds },
+      operatorId: { in: operatorIds },
     },
     include: {
-      tipe_disiplin: true,
+      tipeDisiplin: true,
     },
   });
 
