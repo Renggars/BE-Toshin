@@ -33,7 +33,6 @@ const login = catchAsync(async (req, res) => {
   // Deteksi metode login: NFC atau Email
   if (req.body.uid_nfc) {
     // Login dengan NFC
-    console.log(req.body.uid_nfc)
     user = await authService.loginWithNfc(req.body.uid_nfc, req);
   } else if (req.body.email && req.body.password) {
     // Login dengan Email & Password
@@ -58,8 +57,9 @@ const login = catchAsync(async (req, res) => {
         today,
       );
     } catch (error) {
-      // Jika gagal mengambil dashboard, biarkan null agar login tetap berhasil
-      console.error("Error fetching dashboard data during login:", error.message);
+      if (process.env.NODE_ENV !== "test") {
+        console.error("Error fetching dashboard data during login:", error.message);
+      }
     }
   }
 
