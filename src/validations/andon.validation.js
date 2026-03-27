@@ -2,16 +2,16 @@ import Joi from "joi";
 
 const trigger = {
   body: Joi.object({
-    fk_id_mesin: Joi.number().required(),
-    fk_id_masalah: Joi.number().required(),
-    fk_id_operator: Joi.number().optional(),
+    mesinId: Joi.number().required(),
+    masalahId: Joi.number().required(),
+    operatorId: Joi.number().optional(),
   }),
 };
 
 const call = {
   body: Joi.object({
-    fk_id_mesin: Joi.number().required(),
-    target_divisi: Joi.string()
+    mesinId: Joi.number().required(),
+    targetDivisi: Joi.string()
       .valid("MAINTENANCE", "QUALITY", "PRODUKSI", "DIE_MAINT")
       .required(),
   }),

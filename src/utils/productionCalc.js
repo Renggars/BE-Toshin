@@ -25,8 +25,8 @@ export const calculateProductionTarget = (targetNormal, tipeShift) => {
   }
 
   return {
-    target_normal: targetNormal,
-    target_lembur: targetLembur,
-    total_target: totalTarget,
+    targetNormal: targetNormal,
+    targetLembur: targetLembur,
+    totalTarget: totalTarget,
   };
 };

@@ -6,8 +6,8 @@ const register = {
     nama: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().custom(password).required(),
-    uid_nfc: Joi.string().optional().allow(null, ""),
-    fk_id_divisi: Joi.number().integer().required(),
+    uidNfc: Joi.string().optional().allow(null, ""),
+    divisiId: Joi.number().integer().required(),
     role: Joi.string()
       .valid(
         "PRODUKSI",
@@ -30,16 +30,16 @@ const register = {
         "ADMIN",
       )
       .required(),
-    foto_profile: Joi.string().uri().allow(null, ""),
+    fotoProfile: Joi.string().uri().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
-    no_reg: Joi.string().optional().allow(null, ""),
+    noReg: Joi.string().optional().allow(null, ""),
   }),
 };
 
 const login = {
   body: Joi.object().keys({
-    uid_nfc: Joi.string().required(),
+    uidNfc: Joi.string().required(),
   }),
 };
 
@@ -58,8 +58,8 @@ const updateUser = {
       nama: Joi.string().optional(),
       email: Joi.string().email().optional(),
       password: Joi.string().custom(password).optional(),
-      uid_nfc: Joi.string().optional().allow(null, ""),
-      fk_id_divisi: Joi.number().integer().optional(),
+      uidNfc: Joi.string().optional().allow(null, ""),
+      divisiId: Joi.number().integer().optional(),
       role: Joi.string()
         .valid(
           "PRODUKSI",
@@ -82,10 +82,10 @@ const updateUser = {
           "ADMIN",
         )
         .optional(),
-      foto_profile: Joi.string().uri().allow(null, ""),
+      fotoProfile: Joi.string().uri().allow(null, ""),
       plant: Joi.string().valid("1", "2", "3").optional(),
       line: Joi.string().optional(),
-      no_reg: Joi.string().optional().allow(null, ""),
+      noReg: Joi.string().optional().allow(null, ""),
     })
     .min(1), // Minimal harus ada satu field yang diupdate
 };

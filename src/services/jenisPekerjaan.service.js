@@ -22,7 +22,7 @@ const invalidateCache = async () => {
  */
 const createJenisPekerjaan = async (jenisPekerjaanBody) => {
   const existing = await prisma.jenisPekerjaan.findUnique({
-    where: { nama_pekerjaan: jenisPekerjaanBody.nama_pekerjaan },
+    where: { namaPekerjaan: jenisPekerjaanBody.namaPekerjaan },
   });
 
   if (existing) {
@@ -34,7 +34,7 @@ const createJenisPekerjaan = async (jenisPekerjaanBody) => {
 
   const result = await prisma.jenisPekerjaan.create({
     data: {
-      nama_pekerjaan: jenisPekerjaanBody.nama_pekerjaan,
+      namaPekerjaan: jenisPekerjaanBody.namaPekerjaan,
     },
   });
 
@@ -61,7 +61,7 @@ const queryJenisPekerjaan = async () => {
   );
   const result = await prisma.jenisPekerjaan.findMany({
     orderBy: {
-      nama_pekerjaan: "asc",
+      namaPekerjaan: "asc",
     },
   });
 
@@ -98,9 +98,9 @@ const getJenisPekerjaanById = async (id) => {
 const updateJenisPekerjaanById = async (id, updateBody) => {
   await getJenisPekerjaanById(id);
 
-  if (updateBody.nama_pekerjaan) {
+  if (updateBody.namaPekerjaan) {
     const existing = await prisma.jenisPekerjaan.findUnique({
-      where: { nama_pekerjaan: updateBody.nama_pekerjaan },
+      where: { namaPekerjaan: updateBody.namaPekerjaan },
     });
 
     if (existing && existing.id !== id) {
@@ -130,7 +130,7 @@ const deleteJenisPekerjaanById = async (id) => {
 
   // Check if linked to RencanaProduksi
   const rphCount = await prisma.rencanaProduksi.count({
-    where: { fk_id_jenis_pekerjaan: id },
+    where: { jenisPekerjaanId: id },
   });
 
   if (rphCount > 0) {
@@ -142,7 +142,7 @@ const deleteJenisPekerjaanById = async (id) => {
 
   // Check if linked to Target
   const targetCount = await prisma.target.count({
-    where: { fk_jenis_pekerjaan: id },
+    where: { jenisPekerjaanId: id },
   });
 
   if (targetCount > 0) {

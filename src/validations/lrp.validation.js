@@ -4,29 +4,29 @@ const createLrp = {
   body: Joi.object()
     .keys({
       tanggal: Joi.date().required(),
-      fk_id_shift: Joi.number().integer().required(),
-      fk_id_mesin: Joi.number().integer().required(),
-      fk_id_operator: Joi.number().integer().required(),
-      fk_id_rph: Joi.number().integer().required(),
+      shiftId: Joi.number().integer().required(),
+      mesinId: Joi.number().integer().required(),
+      operatorId: Joi.number().integer().required(),
+      rphId: Joi.number().integer().required(),
 
-      no_kanagata: Joi.string().required(),
-      no_lot: Joi.string().required(),
-      no_reg: Joi.string().required(),
+      noKanagata: Joi.string().required(),
+      noLot: Joi.string().required(),
+      noReg: Joi.string().required(),
 
-      qty_ok: Joi.number().integer().min(0).required(),
-      qty_ng_prev: Joi.number().integer().min(0).default(0),
-      qty_ng_proses: Joi.number().integer().min(0).default(0),
-      qty_rework: Joi.number().integer().min(0).default(0),
+      qtyOk: Joi.number().integer().min(0).required(),
+      qtyNgPrev: Joi.number().integer().min(0).default(0),
+      qtyNgProses: Joi.number().integer().min(0).default(0),
+      qtyRework: Joi.number().integer().min(0).default(0),
 
-      counter_start: Joi.number().integer().min(0).allow(null).optional(),
-      counter_end: Joi.number().integer().min(0).allow(null).optional(),
+      counterStart: Joi.number().integer().min(0).allow(null).optional(),
+      counterEnd: Joi.number().integer().min(0).allow(null).optional(),
     })
     .custom((value, helpers) => {
       const total =
-        value.qty_ok +
-        (value.qty_ng_prev || 0) +
-        (value.qty_ng_proses || 0) +
-        (value.qty_rework || 0);
+        value.qtyOk +
+        (value.qtyNgPrev || 0) +
+        (value.qtyNgProses || 0) +
+        (value.qtyRework || 0);
 
       if (total <= 0) {
         return helpers.error("any.invalid");
@@ -38,8 +38,8 @@ const createLrp = {
 const getLrps = {
   query: Joi.object().keys({
     tanggal: Joi.date(),
-    fk_id_shift: Joi.number(),
-    no_kanagata: Joi.string(),
+    shiftId: Joi.number(),
+    noKanagata: Joi.string(),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),
@@ -58,7 +58,7 @@ const updateLrp = {
   }),
   body: Joi.object()
     .keys({
-      status_lrp: Joi.string().valid("SUBMITTED", "VERIFIED"),
+      statusLrp: Joi.string().valid("SUBMITTED", "VERIFIED"),
     })
     .min(1),
 };

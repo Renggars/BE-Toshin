@@ -32,8 +32,8 @@ async function main() {
     if (row[0] && row[1]) {
       await prisma.divisi.upsert({
         where: { id: parseInt(row[0]) },
-        update: { nama_divisi: row[1].toString().trim() },
-        create: { id: parseInt(row[0]), nama_divisi: row[1].toString().trim() },
+        update: { namaDivisi: row[1].toString().trim() },
+        create: { id: parseInt(row[0]), namaDivisi: row[1].toString().trim() },
       });
     }
   }
@@ -85,7 +85,7 @@ async function main() {
 
     await prisma.user.upsert({
       where: {
-        uid_nfc: row[4]?.toString() || undefined,
+        uidNfc: row[4]?.toString() || undefined,
         email: row[2]?.toString() || undefined,
       },
       update: {
@@ -94,19 +94,19 @@ async function main() {
         role: role,
         plant: row[6]?.toString() || "3",
         line: row[7]?.toString() || "-",
-        foto_profile: row[8]?.toString() || null,
-        fk_id_divisi: parseInt(row[9]) || 1,
+        fotoProfile: row[8]?.toString() || null,
+        divisiId: parseInt(row[9]) || 1,
       },
       create: {
         nama: row[1].toString(),
         email: row[2]?.toString() || null,
         password: hashedPassword,
-        uid_nfc: row[4]?.toString() || null,
+        uidNfc: row[4]?.toString() || null,
         role: role,
         plant: row[6]?.toString() || "3",
         line: row[7]?.toString() || "-",
-        foto_profile: row[8]?.toString() || null,
-        fk_id_divisi: parseInt(row[9]) || 1,
+        fotoProfile: row[8]?.toString() || null,
+        divisiId: parseInt(row[9]) || 1,
       },
     });
   }
@@ -129,7 +129,7 @@ async function main() {
   for (let i = 1; i < rawMesinData.length; i++) {
     const row = rawMesinData[i];
     if (row[1]) {
-      const nama_mesin = row[1].toString().trim();
+      const namaMesin = row[1].toString().trim();
       const rawKategori =
         row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRESS";
 
@@ -138,9 +138,9 @@ async function main() {
         : "PRESS";
 
       await prisma.mesin.upsert({
-        where: { nama_mesin },
+        where: { namaMesin },
         update: { kategori },
-        create: { nama_mesin, kategori },
+        create: { namaMesin, kategori },
       });
     }
   }
@@ -160,7 +160,7 @@ async function main() {
       await prisma.tipeDisiplin.upsert({
         where: { kode: row[0].toString().trim() },
         update: {
-          nama_tipe_disiplin: row[1].toString().trim(),
+          namaTipeDisiplin: row[1].toString().trim(),
           poin: parseInt(row[2]),
           kategori:
             row[3].toString().toUpperCase() === "PENGHARGAAN"
@@ -169,7 +169,7 @@ async function main() {
         },
         create: {
           kode: row[0].toString().trim(),
-          nama_tipe_disiplin: row[1].toString().trim(),
+          namaTipeDisiplin: row[1].toString().trim(),
           poin: parseInt(row[2]),
           kategori:
             row[3].toString().toUpperCase() === "PENGHARGAAN"
@@ -193,10 +193,10 @@ async function main() {
     if (rawProduk[i][0]) {
       await prisma.produk.upsert({
         where: { id: parseInt(rawProduk[i][0]) },
-        update: { nama_produk: rawProduk[i][1].toString().trim() },
+        update: { namaProduk: rawProduk[i][1].toString().trim() },
         create: {
           id: parseInt(rawProduk[i][0]),
-          nama_produk: rawProduk[i][1].toString().trim(),
+          namaProduk: rawProduk[i][1].toString().trim(),
         },
       });
     }
@@ -210,10 +210,10 @@ async function main() {
     if (rawJenis[i][0]) {
       await prisma.jenisPekerjaan.upsert({
         where: { id: parseInt(rawJenis[i][0]) },
-        update: { nama_pekerjaan: rawJenis[i][1].toString().trim() },
+        update: { namaPekerjaan: rawJenis[i][1].toString().trim() },
         create: {
           id: parseInt(rawJenis[i][0]),
-          nama_pekerjaan: rawJenis[i][1].toString().trim(),
+          namaPekerjaan: rawJenis[i][1].toString().trim(),
         },
       });
     }
@@ -226,28 +226,28 @@ async function main() {
     const row = rawTarget[i];
     // Headers: ["PRODUK","JENIS_PEKERJAAN","TARGET","fk_produk","fk_jenis_pekerjaan","CYCLE TIME (menit / pcs)","PEMBULATAN CYCLE TIME (menit / pcs) "]
     if (row[3] && row[4]) {
-      const fk_produk = parseInt(row[3]);
-      const fk_jenis_pekerjaan = parseInt(row[4]);
+      const produkId = parseInt(row[3]);
+      const jenisPekerjaanId = parseInt(row[4]);
       
       const existing = await prisma.target.findFirst({
-        where: { fk_produk, fk_jenis_pekerjaan }
+        where: { produkId, jenisPekerjaanId }
       });
 
       if (!existing) {
         await prisma.target.create({
           data: {
-            fk_produk,
-            fk_jenis_pekerjaan,
-            total_target: parseInt(row[2]) || 0,
-            ideal_cycle_time: parseFloat(row[5]) || 0,
+            produkId,
+            jenisPekerjaanId,
+            totalTarget: parseInt(row[2]) || 0,
+            idealCycleTime: parseFloat(row[5]) || 0,
           },
         });
       } else {
         await prisma.target.update({
           where: { id: existing.id },
           data: {
-            total_target: parseInt(row[2]) || 0,
-            ideal_cycle_time: parseFloat(row[5]) || 0,
+            totalTarget: parseInt(row[2]) || 0,
+            idealCycleTime: parseFloat(row[5]) || 0,
           }
         });
       }
@@ -267,25 +267,25 @@ async function main() {
       await prisma.shift.upsert({
         where: { id: parseInt(row[0]) },
         update: {
-          tipe_shift: row[1].toString(),
-          nama_shift: row[2].toString(),
-          jam_masuk: excelTimeToStr(row[3]),
-          jam_keluar: excelTimeToStr(row[4]),
-          break_duration: parseInt(row[5]) || 60,
-          cleaning_duration: parseInt(row[6]) || 10,
-          briefing_duration: parseInt(row[7]) || 10,
-          toilet_tolerance_pct: parseFloat(row[8]) || 0.1,
+          tipeShift: row[1].toString(),
+          namaShift: row[2].toString(),
+          jamMasuk: excelTimeToStr(row[3]),
+          jamKeluar: excelTimeToStr(row[4]),
+          breakDuration: parseInt(row[5]) || 60,
+          cleaningDuration: parseInt(row[6]) || 10,
+          briefingDuration: parseInt(row[7]) || 10,
+          toiletTolerancePct: parseFloat(row[8]) || 0.1,
         },
         create: {
           id: parseInt(row[0]),
-          tipe_shift: row[1].toString(),
-          nama_shift: row[2].toString(),
-          jam_masuk: excelTimeToStr(row[3]),
-          jam_keluar: excelTimeToStr(row[4]),
-          break_duration: parseInt(row[5]) || 60,
-          cleaning_duration: parseInt(row[6]) || 10,
-          briefing_duration: parseInt(row[7]) || 10,
-          toilet_tolerance_pct: parseFloat(row[8]) || 0.1,
+          tipeShift: row[1].toString(),
+          namaShift: row[2].toString(),
+          jamMasuk: excelTimeToStr(row[3]),
+          jamKeluar: excelTimeToStr(row[4]),
+          breakDuration: parseInt(row[5]) || 60,
+          cleaningDuration: parseInt(row[6]) || 10,
+          briefingDuration: parseInt(row[7]) || 10,
+          toiletTolerancePct: parseFloat(row[8]) || 0.1,
         },
       });
     }
@@ -325,9 +325,9 @@ async function main() {
         if (!nama_masalah) return null;
 
         return {
-          nama_masalah: nama_masalah.toString().trim(),
+          namaMasalah: nama_masalah.toString().trim(),
           kategori: kategoriEnum,
-          waktu_perbaikan_menit: timeToMinutes(timeout),
+          waktuPerbaikanMenit: timeToMinutes(timeout),
         };
       })
       .filter((record) => record !== null);
@@ -400,7 +400,7 @@ async function main() {
       if (user) {
         await prisma.user.update({
           where: { id: user.id },
-          data: { no_reg: noReg },
+          data: { noReg: noReg },
         });
         totalUpdated++;
       } else {

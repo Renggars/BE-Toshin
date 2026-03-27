@@ -39,15 +39,15 @@ const getShiftInfo = async (time) => {
   const shifts = await prisma.shift.findMany();
   const timeMoment = moment(time).tz(TZ);
   const dateStr = timeMoment.format("YYYY-MM-DD");
-
+  // 3. Find segments
   for (const shift of shifts) {
     const shiftStart = moment.tz(
-      `${dateStr} ${shift.jam_masuk}`,
+      `${dateStr} ${shift.jamMasuk}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
     let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jam_keluar}`,
+      `${dateStr} ${shift.jamKeluar}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
@@ -84,26 +84,26 @@ const fetchHistoryHelper = async (where, page, limit) => {
       where,
       select: {
         id: true,
-        waktu_trigger: true,
-        waktu_repair: true,
-        waktu_resolved: true,
-        durasi_downtime: true,
+        waktuTrigger: true,
+        waktuRepair: true,
+        waktuResolved: true,
+        durasiDowntime: true,
         status: true,
         plant: true,
-        respon_status: true,
-        mesin: { select: { nama_mesin: true } },
-        masalah: {
+        responStatus: true,
+        mesin: { select: { namaMesin: true } },
+        masterMasalahAndon: {
           select: {
-            nama_masalah: true,
+            namaMasalah: true,
             kategori: true,
-            waktu_perbaikan_menit: true,
+            waktuPerbaikanMenit: true,
           },
         },
         operator: { select: { nama: true } },
-        resolver: { select: { nama: true } },
-        shift: { select: { nama_shift: true } },
+        resolvedBy: { select: { nama: true } },
+        shift: { select: { namaShift: true } },
       },
-      orderBy: { waktu_trigger: "desc" },
+      orderBy: { waktuTrigger: "desc" },
       skip,
       take,
     }),
@@ -112,36 +112,36 @@ const fetchHistoryHelper = async (where, page, limit) => {
 
   const mappedData = dataRaw.map((e) => ({
     id: e.id,
-    tanggal: e.waktu_trigger,
-    mesin: e.mesin?.nama_mesin,
+    tanggal: e.waktuTrigger,
+    mesin: e.mesin?.namaMesin,
     plant: e.plant,
-    shift: e.shift?.nama_shift,
-    masalah: e.masalah?.nama_masalah,
-    kategori: e.masalah?.kategori,
+    shift: e.shift?.namaShift,
+    masalah: e.masterMasalahAndon?.namaMasalah,
+    kategori: e.masterMasalahAndon?.kategori,
     operator: e.operator?.nama || "-",
-    resolver: e.resolver?.nama || "-",
+    resolver: e.resolvedBy?.nama || "-",
     downtime:
-      e.waktu_resolved && e.waktu_repair
+      e.waktuResolved && e.waktuRepair
         ? Number(
             (
-              (new Date(e.waktu_resolved) - new Date(e.waktu_repair)) /
+              (new Date(e.waktuResolved) - new Date(e.waktuRepair)) /
               60000
             ).toFixed(2),
           )
-        : e.durasi_downtime || 0,
+        : e.durasiDowntime || 0,
     real_downtime:
-      e.waktu_resolved && e.waktu_trigger
+      e.waktuResolved && e.waktuTrigger
         ? Number(
             (
-              (new Date(e.waktu_resolved) - new Date(e.waktu_trigger)) /
+              (new Date(e.waktuResolved) - new Date(e.waktuTrigger)) /
               60000
             ).toFixed(2),
           )
-        : e.total_duration_menit || 0,
+        : e.totalDurationMenit || 0,
     status: e.status,
-    estimasi_menit: e.masalah?.waktu_perbaikan_menit || 0,
-    waktu_resolved: e.waktu_resolved,
-    respon_status: e.respon_status,
+    estimasi_menit: e.masterMasalahAndon?.waktuPerbaikanMenit || 0,
+    waktu_resolved: e.waktuResolved,
+    respon_status: e.responStatus,
   }));
 
   return {
@@ -172,7 +172,7 @@ const calculateAndonSummary = async (plantFilter = {}) => {
         },
       }),
       prisma.andonEvent.aggregate({
-        _sum: { total_duration_menit: true },
+        _sum: { totalDurationMenit: true },
         where: {
           status: "RESOLVED",
           tanggal: operationalDate,
@@ -199,7 +199,7 @@ const calculateAndonSummary = async (plantFilter = {}) => {
 
   return {
     resolvedToday,
-    totalDowntime: Number((aggTotal._sum.total_duration_menit || 0).toFixed(2)),
+    totalDowntime: Number((aggTotal._sum.totalDurationMenit || 0).toFixed(2)),
     totalActiveCall,
     totalActiveRepair,
   };
@@ -210,16 +210,16 @@ const calculateAndonSummary = async (plantFilter = {}) => {
  */
 const triggerAndon = async (payload) => {
   const {
-    fk_id_mesin: rawMesinId,
-    fk_id_masalah,
-    fk_id_operator: manualOperator,
+    mesinId: rawMesinId,
+    masalahId: masalahId,
+    operatorId: manualOperator,
   } = payload;
-  const fk_id_mesin = Number(rawMesinId);
+  const mesinId = Number(rawMesinId);
   const currentTime = moment().tz(TZ);
 
   // 1. Fetch Masalah to check for RPH behavior early
   const masalah = await prisma.masterMasalahAndon.findUnique({
-    where: { id: fk_id_masalah },
+    where: { id: masalahId },
   });
   if (!masalah)
     throw new ApiError(httpStatus.NOT_FOUND, "Masalah tidak ditemukan");
@@ -229,24 +229,24 @@ const triggerAndon = async (payload) => {
     "Pindah Produk",
     "Pindah Jenis Pekerjaan",
   ];
-  const isRphSwitch = RPH_SWITCH_NAMES.includes(masalah.nama_masalah);
+  const isRphSwitch = RPH_SWITCH_NAMES.includes(masalah.namaMasalah);
 
   // 2. Check for existing active andon
   const activeEvent = await prisma.andonEvent.findFirst({
-    where: { fk_id_mesin, status: "ACTIVE" },
-    include: { masalah: true },
+    where: { mesinId, status: "ACTIVE" },
+    include: { masterMasalahAndon: true },
   });
 
   if (activeEvent) {
     const isActiveReport =
-      activeEvent.masalah?.nama_masalah === "Ngisi Laporan";
+      activeEvent.masterMasalahAndon?.namaMasalah === "Ngisi Laporan";
 
     // If it's a switch, we ONLY allow if current active is "Ngisi Laporan" (Back-to-Back)
     // If it's NOT a switch, we never allow new andon if one is already active
     if (!isRphSwitch || !isActiveReport) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        `Masih ada Andon ACTIVE (${activeEvent.masalah?.nama_masalah}) di mesin ini`,
+        `Masih ada Andon ACTIVE (${activeEvent.masterMasalahAndon?.namaMasalah}) di mesin ini`,
       );
     }
   }
@@ -260,7 +260,7 @@ const triggerAndon = async (payload) => {
   // 2. Fetch RPH Candidates for this machine on this operational date
   const rphCandidates = await prisma.rencanaProduksi.findMany({
     where: {
-      fk_id_mesin,
+      mesinId,
       tanggal: operationalDate,
     },
     include: { shift: true },
@@ -270,16 +270,16 @@ const triggerAndon = async (payload) => {
   let detectedShift = shiftId;
 
   // 3. Find Exact Match (Machine + Shift + Date)
-  const exactMatch = rphCandidates.find((r) => r.fk_id_shift === shiftId);
+  const exactMatch = rphCandidates.find((r) => r.shiftId === shiftId);
   if (exactMatch) {
-    detectedOperator = exactMatch.fk_id_user;
+    detectedOperator = exactMatch.userId;
   }
   // 4. Fallback: If no exact shift match, but there are RPHs today (Smart Detect)
   else if (!detectedOperator && rphCandidates.length > 0) {
     // Pick the first available assignment for this machine today
-    detectedOperator = rphCandidates[0].fk_id_user;
+    detectedOperator = rphCandidates[0].userId;
     // If we didn't have a shiftId yet, take it from RPH
-    if (!detectedShift) detectedShift = rphCandidates[0].fk_id_shift;
+    if (!detectedShift) detectedShift = rphCandidates[0].shiftId;
   }
 
   // 5. Final Fallback: detectedShift is already set from getShiftInfo(currentTime)
@@ -309,13 +309,13 @@ const triggerAndon = async (payload) => {
 
   // Find the current active RPH on this machine
   const currentActiveRph = await prisma.rencanaProduksi.findFirst({
-    where: { fk_id_mesin, status: "ACTIVE" },
+    where: { mesinId, status: "ACTIVE" },
   });
 
   if (isRphSwitch) {
     // 7. Handle RPH Switch (Tutup A, Buka B)
     const nextPlannedRph = await prisma.rencanaProduksi.findFirst({
-      where: { fk_id_mesin, status: "PLANNED", tanggal: operationalDate },
+      where: { mesinId, status: "PLANNED", tanggal: operationalDate },
       orderBy: { id: "asc" },
     });
 
@@ -331,7 +331,7 @@ const triggerAndon = async (payload) => {
       if (currentActiveRph) {
         await tx.rencanaProduksi.update({
           where: { id: currentActiveRph.id },
-          data: { status: "CLOSED", end_time: currentTime.toDate() },
+          data: { status: "CLOSED", endTime: currentTime.toDate() },
         });
         activeRphId = currentActiveRph.id;
       }
@@ -339,26 +339,26 @@ const triggerAndon = async (payload) => {
       // 🔍 NEW: Auto-Resolve "Ngisi Laporan" if still active
       const reportAndon = await tx.andonEvent.findFirst({
         where: {
-          fk_id_mesin,
+          mesinId,
           status: { in: ["ACTIVE", "IN_REPAIR"] },
-          masalah: { nama_masalah: "Ngisi Laporan" },
+          masterMasalahAndon: { namaMasalah: "Ngisi Laporan" },
         },
-        orderBy: { waktu_trigger: "desc" },
+        orderBy: { waktuTrigger: "desc" },
       });
 
       if (reportAndon) {
-        const waktu_trigger = new Date(reportAndon.waktu_trigger);
-        const diffMs = currentTime.toDate() - waktu_trigger;
+        const waktuTrigger = new Date(reportAndon.waktuTrigger);
+        const diffMs = currentTime.toDate() - waktuTrigger;
         const duration = Number((diffMs / 60000).toFixed(2));
 
         await tx.andonEvent.update({
           where: { id: reportAndon.id },
           data: {
             status: "RESOLVED",
-            waktu_resolved: currentTime.toDate(),
-            total_duration_menit: duration,
-            durasi_downtime: duration,
-            resolved_by: detectedOperator,
+            waktuResolved: currentTime.toDate(),
+            totalDurationMenit: duration,
+            durasiDowntime: duration,
+            resolvedById: detectedOperator,
           },
         });
       }
@@ -366,32 +366,32 @@ const triggerAndon = async (payload) => {
       // Activate next planned RPH
       await tx.rencanaProduksi.update({
         where: { id: nextPlannedRph.id },
-        data: { status: "ACTIVE", start_time: currentTime.toDate() },
+        data: { status: "ACTIVE", startTime: currentTime.toDate() },
       });
       openedRphId = nextPlannedRph.id;
 
       return {
         newEvent: await tx.andonEvent.create({
           data: {
-            fk_id_mesin,
-            fk_id_masalah,
-            fk_id_operator: detectedOperator,
-            fk_id_shift: detectedShift,
+            mesinId,
+            masalahId: masalahId,
+            operatorId: detectedOperator,
+            shiftId: detectedShift,
             tanggal: operationalDate,
             plant: plantName,
             kategori: masalah.kategori,
             status: "ACTIVE",
-            fk_id_rph_closed: activeRphId,
-            fk_id_rph_opened: openedRphId,
+            rphClosedId: activeRphId,
+            rphOpenedId: openedRphId,
           },
-          include: { mesin: true, masalah: true, operator: true, shift: true },
+          include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
         }),
         resolvedReportAndon: reportAndon
           ? await tx.andonEvent.findUnique({
               where: { id: reportAndon.id },
               include: {
                 mesin: true,
-                masalah: true,
+                masterMasalahAndon: true,
                 operator: true,
                 shift: true,
               },
@@ -408,10 +408,10 @@ const triggerAndon = async (payload) => {
       emitAndonResolved({
         andonId: e.id,
         tanggal: e.waktu_trigger,
-        mesin: e.mesin?.nama_mesin || "Unknown",
+        mesin: e.mesin?.namaMesin || "Unknown",
         plant: e.plant || "Unknown",
-        shift: e.shift?.nama_shift || "Unknown",
-        masalah: e.masalah?.nama_masalah || "Unknown",
+        shift: e.shift?.namaShift || "Unknown",
+        masalah: e.masalah?.namaMasalah || "Unknown",
         kategori: e.masalah?.kategori || "UNKNOWN",
         operator: e.operator?.nama || "-",
         resolver: e.operator?.nama || "-",
@@ -428,17 +428,17 @@ const triggerAndon = async (payload) => {
     // Link ke current active RPH jika ada
     newEvent = await prisma.andonEvent.create({
       data: {
-        fk_id_mesin,
-        fk_id_masalah,
-        fk_id_operator: detectedOperator,
-        fk_id_shift: detectedShift,
+        mesinId,
+        masalahId: masalahId,
+        operatorId: detectedOperator,
+        shiftId: detectedShift,
         tanggal: operationalDate,
         plant: plantName,
         kategori: masalah.kategori,
         status: "ACTIVE",
-        fk_id_rph_closed: currentActiveRph?.id || null,
+        rphClosedId: currentActiveRph?.id || null,
       },
-      include: { mesin: true, masalah: true, operator: true, shift: true },
+      include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
     });
   }
 
@@ -446,15 +446,15 @@ const triggerAndon = async (payload) => {
   // Event 1: andon-created
   emitAndonCreated({
     andonId: newEvent.id,
-    machineId: newEvent.fk_id_mesin,
-    machineName: newEvent.mesin?.nama_mesin || "Unknown",
-    type: newEvent.masalah?.kategori || "UNKNOWN",
-    problemName: newEvent.masalah?.nama_masalah || "Unknown Problem",
-    startTime: newEvent.waktu_trigger,
+    machineId: newEvent.mesinId,
+    machineName: newEvent.mesin?.namaMesin || "Unknown",
+    type: newEvent.masterMasalahAndon?.kategori || "UNKNOWN",
+    problemName: newEvent.masterMasalahAndon?.namaMasalah || "Unknown Problem",
+    startTime: newEvent.waktuTrigger,
     status: "ACTIVE",
     plant: newEvent.plant || "Unknown",
     operator: newEvent.operator?.nama || "-",
-    shift: newEvent.shift?.nama_shift || "-",
+    shift: newEvent.shift?.namaShift || "-",
   });
 
   // Event 2: andon-summary-updated
@@ -470,7 +470,7 @@ const triggerAndon = async (payload) => {
 
   emitAndonDashboardUpdate({
     type: "REFRESH_ANDON_DASHBOARD",
-    mesinId: fk_id_mesin,
+    mesinId: mesinId,
     plant: plantName,
     tanggal: opDateStr,
   });
@@ -482,7 +482,7 @@ const triggerAndon = async (payload) => {
  * Start Repair Andon
  */
 const startRepairAndon = async (id, data) => {
-  const { userId, fk_id_masalah } = data;
+  const { userId, masalahId } = data;
 
   // 1. Check if ID refers to AndonCall
   const call = await prisma.andonCall.findUnique({
@@ -498,10 +498,10 @@ const startRepairAndon = async (id, data) => {
       );
     }
 
-    if (!fk_id_masalah) {
+    if (!masalahId) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        "fk_id_masalah wajib diisi untuk konversi call ke event",
+        "masalahId wajib diisi untuk konversi call ke event",
       );
     }
 
@@ -521,7 +521,7 @@ const startRepairAndon = async (id, data) => {
       PRODUKSI: "PRODUKSI",
     };
 
-    const requiredRole = roleMapping[call.target_divisi];
+    const requiredRole = roleMapping[call.targetDivisi];
 
     // Authorize: Only matching role, or SUPERVISOR/ADMIN can start repair
     if (
@@ -531,12 +531,12 @@ const startRepairAndon = async (id, data) => {
     ) {
       throw new ApiError(
         httpStatus.FORBIDDEN,
-        `Hanya role ${requiredRole} yang boleh melakukan start repair untuk target divisi ${call.target_divisi}`,
+        `Hanya role ${requiredRole} yang boleh melakukan start repair untuk target divisi ${call.targetDivisi}`,
       );
     }
 
     const problem = await prisma.masterMasalahAndon.findUnique({
-      where: { id: fk_id_masalah },
+      where: { id: masalahId },
     });
 
     if (!problem) {
@@ -552,26 +552,26 @@ const startRepairAndon = async (id, data) => {
     const newEvent = await prisma.$transaction(async (tx) => {
       const event = await tx.andonEvent.create({
         data: {
-          fk_id_mesin: call.fk_id_mesin,
-          fk_id_operator: call.fk_id_operator,
-          fk_id_shift: call.fk_id_shift,
-          fk_id_masalah: fk_id_masalah,
+          mesinId: call.mesinId,
+          operatorId: call.operatorId,
+          shiftId: call.shiftId,
+          masalahId: masalahId,
           kategori: problem.kategori,
-          waktu_trigger: call.waktu_call, // waktu_trigger = call.waktu_call
-          waktu_repair: new Date(), // waktu_repair = now()
+          waktuTrigger: call.waktuCall, // waktuTrigger = call.waktuCall
+          waktuRepair: new Date(), // waktuRepair = now()
           status: "IN_REPAIR",
           tanggal: call.tanggal,
           plant: call.plant,
-          resolved_by: userId,
+          resolvedById: userId,
         },
-        include: { mesin: true, masalah: true, operator: true, shift: true },
+        include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
       });
 
       await tx.andonCall.update({
         where: { id: call.id },
         data: {
           status: "CONVERTED",
-          converted_event: event.id,
+          convertedEventId: event.id,
         },
       });
 
@@ -580,19 +580,19 @@ const startRepairAndon = async (id, data) => {
 
     const formattedEvent = {
       id: newEvent.id,
-      tanggal: newEvent.waktu_trigger,
-      mesin: newEvent.mesin?.nama_mesin || "Unknown",
+      tanggal: newEvent.waktuTrigger,
+      mesin: newEvent.mesin?.namaMesin || "Unknown",
       plant: newEvent.plant || "Unknown",
-      shift: newEvent.shift?.nama_shift || "Unknown",
-      masalah: newEvent.masalah?.nama_masalah || "Unknown",
-      kategori: newEvent.masalah?.kategori || "UNKNOWN",
+      shift: newEvent.shift?.namaShift || "Unknown",
+      masalah: newEvent.masterMasalahAndon?.namaMasalah || "Unknown",
+      kategori: newEvent.masterMasalahAndon?.kategori || "UNKNOWN",
       operator: newEvent.operator?.nama || "-",
       resolver: user.nama || "-",
       downtime: 0,
       status: "IN_REPAIR",
-      estimasi_menit: newEvent.masalah?.waktu_perbaikan_menit || 0,
+      estimasi_menit: newEvent.masterMasalahAndon?.waktuPerbaikanMenit || 0,
       waktu_resolved: null,
-      respon_status: null,
+      responStatus: null,
     };
 
     emitAndonRepairStarted(formattedEvent);
@@ -613,9 +613,9 @@ const startRepairAndon = async (id, data) => {
     );
   }
 
-  const problem = fk_id_masalah
+  const problem = masalahId
     ? await prisma.masterMasalahAndon.findUnique({
-        where: { id: fk_id_masalah },
+        where: { id: masalahId },
       })
     : null;
 
@@ -623,12 +623,12 @@ const startRepairAndon = async (id, data) => {
     where: { id },
     data: {
       status: "IN_REPAIR",
-      waktu_repair: new Date(),
-      resolved_by: userId,
-      fk_id_masalah: fk_id_masalah || event.fk_id_masalah,
+      waktuRepair: new Date(),
+      resolvedById: userId,
+      masalahId: masalahId || event.masalahId,
       kategori: problem ? problem.kategori : event.kategori,
     },
-    include: { mesin: true, masalah: true, operator: true, shift: true },
+    include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
   });
 
   const user = await prisma.user.findUnique({
@@ -638,19 +638,19 @@ const startRepairAndon = async (id, data) => {
 
   const formattedEvent = {
     id: updated.id,
-    tanggal: updated.waktu_trigger,
-    mesin: updated.mesin?.nama_mesin || "Unknown",
+    tanggal: updated.waktuTrigger,
+    mesin: updated.mesin?.namaMesin || "Unknown",
     plant: updated.plant || "Unknown",
-    shift: updated.shift?.nama_shift || "Unknown",
-    masalah: updated.masalah?.nama_masalah || "Unknown",
-    kategori: updated.masalah?.kategori || "UNKNOWN",
+    shift: updated.shift?.namaShift || "Unknown",
+    masalah: updated.masterMasalahAndon?.namaMasalah || "Unknown",
+    kategori: updated.masterMasalahAndon?.kategori || "UNKNOWN",
     operator: updated.operator?.nama || "-",
     resolver: user?.nama || "-",
     downtime: 0,
     status: "IN_REPAIR",
-    estimasi_menit: updated.masalah?.waktu_perbaikan_menit || 0,
-    waktu_resolved: null,
-    respon_status: null,
+    estimasiMenit: updated.masterMasalahAndon?.waktuPerbaikanMenit || 0,
+    waktuResolved: null,
+    responStatus: null,
   };
 
   emitAndonRepairStarted(formattedEvent);
@@ -667,7 +667,7 @@ const startRepairAndon = async (id, data) => {
 const resolveAndon = async (id, data) => {
   const event = await prisma.andonEvent.findUnique({
     where: { id },
-    include: { masalah: true },
+    include: { masterMasalahAndon: true },
   });
 
   if (!event || event.status === "RESOLVED") {
@@ -678,7 +678,7 @@ const resolveAndon = async (id, data) => {
   }
 
   // State Machine Validation
-  const isPlanDowntime = event.masalah?.kategori === "PLAN_DOWNTIME";
+  const isPlanDowntime = event.masterMasalahAndon?.kategori === "PLAN_DOWNTIME";
   if (!isPlanDowntime && event.status !== "IN_REPAIR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
@@ -687,20 +687,20 @@ const resolveAndon = async (id, data) => {
   }
 
   const resolvedAt = new Date();
-  const triggerAt = new Date(event.waktu_trigger);
+  const triggerAt = new Date(event.waktuTrigger);
   const durationMs = resolvedAt - triggerAt;
 
   // Real decimal minutes (2 decimal precision)
   const realDurationMinutes = Number((durationMs / 60000).toFixed(2));
 
-  const repairAt = event.waktu_repair
-    ? new Date(event.waktu_repair)
+  const repairAt = event.waktuRepair
+    ? new Date(event.waktuRepair)
     : triggerAt;
   const repairDurationMinutes = Number(
     ((resolvedAt - repairAt) / 60000).toFixed(2),
   );
 
-  const standardMinutes = event.masalah?.waktu_perbaikan_menit || 0;
+  const standardMinutes = event.masterMasalahAndon?.waktuPerbaikanMenit || 0;
   const lateMinutes = Number(
     Math.max(0, repairDurationMinutes - standardMinutes).toFixed(2),
   );
@@ -715,8 +715,8 @@ const resolveAndon = async (id, data) => {
     "Pindah Jenis Pekerjaan",
   ];
   const isRphSwitch =
-    event.masalah?.kategori === "PLAN_DOWNTIME" &&
-    RPH_SWITCH_NAMES.includes(event.masalah?.nama_masalah);
+    event.masterMasalahAndon?.kategori === "PLAN_DOWNTIME" &&
+    RPH_SWITCH_NAMES.includes(event.masterMasalahAndon?.namaMasalah);
 
   // Use Transaction for Atomicity
   const [updatedEvent] = await prisma.$transaction(async (tx) => {
@@ -728,24 +728,24 @@ const resolveAndon = async (id, data) => {
       where: { id },
       data: {
         status: "RESOLVED",
-        waktu_resolved: resolvedAt,
-        durasi_downtime: repairDurationMinutes, // downtime field
-        total_duration_menit: realDurationMinutes, // real_downtime field
-        late_menit: lateMinutes,
-        is_late: isLate,
-        resolved_by: data.resolved_by || event.resolved_by,
-        respon_status: responStatus,
-        fk_id_rph_opened: openedRphId,
-        fk_id_masalah: data.fk_id_masalah || event.fk_id_masalah,
-        kategori: data.fk_id_masalah
+        waktuResolved: resolvedAt,
+        durasiDowntime: repairDurationMinutes, // downtime field
+        totalDurationMenit: realDurationMinutes, // real_downtime field
+        lateMenit: lateMinutes,
+        isLate: isLate,
+        resolvedById: data.resolved_by || event.resolvedById,
+        responStatus: responStatus,
+        rphOpenedId: openedRphId,
+        masalahId: data.masalahId || event.masalahId,
+        kategori: data.masalahId
           ? (
               await tx.masterMasalahAndon.findUnique({
-                where: { id: data.fk_id_masalah },
+                where: { id: data.masalahId },
               })
             )?.kategori
           : event.kategori,
       },
-      include: { mesin: true, masalah: true, operator: true, shift: true },
+      include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
     });
 
     const splitPromises = await generateSplitDowntimePromises(
@@ -760,30 +760,30 @@ const resolveAndon = async (id, data) => {
   });
 
   // Enqueue OEE recalc ke background worker (non-blocking)
-  await enqueueOeeRecalc(event.fk_id_mesin, event.tanggal);
+  await enqueueOeeRecalc(event.mesinId, event.tanggal);
 
   // ✅ WebSocket Events
   const resolverUser = await prisma.user.findUnique({
-    where: { id: data.resolved_by || event.resolved_by },
+    where: { id: data.resolved_by || event.resolvedById },
     select: { nama: true },
   });
 
   emitAndonResolved({
     andonId: updatedEvent.id,
-    tanggal: updatedEvent.waktu_trigger,
-    mesin: updatedEvent.mesin?.nama_mesin || "Unknown",
+    tanggal: updatedEvent.waktuTrigger,
+    mesin: updatedEvent.mesin?.namaMesin || "Unknown",
     plant: updatedEvent.plant || "Unknown",
-    shift: updatedEvent.shift?.nama_shift || "Unknown",
-    masalah: updatedEvent.masalah?.nama_masalah || "Unknown",
-    kategori: updatedEvent.masalah?.kategori || "UNKNOWN",
+    shift: updatedEvent.shift?.namaShift || "Unknown",
+    masalah: updatedEvent.masterMasalahAndon?.namaMasalah || "Unknown",
+    kategori: updatedEvent.masterMasalahAndon?.kategori || "UNKNOWN",
     operator: updatedEvent.operator?.nama || "-",
     resolver: resolverUser?.nama || "-",
     downtime: repairDurationMinutes,
-    real_downtime: realDurationMinutes,
+    realDowntime: realDurationMinutes,
     status: "RESOLVED",
-    estimasi_menit: updatedEvent.masalah?.waktu_perbaikan_menit || 0,
-    waktu_resolved: resolvedAt,
-    respon_status: responStatus,
+    estimasiMenit: updatedEvent.masterMasalahAndon?.waktuPerbaikanMenit || 0,
+    waktuResolved: resolvedAt,
+    responStatus: responStatus,
   });
 
   const plantFilter = event.plant ? { plant: event.plant } : {};
@@ -798,7 +798,7 @@ const resolveAndon = async (id, data) => {
 
   emitAndonDashboardUpdate({
     type: "REFRESH_ANDON_DASHBOARD",
-    mesinId: event.fk_id_mesin,
+    mesinId: event.mesinId,
     plant: event.plant,
     tanggal: moment(event.tanggal).format("YYYY-MM-DD"),
   });
@@ -807,7 +807,7 @@ const resolveAndon = async (id, data) => {
   const supervisors = await prisma.user.findMany({
     where: {
       role: "SUPERVISOR",
-      divisi: { nama_divisi: { contains: "PRODUKSI" } },
+      divisi: { namaDivisi: { contains: "PRODUKSI" } },
     },
     select: { id: true },
   });
@@ -818,33 +818,33 @@ const resolveAndon = async (id, data) => {
       "ANDON_RESOLVED",
       "Andon Telah Diselesaikan",
       `Andon di mesin ${
-        updatedEvent.mesin?.nama_mesin || "Unknown"
+        updatedEvent.mesin?.namaMesin || "Unknown"
       } telah diselesaikan. Durasi downtime: ${repairDurationMinutes} menit (Total: ${realDurationMinutes} menit)`,
       JSON.stringify({
         andonId: id,
-        mesin: updatedEvent.mesin?.nama_mesin,
+        mesin: updatedEvent.mesin?.namaMesin,
         durasi: repairDurationMinutes,
-        real_durasi: realDurationMinutes,
+        realDurasi: realDurationMinutes,
       }),
     );
   }
 
-  const waitTime = event.waktu_repair
+  const waitTime = event.waktuRepair
     ? Number(
         (
-          (new Date(event.waktu_repair) - new Date(event.waktu_trigger)) /
+          (new Date(event.waktuRepair) - new Date(event.waktuTrigger)) /
           60000
         ).toFixed(2),
       )
     : 0;
 
   return {
-    andon_event: updatedEvent,
-    durasi_downtime: repairDurationMinutes,
-    real_downtime: realDurationMinutes,
-    waktu_tunggu_maintenance: waitTime,
-    affected_shift: await prisma.andonDowntimeShift.findMany({
-      where: { fk_id_andon: id },
+    andonEvent: updatedEvent,
+    durasiDowntime: repairDurationMinutes,
+    realDowntime: realDurationMinutes,
+    waktuTungguMaintenance: waitTime,
+    affectedShift: await prisma.andonDowntimeShift.findMany({
+      where: { andonEventId: id },
     }),
   };
 };
@@ -854,17 +854,17 @@ const resolveAndon = async (id, data) => {
  */
 const generateSplitDowntimePromises = async (event, resolvedAt) => {
   const shifts = await prisma.shift.findMany();
-  const triggerTime = moment(event.waktu_trigger).tz(TZ);
+  const triggerTime = moment(event.waktuTrigger).tz(TZ);
   const resolveTime = moment(resolvedAt).tz(TZ);
   const dataList = [];
 
   // Determine RPH to attribute downtime to
   // Rule: Prioritize opened RPH for Switch events, otherwise use closed or active.
-  let rphId = event.fk_id_rph_opened || event.fk_id_rph_closed;
+  let rphId = event.rphOpenedId || event.rphClosedId;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
       where: {
-        fk_id_mesin: event.fk_id_mesin,
+        mesinId: event.mesinId,
         status: "ACTIVE",
         // Fallback or specific window check could be added here
       },
@@ -875,12 +875,12 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
   for (const shift of shifts) {
     const dateStr = triggerTime.format("YYYY-MM-DD");
     const shiftStart = moment.tz(
-      `${dateStr} ${shift.jam_masuk}`,
+      `${dateStr} ${shift.jamMasuk}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
     let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jam_keluar}`,
+      `${dateStr} ${shift.jamKeluar}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
@@ -894,13 +894,13 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
       const minutes = overlapEnd.diff(overlapStart, "minutes");
       dataList.push({
         data: {
-          fk_id_andon: event.id,
-          fk_id_shift: shift.id,
-          fk_id_mesin: event.fk_id_mesin,
-          fk_id_rph: rphId,
-          waktu_start: overlapStart.toDate(),
-          waktu_end: overlapEnd.toDate(),
-          durasi_menit: Number(
+          andonEventId: event.id,
+          shiftId: shift.id,
+          mesinId: event.mesinId,
+          rphId: rphId,
+          waktuStart: overlapStart.toDate(),
+          waktuEnd: overlapEnd.toDate(),
+          durasiMenit: Number(
             (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
           ),
           tanggal: event.tanggal,
@@ -916,14 +916,14 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
  */
 const splitDowntimePerShift = async (event, resolvedAt) => {
   const shifts = await prisma.shift.findMany();
-  const triggerTime = moment(event.waktu_trigger).tz(TZ);
+  const triggerTime = moment(event.waktuTrigger).tz(TZ);
   const resolveTime = moment(resolvedAt).tz(TZ);
 
   // Determine RPH
-  let rphId = event.fk_id_rph_opened || event.fk_id_rph_closed;
+  let rphId = event.rphOpenedId || event.rphClosedId;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
-      where: { fk_id_mesin: event.fk_id_mesin, status: "ACTIVE" },
+      where: { mesinId: event.mesinId, status: "ACTIVE" },
     });
     rphId = activeRph?.id || null;
   }
@@ -931,12 +931,12 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
   for (const shift of shifts) {
     const dateStr = triggerTime.format("YYYY-MM-DD");
     const shiftStart = moment.tz(
-      `${dateStr} ${shift.jam_masuk}`,
+      `${dateStr} ${shift.jamMasuk}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
     let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jam_keluar}`,
+      `${dateStr} ${shift.jamKeluar}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
@@ -951,13 +951,13 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
       const minutes = overlapEnd.diff(overlapStart, "minutes");
       await prisma.andonDowntimeShift.create({
         data: {
-          fk_id_andon: event.id,
-          fk_id_shift: shift.id,
-          fk_id_mesin: event.fk_id_mesin,
-          fk_id_rph: rphId,
-          waktu_start: overlapStart.toDate(),
-          waktu_end: overlapEnd.toDate(),
-          durasi_menit: Number(
+          andonEventId: event.id,
+          shiftId: shift.id,
+          mesinId: event.mesinId,
+          rphId: rphId,
+          waktuStart: overlapStart.toDate(),
+          waktuEnd: overlapEnd.toDate(),
+          durasiMenit: Number(
             (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
           ),
           tanggal: event.tanggal, // Operational date from parent
@@ -987,18 +987,18 @@ const getPersonalHistory = async (userId) => {
         { tanggal: operationalDate },
         {
           OR: [
-            { fk_id_operator: Number(userId) },
-            { resolved_by: Number(userId) },
+            { operatorId: Number(userId) },
+            { resolvedById: Number(userId) },
           ],
         },
       ],
     },
     include: {
       shift: true,
-      masalah: true,
+      masterMasalahAndon: true,
       mesin: true,
     },
-    orderBy: { waktu_trigger: "desc" },
+    orderBy: { waktuTrigger: "desc" },
   });
 
   // 3. Helper: Shift Duration
@@ -1033,10 +1033,10 @@ const getPersonalHistory = async (userId) => {
   };
 
   if (referenceShift) {
-    shiftName = referenceShift.nama_shift;
-    totalShiftMenit = getEffectiveShiftMinutes(referenceShift.tipe_shift);
-    jamMasuk = referenceShift.jam_masuk;
-    jamKeluar = referenceShift.jam_keluar;
+    shiftName = referenceShift.namaShift;
+    totalShiftMenit = getEffectiveShiftMinutes(referenceShift.tipeShift);
+    jamMasuk = referenceShift.jamMasuk;
+    jamKeluar = referenceShift.jamKeluar;
   }
 
   // 4. Split Downtime & Calculate
@@ -1047,18 +1047,18 @@ const getPersonalHistory = async (userId) => {
   const historyBreakdown = [];
 
   events.forEach((e) => {
-    const durasi = e.durasi_downtime || 0;
-    const isPlan = e.masalah?.kategori === "PLAN_DOWNTIME";
+    const durasi = e.durasiDowntime || 0;
+    const isPlan = e.masterMasalahAndon?.kategori === "PLAN_DOWNTIME";
 
     // Format params
     const item = {
       id: e.id,
-      id_mesin: e.fk_id_mesin,
-      mesin: e.mesin?.nama_mesin || "-",
-      masalah: e.masalah?.nama_masalah || "-",
-      kategori: e.masalah?.kategori || "-",
-      waktu_trigger: e.waktu_trigger,
-      waktu_resolved: e.waktu_resolved,
+      mesinId: e.mesinId,
+      mesin: e.mesin?.namaMesin || "-",
+      masalah: e.masterMasalahAndon?.namaMasalah || "-",
+      kategori: e.masterMasalahAndon?.kategori || "-",
+      waktuTrigger: e.waktuTrigger,
+      waktuResolved: e.waktuResolved,
       durasi: durasi,
       status: e.status,
     };
@@ -1127,14 +1127,14 @@ const getPersonalHistory = async (userId) => {
 
 const getActiveEvents = async (userId, query = {}) => {
   const { mesinId } = query;
-  const filter = mesinId ? { fk_id_mesin: Number(mesinId) } : {};
+  const filter = mesinId ? { mesinId: Number(mesinId) } : {};
   const userFilter = userId
     ? {
-        calls: { fk_id_operator: Number(userId) },
+        calls: { operatorId: Number(userId) },
         events: {
           OR: [
-            { fk_id_operator: Number(userId) },
-            { resolved_by: Number(userId) },
+            { operatorId: Number(userId) },
+            { resolvedById: Number(userId) },
           ],
         },
       }
@@ -1151,9 +1151,9 @@ const getActiveEvents = async (userId, query = {}) => {
         mesin: true,
         operator: true,
         shift: true,
-        divisi_target: true,
+        divisiTarget: true,
       },
-      orderBy: { waktu_call: "desc" },
+      orderBy: { waktuCall: "desc" },
     }),
     prisma.andonEvent.findMany({
       where: {
@@ -1161,8 +1161,8 @@ const getActiveEvents = async (userId, query = {}) => {
         ...userFilter.events,
         ...filter,
       },
-      include: { mesin: true, masalah: true, operator: true, shift: true },
-      orderBy: { waktu_trigger: "desc" },
+      include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
+      orderBy: { waktuTrigger: "desc" },
     }),
   ]);
 
@@ -1179,22 +1179,22 @@ const getMyActiveEvents = async (userId, query = {}) => {
     id: c.id,
     type: "CALL",
     status: c.status,
-    kategori: c.target_divisi, // For calls, use target_divisi as category
+    kategori: c.targetDivisi, // For calls, use target_divisi as category
     masalah: "-", // Calls don't have problems yet
     teknisi: "-",
-    startTime: c.waktu_call,
-    mesin: c.mesin?.nama_mesin || "-",
+    startTime: c.waktuCall,
+    mesin: c.mesin?.namaMesin || "-",
   }));
 
   const mappedRepairs = repairs.map((r) => ({
     id: r.id,
     type: "EVENT",
     status: r.status,
-    kategori: r.masalah?.kategori || "-",
-    masalah: r.masalah?.nama_masalah || "-",
-    teknisi: r.resolver?.nama || "-",
-    startTime: r.waktu_trigger,
-    mesin: r.mesin?.nama_mesin || "-",
+    kategori: r.masterMasalahAndon?.kategori || "-",
+    masalah: r.masterMasalahAndon?.namaMasalah || "-",
+    teknisi: r.resolvedBy?.nama || "-",
+    startTime: r.waktuTrigger,
+    mesin: r.mesin?.namaMesin || "-",
   }));
 
   return [...mappedCalls, ...mappedRepairs];
@@ -1228,14 +1228,14 @@ const getDashboardData = async (query) => {
     plantId && plantId !== "0" && plantId !== "Semua Plant"
       ? { plant: plantId }
       : {};
-  const shiftFilter = shiftId ? { fk_id_shift: Number(shiftId) } : {};
+  const shiftFilter = shiftId ? { shiftId: Number(shiftId) } : {};
   const mesinFilter =
     mesinId && mesinId !== "0" && mesinId !== "Semua Mesin"
-      ? { fk_id_mesin: Number(mesinId) }
+      ? { mesinId: Number(mesinId) }
       : {};
   const kategoriFilter =
     kategori && kategori !== "Semua Kategori"
-      ? { masalah: { kategori: kategori } }
+      ? { masterMasalahAndon: { kategori: kategori } }
       : {};
 
   // History Filter: Based on exact operational date (RESOLVED only)
@@ -1290,7 +1290,7 @@ const getDashboardData = async (query) => {
       },
     }),
     prisma.andonEvent.aggregate({
-      _sum: { total_duration_menit: true },
+      _sum: { totalDurationMenit: true },
       where: {
         status: "RESOLVED",
         tanggal: operationalDate,
@@ -1326,9 +1326,9 @@ const getDashboardData = async (query) => {
         mesin: true,
         operator: true,
         shift: true,
-        divisi_target: true,
+        divisiTarget: true,
       },
-      orderBy: { waktu_call: "desc" },
+      orderBy: { waktuCall: "desc" },
     }),
     // IN_REPAIR events
     prisma.andonEvent.findMany({
@@ -1339,21 +1339,21 @@ const getDashboardData = async (query) => {
       },
       select: {
         id: true,
-        waktu_trigger: true,
+        waktuTrigger: true,
         status: true,
-        mesin: { select: { nama_mesin: true, id: true } },
-        masalah: {
+        mesin: { select: { namaMesin: true, id: true } },
+        masterMasalahAndon: {
           select: {
-            nama_masalah: true,
+            namaMasalah: true,
             kategori: true,
-            waktu_perbaikan_menit: true,
+            waktuPerbaikanMenit: true,
           },
         },
         operator: { select: { nama: true } },
-        shift: { select: { nama_shift: true } },
-        resolver: { select: { nama: true } },
+        shift: { select: { namaShift: true } },
+        resolvedBy: { select: { nama: true } },
       },
-      orderBy: { waktu_trigger: "desc" },
+      orderBy: { waktuTrigger: "desc" },
     }),
     fetchHistoryHelper(historyWhere, page, limit),
   ]);
@@ -1372,8 +1372,8 @@ const getDashboardData = async (query) => {
 
   // Process Repairs (IN_REPAIR events)
   const repairs = repairsRaw.map((e) => {
-    const elapsed = moment().diff(moment(e.waktu_trigger), "minutes");
-    const slaMenit = e.masalah?.waktu_perbaikan_menit || 0;
+    const elapsed = moment().diff(moment(e.waktuTrigger), "minutes");
+    const slaMenit = e.masterMasalahAndon?.waktuPerbaikanMenit || 0;
     let liveStatus = "ON_TIME";
     if (slaMenit > 0 && elapsed > slaMenit) liveStatus = "OVER_TIME";
     return {
@@ -1388,7 +1388,7 @@ const getDashboardData = async (query) => {
     summary: {
       resolvedToday,
       totalDowntime: Number(
-        (aggTotal._sum.total_duration_menit || 0).toFixed(2),
+        (aggTotal._sum.totalDurationMenit || 0).toFixed(2),
       ),
       totalActiveCall,
       totalActiveRepair,
@@ -1407,27 +1407,27 @@ const getAndonFilters = async () => {
     prisma.shift.findMany({
       select: {
         id: true,
-        nama_shift: true,
-        tipe_shift: true,
+        namaShift: true,
+        tipeShift: true,
       },
     }),
     prisma.mesin.findMany({
       select: {
         id: true,
-        nama_mesin: true,
+        namaMesin: true,
       },
       orderBy: {
-        nama_mesin: "asc",
+        namaMesin: "asc",
       },
     }),
   ]);
 
   const categories = ["MAINTENANCE", "QUALITY", "PRODUKSI", "PLAN_DOWNTIME"];
 
-  // Format shifts: nama_shift + tipe_shift
+  // Format shifts: namaShift + tipe_shift
   const shifts = shiftsRaw.map((s) => ({
     id: s.id,
-    nama: `${s.nama_shift} (${s.tipe_shift})`,
+    nama: `${s.namaShift} (${s.tipeShift})`,
   }));
 
   return {

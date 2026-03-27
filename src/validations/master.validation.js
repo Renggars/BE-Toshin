@@ -2,17 +2,18 @@ import Joi from "joi";
 
 const createTarget = {
   body: Joi.object().keys({
-    fk_jenis_pekerjaan: Joi.number().required(),
-    fk_produk: Joi.number().required(),
-    total_target: Joi.number().required().min(1),
-    ideal_cycle_time: Joi.number().required().min(0),
+    produkId: Joi.number().required(),
+    jenisPekerjaanId: Joi.number().integer().required(),
+    shiftId: Joi.number().integer().optional(),
+    totalTarget: Joi.number().required().min(1),
+    idealCycleTime: Joi.number().required().min(0),
   }),
 };
 
 // --- Mesin ---
 const createMesin = {
   body: Joi.object().keys({
-    nama_mesin: Joi.string().required(),
+    namaMesin: Joi.string().required(),
     kategori: Joi.string()
       .required()
       .valid(
@@ -31,7 +32,7 @@ const updateMesin = {
   }),
   body: Joi.object()
     .keys({
-      nama_mesin: Joi.string(),
+      namaMesin: Joi.string(),
       kategori: Joi.string().valid(
         "PRESS",
         "SECONDARY",
@@ -46,7 +47,7 @@ const updateMesin = {
 // --- Produk ---
 const createProduk = {
   body: Joi.object().keys({
-    nama_produk: Joi.string().required(),
+    namaProduk: Joi.string().required(),
   }),
 };
 
@@ -55,21 +56,21 @@ const updateProduk = {
     id: Joi.number().required(),
   }),
   body: Joi.object().keys({
-    nama_produk: Joi.string().required(),
+    namaProduk: Joi.string().required(),
   }),
 };
 
 // --- Shift ---
 const createShift = {
   body: Joi.object().keys({
-    nama_shift: Joi.string().required(),
-    jam_masuk: Joi.string()
+    namaShift: Joi.string().required(),
+    jamMasuk: Joi.string()
       .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
       .required(), // HH:mm
-    jam_keluar: Joi.string()
+    jamKeluar: Joi.string()
       .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
       .required(),
-    tipe_shift: Joi.string().required(),
+    tipeShift: Joi.string().required(),
   }),
 };
 
@@ -79,10 +80,10 @@ const updateShift = {
   }),
   body: Joi.object()
     .keys({
-      nama_shift: Joi.string(),
-      jam_masuk: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
-      jam_keluar: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
-      tipe_shift: Joi.string(),
+      namaShift: Joi.string(),
+      jamMasuk: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+      jamKeluar: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+      tipeShift: Joi.string(),
     })
     .min(1),
 };
@@ -90,9 +91,9 @@ const updateShift = {
 // --- Masalah Andon ---
 const createMasalahAndon = {
   body: Joi.object().keys({
-    nama_masalah: Joi.string().required(),
+    namaMasalah: Joi.string().required(),
     kategori: Joi.string().required(),
-    waktu_perbaikan_menit: Joi.number().integer().required().min(0),
+    waktuPerbaikanMenit: Joi.number().integer().required().min(0),
   }),
 };
 
@@ -102,9 +103,9 @@ const updateMasalahAndon = {
   }),
   body: Joi.object()
     .keys({
-      nama_masalah: Joi.string(),
+      namaMasalah: Joi.string(),
       kategori: Joi.string(),
-      waktu_perbaikan_menit: Joi.number().integer().min(0),
+      waktuPerbaikanMenit: Joi.number().integer().min(0),
     })
     .min(1),
 };
@@ -113,7 +114,7 @@ const updateMasalahAndon = {
 const createTipeDisiplin = {
   body: Joi.object().keys({
     kode: Joi.string().required(),
-    nama_tipe_disiplin: Joi.string().required(),
+    namaTipeDisiplin: Joi.string().required(),
     poin: Joi.number().integer().required(),
     kategori: Joi.string().required().valid("PELANGGARAN", "PENGHARGAAN"),
   }),
@@ -125,10 +126,10 @@ const updateTarget = {
   }),
   body: Joi.object()
     .keys({
-      fk_jenis_pekerjaan: Joi.number(),
-      fk_produk: Joi.number(),
-      total_target: Joi.number().min(1),
-      ideal_cycle_time: Joi.number().min(0),
+      jenisPekerjaanId: Joi.number(),
+      produkId: Joi.number(),
+      totalTarget: Joi.number().min(1),
+      idealCycleTime: Joi.number().min(0),
     })
     .min(1),
 };
@@ -146,7 +147,7 @@ const updateTipeDisiplin = {
   body: Joi.object()
     .keys({
       kode: Joi.string(),
-      nama_tipe_disiplin: Joi.string(),
+      namaTipeDisiplin: Joi.string(),
       poin: Joi.number().integer(),
       kategori: Joi.string().valid("PELANGGARAN", "PENGHARGAAN"),
     })

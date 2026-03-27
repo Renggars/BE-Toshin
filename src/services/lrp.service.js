@@ -34,16 +34,16 @@ const createLrp = async (lrpBody) => {
   const data = lrpBody;
 
   // 1. Validasi ID RPH
-  if (!data.fk_id_rph) {
+  if (!data.rphId) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      "ID Rencana Produksi (fk_id_rph) wajib diisi",
+      "ID Rencana Produksi (rphId) wajib diisi",
     );
   }
 
   const result = await prisma.$transaction(async (tx) => {
     const rph = await tx.rencanaProduksi.findUnique({
-      where: { id: data.fk_id_rph },
+      where: { id: data.rphId },
       include: { target: true, shift: true },
     });
 
@@ -65,43 +65,55 @@ const createLrp = async (lrpBody) => {
 
     // 3. Enforce 1:1 Mapping
     const existingLrp = await tx.laporanRealisasiProduksi.findUnique({
-      where: { fk_id_rph: data.fk_id_rph },
+      where: { rphId: data.rphId },
     });
     if (existingLrp) {
       throw new ApiError(
         httpStatus.CONFLICT,
-        "LRP untuk Rencana Produksi ini sudah pernah dibuat (Strict 1:1 Mapping)",
+        "LRP for this rphId already exists (Strict 1:1 Mapping)",
       );
     }
 
     // 4. Hitung loading time (Gunakan start_time ke end_time atau shift)
-    let loading_time = 0;
-    const currentEnd = rph.end_time || new Date();
-    if (rph.start_time) {
-      loading_time = Math.ceil(
-        (new Date(currentEnd) - new Date(rph.start_time)) / 60000,
+    let loadingTime = 0;
+    const currentEnd = rph.endTime || new Date();
+    if (rph.startTime) {
+      loadingTime = Math.ceil(
+        (new Date(currentEnd) - new Date(rph.startTime)) / 60000,
       );
     } else {
-      loading_time = calculateLoadingTimeFromShift(rph.shift);
+      loadingTime = calculateLoadingTimeFromShift(rph.shift);
     }
 
     // 5. Hitung total produksi
-    const qty_total_prod =
-      Number(data.qty_ok || 0) +
-      Number(data.qty_ng_proses || 0) +
-      Number(data.qty_rework || 0);
+    const qtyTotalProd =
+      Number(data.qtyOk || 0) +
+      Number(data.qtyNgProses || 0) +
+      Number(data.qtyRework || 0);
 
     // 6. Simpan LRP
     const lrp = await tx.laporanRealisasiProduksi.create({
       data: {
-        ...data,
-        qty_total_prod,
-        loading_time,
-        cycle_time: rph.target.ideal_cycle_time || 0,
-        no_reg: data.no_reg || null,
-        counter_start:
+        rphId: data.rphId,
+        mesinId: data.mesinId,
+        produkId: data.produkId,
+        shiftId: data.shiftId,
+        userId: data.userId,
+        jenisPekerjaanId: data.jenisPekerjaanId,
+        tanggal: data.tanggal ? new Date(data.tanggal) : undefined,
+        keterangan: data.keterangan,
+        qtyOk: Number(data.qtyOk || 0),
+        qtyNgProses: Number(data.qtyNgProses || 0),
+        qtyNgPrev: Number(data.qtyNgPrev || 0),
+        qtyRework: Number(data.qtyRework || 0),
+        qtyTotalProd,
+        loadingTime,
+        cycleTime: rph.target.idealCycleTime || 0,
+        noReg: data.no_reg || null,
+        counterStart:
           data.counter_start != null ? Number(data.counter_start) : null,
-        counter_end: data.counter_end != null ? Number(data.counter_end) : null,
+        counterEnd: data.counter_end != null ? Number(data.counter_end) : null,
+        noKanagata: data.no_kanagata,
       },
     });
 
@@ -110,7 +122,7 @@ const createLrp = async (lrpBody) => {
 
   // 7. Enqueue OEE recalc ke background worker (non-blocking)
   // Response 201 sudah dikirim, recalc jalan setelah delay 3 detik
-  await enqueueOeeRecalc(result.fk_id_mesin, result.tanggal);
+  await enqueueOeeRecalc(result.mesinId, result.tanggal);
 
   return result;
 };
@@ -129,8 +141,8 @@ const queryLrps = async (filter, options) => {
   // Basic filtering
   const where = {};
   if (filter.tanggal) where.tanggal = new Date(filter.tanggal);
-  if (filter.fk_id_shift) where.fk_id_shift = parseInt(filter.fk_id_shift);
-  if (filter.no_kanagata) where.no_kanagata = { contains: filter.no_kanagata };
+  if (filter.fk_id_shift) where.shiftId = parseInt(filter.fk_id_shift);
+  if (filter.no_kanagata) where.noKanagata = { contains: filter.no_kanagata };
 
   const lrps = await prisma.laporanRealisasiProduksi.findMany({
     where,
@@ -138,7 +150,7 @@ const queryLrps = async (filter, options) => {
     take: limit,
     orderBy: options.sortBy
       ? { [options.sortBy]: "desc" }
-      : { created_at: "desc" },
+      : { createdAt: "desc" },
     include: {
       operator: true,
       mesin: true,
@@ -199,7 +211,7 @@ const updateLrpById = async (lrpId, updateBody) => {
     updateBody.qty_rework !== undefined
   ) {
     // Quantity berubah → enqueue OEE recalc ke background worker
-    await enqueueOeeRecalc(updatedLrp.fk_id_mesin, updatedLrp.tanggal);
+    await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
   }
 
   return updatedLrp;
@@ -224,7 +236,7 @@ const deleteLrpById = async (lrpId) => {
   });
 
   // Enqueue OEE recalc karena data LRP sudah dihapus
-  await enqueueOeeRecalc(lrp.fk_id_mesin, lrp.tanggal);
+  await enqueueOeeRecalc(lrp.mesinId, lrp.tanggal);
 
   return lrp;
 };

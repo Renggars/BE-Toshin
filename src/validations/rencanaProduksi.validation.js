@@ -4,12 +4,12 @@ import Joi from "joi";
 
 const createRencanaProduksi = {
   body: Joi.object({
-    fk_id_user: Joi.number().required(),
-    fk_id_mesin: Joi.number().required(),
-    fk_id_produk: Joi.number().required(),
-    fk_id_shift: Joi.number().required(),
-    fk_id_target: Joi.number().required(),
-    fk_id_jenis_pekerjaan: Joi.number().integer().required(),
+    userId: Joi.number().required(),
+    mesinId: Joi.number().required(),
+    produkId: Joi.number().required(),
+    shiftId: Joi.number().required(),
+    targetId: Joi.number().required(),
+    jenisPekerjaanId: Joi.number().integer().required(),
     tanggal: Joi.date().required(),
     keterangan: Joi.string().allow("", null),
   }),
@@ -21,12 +21,12 @@ const updateRencanaProduksi = {
   }),
   body: Joi.object()
     .keys({
-      fk_id_user: Joi.number().integer(),
-      fk_id_mesin: Joi.number().integer(),
-      fk_id_produk: Joi.number().integer(),
-      fk_id_shift: Joi.number().integer(),
-      fk_id_target: Joi.number().integer(),
-      fk_id_jenis_pekerjaan: Joi.number().integer(),
+      userId: Joi.number().integer(),
+      mesinId: Joi.number().integer(),
+      produkId: Joi.number().integer(),
+      shiftId: Joi.number().integer(),
+      targetId: Joi.number().integer(),
+      jenisPekerjaanId: Joi.number().integer(),
       tanggal: Joi.date(),
       keterangan: Joi.string().allow("", null),
       status: Joi.string().valid(

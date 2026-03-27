@@ -6,8 +6,8 @@
  * @returns {number} loading time (menit)
  */
 const calculateLoadingTimeFromShift = (shift) => {
-  const [startH, startM] = shift.jam_masuk.split(":").map(Number);
-  const [endH, endM] = shift.jam_keluar.split(":").map(Number);
+  const [startH, startM] = shift.jamMasuk.split(":").map(Number);
+  const [endH, endM] = shift.jamKeluar.split(":").map(Number);
 
   let shiftMinutes = endH * 60 + endM - (startH * 60 + startM);
 
@@ -17,16 +17,16 @@ const calculateLoadingTimeFromShift = (shift) => {
   }
 
   // Kurangi istirahat utama
-  const effectiveWorkTime = shiftMinutes - (shift.break_duration || 0);
+  const effectiveWorkTime = shiftMinutes - (shift.breakDuration || 0);
 
   // Toleransi toilet (% dari waktu kerja efektif)
-  const toiletTolerance = effectiveWorkTime * (shift.toilet_tolerance_pct || 0);
+  const toiletTolerance = effectiveWorkTime * (shift.toiletTolerancePct || 0);
 
   // Loading Time final
   const loadingTime =
     effectiveWorkTime -
-    (shift.cleaning_duration || 0) -
-    (shift.briefing_duration || 0) -
+    (shift.cleaningDuration || 0) -
+    (shift.briefingDuration || 0) -
     toiletTolerance;
 
   return Math.max(0, Number(loadingTime.toFixed(2)));

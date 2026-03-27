@@ -22,12 +22,12 @@ const getShiftInfo = async (time) => {
 
   for (const shift of shifts) {
     const shiftStart = moment.tz(
-      `${dateStr} ${shift.jam_masuk}`,
+      `${dateStr} ${shift.jamMasuk}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
     let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jam_keluar}`,
+      `${dateStr} ${shift.jamKeluar}`,
       "YYYY-MM-DD HH:mm",
       TZ,
     );
@@ -50,12 +50,12 @@ const getShiftInfo = async (time) => {
 };
 
 const createCall = async (payload) => {
-  const { fk_id_mesin, fk_id_operator, target_divisi } = payload;
+  const { mesinId, operatorId, targetDivisi } = payload;
   const currentTime = new Date();
 
   // Check if there's already a WAITING call or ACTIVE/IN_REPAIR event for this machine
   const activeCall = await prisma.andonCall.findFirst({
-    where: { fk_id_mesin, status: "WAITING" },
+    where: { mesinId: mesinId, status: "WAITING" },
   });
 
   if (activeCall) {
@@ -67,7 +67,7 @@ const createCall = async (payload) => {
 
   const activeEvent = await prisma.andonEvent.findFirst({
     where: {
-      fk_id_mesin,
+      mesinId: mesinId,
       status: { in: ["ACTIVE", "IN_REPAIR"] },
     },
   });
@@ -86,15 +86,15 @@ const createCall = async (payload) => {
 
   // Get Plant from Operator
   const operator = await prisma.user.findUnique({
-    where: { id: fk_id_operator },
+    where: { id: operatorId },
     select: { plant: true },
   });
 
   // Find Divisi Record for target_divisi
   const targetDivisiRecord = await prisma.divisi.findFirst({
     where: {
-      nama_divisi: {
-        contains: target_divisi.replace("_", " "), // Still helpful if db names have spaces but enum doesn't
+      namaDivisi: {
+        contains: targetDivisi.replace("_", " "), // Still helpful if db names have spaces but enum doesn't
       },
     },
   });
@@ -108,21 +108,21 @@ const createCall = async (payload) => {
 
   const newCall = await prisma.andonCall.create({
     data: {
-      fk_id_mesin,
-      fk_id_operator,
-      fk_id_shift: shiftId,
+      mesinId: fk_id_mesin,
+      operatorId: fk_id_operator,
+      shiftId: shiftId,
       tanggal: operationalDate,
       plant: operator?.plant || null,
-      waktu_call: currentTime,
-      target_divisi,
-      fk_id_target_divisi: targetDivisiRecord.id,
+      waktuCall: currentTime,
+      targetDivisi: target_divisi,
+      targetDivisiId: targetDivisiRecord.id,
       status: "WAITING",
     },
     include: {
       mesin: true,
       operator: true,
       shift: true,
-      divisi_target: true,
+      divisiTarget: true,
     },
   });
 
@@ -136,16 +136,16 @@ const createCall = async (payload) => {
   const supervisors = await prisma.user.findMany({
     where: {
       role: "SUPERVISOR",
-      divisi: { nama_divisi: { contains: target_divisi.replace("_", " ") } },
+      divisi: { namaDivisi: { contains: target_divisi.replace("_", " ") } },
     },
     select: { id: true },
   });
 
   if (supervisors.length > 0) {
     const waktuWIB = moment(currentTime).tz(TZ).format("DD-MM-YYYY HH:mm:ss");
-    const namaMesin = newCall.mesin?.nama_mesin || "-";
+    const namaMesin = newCall.mesin?.namaMesin || "-";
     const namaOperator = newCall.operator?.nama || "-";
-    const namaShift = newCall.shift?.nama_shift || "-";
+    const namaShift = newCall.shift?.namaShift || "-";
     const plantInfo = newCall.plant || "-";
 
     const pesan =
@@ -176,7 +176,7 @@ const getWaitingCalls = async () => {
       operator: true,
       shift: true,
     },
-    orderBy: { waktu_call: "desc" },
+    orderBy: { waktuCall: "desc" },
   });
 };
 
