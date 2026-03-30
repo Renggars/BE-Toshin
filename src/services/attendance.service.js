@@ -20,15 +20,15 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
   }
 
   if (divisiId) {
-    where.user = {
-      fk_id_divisi: parseInt(divisiId),
+    where.operator = {
+      divisiId: parseInt(divisiId),
     };
   }
 
   const result = await prisma.rencanaProduksi.findMany({
     where,
     include: {
-      user: {
+      operator: {
         select: {
           id: true,
           nama: true,
@@ -44,12 +44,12 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
   });
 
   return result
-    .filter((r) => r.user)
+    .filter((r) => r.operator)
     .map((r) => {
       const attendance = r.attendance.length > 0 ? r.attendance[0] : null;
 
       return {
-        nama: r.user.nama,
+        nama: r.operator.nama,
         statusAbsen: attendance ? "Hadir" : "Belum Hadir",
         is_terlambat: attendance ? attendance.isTerlambat : false,
         jam_tap: attendance ? attendance.jamTap : null,
@@ -132,7 +132,7 @@ const clockIn = async (user, req) => {
 
   // 2. Cek apakah sudah ada absen untuk rencana produksi ini
   const existing = await prisma.attendance.findFirst({
-    where: { rencanaProduksiId: rph.id },
+    where: { rphId: rph.id },
   });
 
   if (!existing) {
@@ -166,7 +166,7 @@ const clockIn = async (user, req) => {
     await prisma.attendance.create({
       data: {
         userId: user.id,
-        rencanaProduksiId: rph.id,
+        rphId: rph.id,
         jamTap: now,
         tanggal: new Date(dateStr),
         isTerlambat: isTerlambat,
@@ -190,9 +190,9 @@ const clockIn = async (user, req) => {
           if (adminStaff) {
             await poinService.createPelanggaran(
               {
-                fk_id_operator: user.id,
-                fk_tipe_disiplin: tipeDisiplin.id,
-                fk_id_shift: rph.shiftId,
+                operatorId: user.id,
+                tipeDisiplinId: tipeDisiplin.id,
+                shiftId: rph.shiftId,
                 keterangan: `Sistem: Terlambat login pada ${now.toLocaleTimeString(
                   "id-ID",
                   {

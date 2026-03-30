@@ -56,7 +56,7 @@ components:
           nullable: true
         line:
           type: string
-        current_point:
+        currentPoint:
           type: integer
         status:
           type: string
@@ -97,7 +97,7 @@ components:
       type: object
       properties:
         id: { type: integer }
-        id_mesin: { type: integer }
+        mesinId: { type: integer }
         mesin: { type: string }
         masalah: { type: string }
         kategori: { type: string }
@@ -114,9 +114,9 @@ components:
         operatorId: { type: integer }
         shiftId: { type: integer, nullable: true }
         targetDivisiId: { type: integer }
-        target_divisi:
+        targetDivisi:
           { type: string, enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT] }
-        waktu_call: { type: string, format: date-time }
+        waktuCall: { type: string, format: date-time }
         status: { type: string, enum: [WAITING, CONVERTED, CANCELLED] }
         tanggal: { type: string, format: date }
         plant: { type: string, nullable: true }
@@ -130,7 +130,7 @@ components:
         shiftId: { type: integer, nullable: true }
         masalahId: { type: integer }
         waktuTrigger: { type: string, format: date-time }
-        waktu_start_perbaikan:
+        waktuRepair:
           { type: string, format: date-time, nullable: true }
         waktuResolved: { type: string, format: date-time, nullable: true }
         status: { type: string, enum: [ACTIVE, IN_REPAIR, RESOLVED] }
@@ -145,7 +145,7 @@ components:
           properties:
             namaMasalah: { type: string }
             kategori: { type: string }
-            waktu_perbaikan_menit: { type: integer }
+            waktuPerbaikanMenit: { type: integer }
         operator:
           type: object
           properties:
@@ -182,14 +182,14 @@ components:
         pesan:
           type: string
           example: "Anda ditugaskan RPH baru: mesin FB1100A, produk Part A, tanggal 2026-02-16"
-        is_read:
+        isRead:
           type: boolean
           example: false
         data_json:
           type: string
           nullable: true
           example: '{"rphId": 1}'
-        created_at:
+        createdAt:
           type: string
           format: date-time
 
@@ -514,7 +514,7 @@ paths:
               required: [mesinId, target_divisi]
               properties:
                 mesinId: { type: integer, example: 1 }
-                target_divisi:
+                targetDivisi:
                   type: string
                   enum: [MAINTENANCE, QUALITY, PRODUKSI, DIE_MAINT]
                   example: MAINTENANCE

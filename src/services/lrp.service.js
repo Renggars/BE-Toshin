@@ -13,6 +13,7 @@ import { oeeQueue } from "../queues/oeeQueue.js";
  * sama hanya akan trigger 1 recalc setelah window delay 3 detik selesai.
  */
 const enqueueOeeRecalc = async (mesinId, tanggal) => {
+  if (!oeeQueue) return;
   // Normalize ke YYYY-MM-DD agar jobId selalu konsisten
   // (tanggal bisa berupa Date object atau ISO string)
   const tanggalStr = moment(tanggal).format("YYYY-MM-DD");
@@ -96,10 +97,8 @@ const createLrp = async (lrpBody) => {
       data: {
         rphId: data.rphId,
         mesinId: data.mesinId,
-        produkId: data.produkId,
         shiftId: data.shiftId,
-        userId: data.userId,
-        jenisPekerjaanId: data.jenisPekerjaanId,
+        operatorId: data.operatorId || data.userId,
         tanggal: data.tanggal ? new Date(data.tanggal) : undefined,
         keterangan: data.keterangan,
         qtyOk: Number(data.qtyOk || 0),
@@ -109,11 +108,13 @@ const createLrp = async (lrpBody) => {
         qtyTotalProd,
         loadingTime,
         cycleTime: rph.target.idealCycleTime || 0,
-        noReg: data.no_reg || null,
+        noReg: data.noReg || null,
         counterStart:
-          data.counter_start != null ? Number(data.counter_start) : null,
-        counterEnd: data.counter_end != null ? Number(data.counter_end) : null,
-        noKanagata: data.no_kanagata,
+          data.counterStart != null ? Number(data.counterStart) : null,
+        counterEnd: data.counterEnd != null ? Number(data.counterEnd) : null,
+        noKanagata: data.noKanagata,
+        noLot: data.noLot,
+        updatedAt: new Date(),
       },
     });
 
@@ -141,8 +142,8 @@ const queryLrps = async (filter, options) => {
   // Basic filtering
   const where = {};
   if (filter.tanggal) where.tanggal = new Date(filter.tanggal);
-  if (filter.fk_id_shift) where.shiftId = parseInt(filter.fk_id_shift);
-  if (filter.no_kanagata) where.noKanagata = { contains: filter.no_kanagata };
+  if (filter.shiftId) where.shiftId = parseInt(filter.shiftId);
+  if (filter.noKanagata) where.noKanagata = { contains: filter.noKanagata };
 
   const lrps = await prisma.laporanRealisasiProduksi.findMany({
     where,
@@ -205,10 +206,10 @@ const updateLrpById = async (lrpId, updateBody) => {
 
   // Sync OEE (Recalculate)
   if (
-    updateBody.qty_ok !== undefined ||
-    updateBody.qty_ng_proses !== undefined ||
-    updateBody.qty_ng_prev !== undefined ||
-    updateBody.qty_rework !== undefined
+    updateBody.qtyOk !== undefined ||
+    updateBody.qtyNgProses !== undefined ||
+    updateBody.qtyNgPrev !== undefined ||
+    updateBody.qtyRework !== undefined
   ) {
     // Quantity berubah → enqueue OEE recalc ke background worker
     await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);

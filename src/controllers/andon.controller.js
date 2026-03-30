@@ -19,7 +19,7 @@ const callAndon = catchAsync(async (req, res) => {
 
 const startRepairAndon = catchAsync(async (req, res) => {
   const result = await andonService.startRepairAndon(Number(req.params.id), {
-    userId: req.user.id,
+    userId: req.body.userId || req.user.id,
     masalahId: req.body.masalahId,
   });
   responseApiSuccess(res, "Success start repair andon", result);
@@ -28,7 +28,7 @@ const startRepairAndon = catchAsync(async (req, res) => {
 const resolveAndon = catchAsync(async (req, res) => {
   const result = await andonService.resolveAndon(Number(req.params.id), {
     ...req.body,
-    resolvedBy: req.user.id,
+    resolvedBy: req.body.resolvedBy || req.user.id,
   });
   responseApiSuccess(res, "Success resolve andon", result);
 });

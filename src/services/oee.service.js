@@ -98,9 +98,9 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       (availability / 100) * (performance / 100) * (quality / 100) * 100;
 
     // 5. Upsert OEE Record
-    const oeeRecord = await prisma.oEE.upsert({
+    const oeeRecord = await prisma.oee.upsert({
       where: {
-        fk_id_mesin_tanggal_fk_id_shift: {
+        mesinId_tanggal_shiftId: {
           mesinId: mesinId,
           tanggal: targetDate,
           shiftId: shift.id,
@@ -144,13 +144,13 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
 };
 
 const getOEEByMesin = (mesinId) =>
-  prisma.oEE.findMany({ where: { mesinId: Number(mesinId) } });
+  prisma.oee.findMany({ where: { mesinId: Number(mesinId) } });
 
 const getOEEByShift = (shiftId) =>
-  prisma.oEE.findMany({ where: { shiftId: Number(shiftId) } });
+  prisma.oee.findMany({ where: { shiftId: Number(shiftId) } });
 
 const getPlantOEE = () =>
-  prisma.oEE.aggregate({
+  prisma.oee.aggregate({
     _avg: {
       availability: true,
       performance: true,
@@ -178,7 +178,7 @@ const getOEESummary = async (tanggal, plant) => {
 
   if (plant) {
     const rencanaInPlant = await prisma.rencanaProduksi.findMany({
-      where: { user: { plant: plant }, tanggal: targetDate },
+      where: { operator: { plant: plant }, tanggal: targetDate },
       select: { mesinId: true },
       distinct: ["mesinId"],
     });
@@ -186,7 +186,7 @@ const getOEESummary = async (tanggal, plant) => {
     where.mesinId = { in: machineIds };
   }
 
-  const oeeData = await prisma.oEE.findMany({
+  const oeeData = await prisma.oee.findMany({
     where,
     select: {
       availability: true,
@@ -271,7 +271,7 @@ const getOEETrend = async (tanggal, shiftIds, plant) => {
   if (plant) {
     const rencanaInPlant = await prisma.rencanaProduksi.findMany({
       where: {
-        user: { plant: plant },
+        operator: { plant: plant },
         tanggal: {
           gte: startDate.toDate(),
           lte: endDate.toDate(),
@@ -291,7 +291,7 @@ const getOEETrend = async (tanggal, shiftIds, plant) => {
     where.shiftId = { in: ids };
   }
 
-  const oeeRecords = await prisma.oEE.findMany({
+  const oeeRecords = await prisma.oee.findMany({
     where,
     select: { shiftId: true, oeeScore: true, tanggal: true },
     orderBy: { tanggal: "asc" },
@@ -357,8 +357,8 @@ const getMachineDetail = async (tanggal, plant) => {
 
   let machineWhere = {};
   if (plant) {
-    machineWhere.rencana_produksis = {
-      some: { user: { plant: plant }, tanggal: targetDate },
+    machineWhere.rencanaProduksi = {
+      some: { operator: { plant: plant }, tanggal: targetDate },
     };
   }
   const machines = await prisma.mesin.findMany({ where: machineWhere });
@@ -366,7 +366,7 @@ const getMachineDetail = async (tanggal, plant) => {
 
   const [oeeRecords, lrpRecords, downtimeShifts, rencanaProduksis] =
     await Promise.all([
-      prisma.oEE.findMany({
+      prisma.oee.findMany({
         where: { tanggal: targetDate, mesinId: { in: machineIds } },
       }),
       prisma.laporanRealisasiProduksi.findMany({

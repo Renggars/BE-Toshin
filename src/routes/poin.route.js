@@ -43,7 +43,7 @@ router.get("/my-poin", allRoles, poinController.getMyPoin);
 
 router.get("/user/:userId", auth("SUPERVISOR"), poinController.getPoinByUserId);
 router.get(
-  "/user/by-nfc/:uid_nfc",
+  "/user/by-nfc/:uidNfc",
   auth("SUPERVISOR"),
   poinController.getUserByNfc,
 );
