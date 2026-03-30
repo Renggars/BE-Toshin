@@ -102,19 +102,19 @@ const createCall = async (payload) => {
   if (!targetDivisiRecord) {
     throw new ApiError(
       httpStatus.NOT_FOUND,
-      `Divisi tujuan ${target_divisi} tidak ditemukan di master data`,
+      `Divisi tujuan ${targetDivisi} tidak ditemukan di master data`,
     );
   }
 
   const newCall = await prisma.andonCall.create({
     data: {
-      mesinId: fk_id_mesin,
-      operatorId: fk_id_operator,
+      mesinId: mesinId,
+      operatorId: operatorId,
       shiftId: shiftId,
       tanggal: operationalDate,
       plant: operator?.plant || null,
       waktuCall: currentTime,
-      targetDivisi: target_divisi,
+      targetDivisi: targetDivisi,
       targetDivisiId: targetDivisiRecord.id,
       status: "WAITING",
     },
@@ -122,7 +122,7 @@ const createCall = async (payload) => {
       mesin: true,
       operator: true,
       shift: true,
-      divisiTarget: true,
+      divisi: true,
     },
   });
 
@@ -136,7 +136,7 @@ const createCall = async (payload) => {
   const supervisors = await prisma.user.findMany({
     where: {
       role: "SUPERVISOR",
-      divisi: { namaDivisi: { contains: target_divisi.replace("_", " ") } },
+      divisi: { namaDivisi: { contains: targetDivisi.replace("_", " ") } },
     },
     select: { id: true },
   });
@@ -155,7 +155,7 @@ const createCall = async (payload) => {
       `Waktu: ${waktuWIB} WIB\n` +
       `Shift: ${namaShift}\n` +
       `Plant: ${plantInfo}\n` +
-      `Divisi Tujuan: ${target_divisi}`;
+      `Divisi Tujuan: ${targetDivisi}`;
 
     await notificationService.createBulkNotifications(
       supervisors.map((s) => s.id),

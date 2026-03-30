@@ -24,6 +24,7 @@ const TZ = "Asia/Jakarta";
  * Sama persis dengan helper di lrp.service.js — non-blocking.
  */
 const enqueueOeeRecalc = async (mesinId, tanggal) => {
+  if (!oeeQueue) return;
   const tanggalStr = moment(tanggal).tz(TZ).format("YYYY-MM-DD");
   await oeeQueue.add(
     "oee-recalc",
@@ -407,20 +408,20 @@ const triggerAndon = async (payload) => {
       const e = result.resolvedReportAndon;
       emitAndonResolved({
         andonId: e.id,
-        tanggal: e.waktu_trigger,
+        tanggal: e.waktuTrigger,
         mesin: e.mesin?.namaMesin || "Unknown",
         plant: e.plant || "Unknown",
         shift: e.shift?.namaShift || "Unknown",
-        masalah: e.masalah?.namaMasalah || "Unknown",
-        kategori: e.masalah?.kategori || "UNKNOWN",
+        masalah: e.masterMasalahAndon?.namaMasalah || "Unknown",
+        kategori: e.masterMasalahAndon?.kategori || "UNKNOWN",
         operator: e.operator?.nama || "-",
         resolver: e.operator?.nama || "-",
-        downtime: e.durasi_downtime,
-        real_downtime: e.total_duration_menit,
+        downtime: e.durasiDowntime,
+        realDowntime: e.totalDurationMenit,
         status: "RESOLVED",
-        estimasi_menit: e.masalah?.waktu_perbaikan_menit || 0,
-        waktu_resolved: e.waktu_resolved,
-        respon_status: "ON_TIME",
+        estimasiMenit: e.masterMasalahAndon?.waktuPerbaikanMenit || 0,
+        waktuResolved: e.waktuResolved,
+        responStatus: "ON_TIME",
       });
     }
   } else {
@@ -733,7 +734,7 @@ const resolveAndon = async (id, data) => {
         totalDurationMenit: realDurationMinutes, // real_downtime field
         lateMenit: lateMinutes,
         isLate: isLate,
-        resolvedById: data.resolved_by || event.resolvedById,
+        resolvedById: data.resolvedBy || event.resolvedById,
         responStatus: responStatus,
         rphOpenedId: openedRphId,
         masalahId: data.masalahId || event.masalahId,
@@ -764,7 +765,7 @@ const resolveAndon = async (id, data) => {
 
   // ✅ WebSocket Events
   const resolverUser = await prisma.user.findUnique({
-    where: { id: data.resolved_by || event.resolvedById },
+    where: { id: data.resolvedBy || event.resolvedById },
     select: { nama: true },
   });
 
@@ -1151,7 +1152,7 @@ const getActiveEvents = async (userId, query = {}) => {
         mesin: true,
         operator: true,
         shift: true,
-        divisiTarget: true,
+        divisi: true,
       },
       orderBy: { waktuCall: "desc" },
     }),
@@ -1326,7 +1327,7 @@ const getDashboardData = async (query) => {
         mesin: true,
         operator: true,
         shift: true,
-        divisiTarget: true,
+        divisi: true,
       },
       orderBy: { waktuCall: "desc" },
     }),

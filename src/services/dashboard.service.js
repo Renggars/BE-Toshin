@@ -16,7 +16,7 @@ const getOEESummary = async (tanggal, plant) => {
     // Filter machines associated with this plant via RencanaProduksi -> User
     const rencanaInPlant = await prisma.rencanaProduksi.findMany({
       where: {
-        user: { plant: plant },
+        operator: { plant: plant },
         tanggal: targetDate,
       },
       select: { mesinId: true },
@@ -201,7 +201,7 @@ const getMachineDetail = async (tanggal, plant) => {
   let machineWhere = {};
   if (plant) {
     machineWhere.rencanaProduksi = {
-      some: { user: { plant }, tanggal: targetDate },
+      some: { operator: { plant }, tanggal: targetDate },
     };
   }
   const machines = await prisma.mesin.findMany({
@@ -213,7 +213,7 @@ const getMachineDetail = async (tanggal, plant) => {
   // 2. Fetch all supporting data in parallel
   const [oeeRecords, lrpRecords, downtimeShifts, rencanaProduksis] =
     await Promise.all([
-      prisma.oEE.findMany({
+      prisma.oee.findMany({
         where: { tanggal: targetDate, mesinId: { in: machineIds } },
       }),
       prisma.laporanRealisasiProduksi.findMany({

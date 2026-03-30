@@ -66,7 +66,7 @@ const createRencanaProduksi = async (payload) => {
       keterangan,
     },
     include: {
-      user: { include: { divisi: true } },
+      operator: { include: { divisi: true } },
       mesin: true,
       produk: true,
       shift: true,
@@ -98,7 +98,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   const endOfDay = moment(tanggalStr).endOf("day").toDate();
 
   const includeQuery = {
-    user: {
+    operator: {
       include: {
         poinDisiplinOperator: {
           take: 3,
@@ -125,7 +125,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   // Find all RPHs for this user today
   let allRphs = await prisma.rencanaProduksi.findMany({
     where: {
-      fk_id_user: userId,
+      userId: userId,
       tanggal: { gte: startOfDay, lte: endOfDay },
     },
     include: includeQuery,
@@ -410,7 +410,7 @@ const getDashboardSummary = async (filterTanggal) => {
 
   // Perbaikan error 'distinct': Gunakan groupBy untuk menghitung operator unik yang tap absensi
   const aktifOperatorGroup = await prisma.attendance.groupBy({
-    by: ["fk_id_user"],
+    by: ["userId"],
     where: {
       tanggal: {
         gte: startOfDay,
@@ -587,7 +587,7 @@ const getHistoryRPH = async (filterTanggal) => {
   const data = await prisma.rencanaProduksi.findMany({
     where,
     include: {
-      user: { select: { nama: true } },
+      operator: { select: { nama: true } },
       mesin: { select: { namaMesin: true } },
       produk: { select: { namaProduk: true } },
       shift: { select: { namaShift: true, tipeShift: true } },
@@ -599,15 +599,15 @@ const getHistoryRPH = async (filterTanggal) => {
   // Map data ke format yang diinginkan
   const result = data.map((curr) => {
     const targetKalkulasi = calculateProductionTarget(
-      curr.target?.total_target || 0,
-      curr.shift?.tipe_shift || "Normal",
+      curr.target?.totalTarget || 0,
+      curr.shift?.tipeShift || "Normal",
     );
 
     return {
-      nama: curr.user.nama,
-      detail: `${curr.mesin.namaMesin} • ${curr.produk.namaProduk}`,
-      shift: curr.shift.namaShift,
-      kategori_shift: curr.shift.tipeShift,
+      nama: curr.operator?.nama || "-",
+      detail: `${curr.mesin?.namaMesin || "-"} • ${curr.produk?.namaProduk || "-"}`,
+      shift: curr.shift?.namaShift || "-",
+      kategori_shift: curr.shift?.tipeShift || "-",
       target: targetKalkulasi.totalTarget,
     };
   });
@@ -631,9 +631,9 @@ const updateRencanaProduksi = async (rphId, payload) => {
   }
 
   // Jika ada perubahan user, kirim notifikasi ke user baru
-  if (payload.fk_id_user && payload.fk_id_user !== rph.userId) {
+  if (payload.userId && payload.userId !== rph.userId) {
     await notificationService.createNotification({
-      fk_id_user: payload.fk_id_user,
+      userId: payload.userId,
       tipe: "RPH_ASSIGNED",
       judul: "RPH Baru Ditugaskan",
       pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
@@ -645,17 +645,17 @@ const updateRencanaProduksi = async (rphId, payload) => {
   const updatedRph = await prisma.rencanaProduksi.update({
     where: { id: rphId },
     data: {
-      userId: payload.fk_id_user || undefined,
-      mesinId: payload.fk_id_mesin || undefined,
-      produkId: payload.fk_id_produk || undefined,
-      shiftId: payload.fk_id_shift || undefined,
-      targetId: payload.fk_id_target || undefined,
-      jenisPekerjaanId: payload.fk_id_jenis_pekerjaan || undefined,
+      userId: payload.userId || undefined,
+      mesinId: payload.mesinId || undefined,
+      produkId: payload.produkId || undefined,
+      shiftId: payload.shiftId || undefined,
+      targetId: payload.targetId || undefined,
+      jenisPekerjaanId: payload.jenisPekerjaanId || undefined,
       keterangan: payload.keterangan || undefined,
       tanggal: payload.tanggal ? new Date(payload.tanggal) : undefined,
     },
     include: {
-      user: { include: { divisi: true } },
+      operator: { include: { divisi: true } },
       mesin: true,
       produk: true,
       shift: true,
