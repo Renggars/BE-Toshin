@@ -92,6 +92,11 @@ const getUserByNfc = catchAsync(async (req, res) => {
   res.send({ status: true, data: user });
 });
 
+const resetPoints = catchAsync(async (req, res) => {
+  await poinService.resetAllUsersPoints();
+  res.send({ status: true, message: "Poin semua user berhasil direset ke 100" });
+});
+
 export default {
   getFormData,
   getMyPoin,
@@ -103,4 +108,5 @@ export default {
   getWeeklyStats,
   getMonthlyStats,
   getUserByNfc,
+  resetPoints,
 };

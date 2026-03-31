@@ -1196,6 +1196,7 @@ const getMyActiveEvents = async (userId, query = {}) => {
     teknisi: r.resolvedBy?.nama || "-",
     startTime: r.waktuTrigger,
     mesin: r.mesin?.namaMesin || "-",
+    estimated_minutes: r.masterMasalahAndon?.waktuPerbaikanMenit || 0,
   }));
 
   return [...mappedCalls, ...mappedRepairs];

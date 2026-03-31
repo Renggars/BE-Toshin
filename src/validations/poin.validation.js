@@ -8,7 +8,7 @@ const createPelanggaran = {
       operatorId: Joi.number().integer().optional(),
       tipeDisiplinId: Joi.number().integer().required(),
       shiftId: Joi.number().integer().required(),
-      keterangan: Joi.string().optional(),
+      keterangan: Joi.string().allow("", null).optional(),
     })
     .or("uidNfc", "operatorId"), // At least one must be present
   file: Joi.object()
