@@ -118,10 +118,19 @@ const createLrp = async (lrpBody) => {
       },
     });
 
+    // 7. Auto-Close RPH: Ubah status menjadi CLOSED agar tidak bisa login/submit lagi
+    await tx.rencanaProduksi.update({
+      where: { id: data.rphId },
+      data: {
+        status: "CLOSED",
+        endTime: new Date(),
+      },
+    });
+
     return lrp;
   });
 
-  // 7. Enqueue OEE recalc ke background worker (non-blocking)
+  // 8. Enqueue OEE recalc ke background worker (non-blocking)
   // Response 201 sudah dikirim, recalc jalan setelah delay 3 detik
   await enqueueOeeRecalc(result.mesinId, result.tanggal);
 
@@ -198,22 +207,40 @@ const updateLrpById = async (lrpId, updateBody) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Update LRP
-  const updatedLrp = await prisma.laporanRealisasiProduksi.update({
-    where: { id: lrpId },
-    data: updateBody,
-  });
-
-  // Sync OEE (Recalculate)
+  // Sync OEE (Recalculate) and Recalculate qtyTotalProd
   if (
     updateBody.qtyOk !== undefined ||
     updateBody.qtyNgProses !== undefined ||
     updateBody.qtyNgPrev !== undefined ||
     updateBody.qtyRework !== undefined
   ) {
+    const qtyOk =
+      updateBody.qtyOk !== undefined ? Number(updateBody.qtyOk) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyOk);
+    const qtyNgProses =
+      updateBody.qtyNgProses !== undefined ? Number(updateBody.qtyNgProses) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyNgProses);
+    const qtyRework =
+      updateBody.qtyRework !== undefined ? Number(updateBody.qtyRework) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyRework);
+    const qtyNgPrev =
+      updateBody.qtyNgPrev !== undefined ? Number(updateBody.qtyNgPrev) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyNgPrev);
+    
+    updateBody.qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
+
+    // Update LRP first
+    const updatedLrp = await prisma.laporanRealisasiProduksi.update({
+      where: { id: lrpId },
+      data: updateBody,
+    });
+
     // Quantity berubah → enqueue OEE recalc ke background worker
     await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+    return updatedLrp;
   }
+
+  // Update LRP
+  const updatedLrp = await prisma.laporanRealisasiProduksi.update({
+    where: { id: lrpId },
+    data: updateBody,
+  });
 
   return updatedLrp;
 };

@@ -1,4 +1,5 @@
 // src/services/poin.service.js
+import moment from "moment";
 import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
@@ -111,13 +112,8 @@ const getUserCurrentPoin = async (userId) => {
   });
 
   const sekarang = new Date();
-  const selisihHari = Math.floor(
-    (sekarang - user.pointCycleStart) / (1000 * 60 * 60 * 24),
-  );
 
-  console.log(user.pointCycleStart);
-
-  // Ambil total perubahan dari history
+  // Ambil total perubahan dari history dari sejak cycle start
   const history = await prisma.poinDisiplin.aggregate({
     _sum: { poinBerubah: true },
     where: {
@@ -127,15 +123,6 @@ const getUserCurrentPoin = async (userId) => {
   });
 
   let currentTotal = BASE_POINT + (history._sum.poinBerubah || 0);
-
-  // Logic Reset 30 Hari: Jika < 100 reset, jika >= 100 pertahankan prestasi
-  if (selisihHari >= 30 && currentTotal < 100) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { pointCycleStart: sekarang },
-    });
-    return BASE_POINT;
-  }
 
   return currentTotal;
 };
@@ -149,10 +136,9 @@ const getStatusFromPoin = (poin) => {
 };
 
 const createPelanggaran = async (payload, staffId, imageFile = null) => {
-  let operator; // Changed from fk_id_operator to operator
+  let operator;
 
   // Support both uidNfc and operatorId
-  // The new logic combines the search for operator
   operator = await prisma.user.findFirst({
     where: {
       OR: [{ uidNfc: payload.uidNfc }, { id: payload.operatorId }],
@@ -211,15 +197,6 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
   const poinSetelahUpdate = operator.currentPoint + nilaiPerubahan;
 
   const statusBaru = getStatusFromPoin(poinSetelahUpdate);
-  let alertType = "";
-
-  if (statusBaru === "SP3") {
-    alertType = "SURAT PERINGATAN 3 (SP3)";
-  } else if (statusBaru === "SP2") {
-    alertType = "SURAT PERINGATAN 2 (SP2)";
-  } else if (statusBaru === "SP1") {
-    alertType = "SURAT PERINGATAN 1 (SP1)";
-  }
 
   const bukti_foto = imageFile
     ? `/uploads/poin-images/${imageFile.filename}`
@@ -234,9 +211,9 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     suspendedUntil.setMonth(suspendedUntil.getMonth() + 6);
   }
 
-  // 3. Simpan Transaksi & Update Saldo User secara Atomik (Transaction)
+  // Simpan Transaksi & Update Saldo User secara Atomik (Transaction)
   const result = await prisma.$transaction(async (tx) => {
-    // Update data di tabel User
+    // Update data di tabel User (cache)
     await tx.user.update({
       where: { id: operator.id },
       data: {
@@ -256,7 +233,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
         statusLevel: statusBaru,
         tanggal: now,
         buktiFoto: bukti_foto,
-        keterangan: keterangan || "-",
+        keterangan: (keterangan && keterangan.trim() !== "") ? keterangan : "-",
       },
       include: { tipeDisiplin: true, operator: true },
     });
@@ -334,7 +311,7 @@ const getPoinDashboardStats = async (plant, tanggal) => {
   const users = await prisma.user.findMany({
     where: whereOperator,
     select: {
-      id: true, // WAJIB ADA agar targetUserIds tidak undefined
+      id: true,
       currentPoint: true,
     },
   });
@@ -348,7 +325,6 @@ const getPoinDashboardStats = async (plant, tanggal) => {
     kritis: users.filter((u) => u.currentPoint < 50).length,
   };
 
-  // Jika tidak ada user di plant tersebut, kembalikan response kosong lebih awal
   if (users.length === 0) {
     return {
       summary,
@@ -377,10 +353,8 @@ const getPoinDashboardStats = async (plant, tanggal) => {
   const targetUserIds = users.map((u) => u.id);
 
   // 3. Parallel Fetch untuk Shift Stats & Top Violations
-  // Menggunakan groupBy yang sudah mendukung where clause
   const [shiftStatsRaw, topViolationsRaw, masterShift, masterTipe] =
     await Promise.all([
-      // Group by Shift
       prisma.poinDisiplin.groupBy({
         by: ["shiftId"],
         _count: { id: true },
@@ -389,7 +363,6 @@ const getPoinDashboardStats = async (plant, tanggal) => {
           ...dateFilter,
         },
       }),
-      // Top Violations
       prisma.poinDisiplin.groupBy({
         by: ["tipeDisiplinId"],
         _count: { id: true },
@@ -400,7 +373,6 @@ const getPoinDashboardStats = async (plant, tanggal) => {
         orderBy: { _count: { id: "desc" } },
         take: 4,
       }),
-      // Master Data (Cached-like fetch)
       prisma.shift.findMany(),
       prisma.tipeDisiplin.findMany(),
     ]);
@@ -474,22 +446,17 @@ const getPoinRankings = async (plant) => {
   };
 };
 
-/**
- * Get discipline points history with pagination
- */
 const getPoinHistory = async (filter, options) => {
   const { plant } = filter;
   const page = options.page || 1;
   const limit = options.limit || 10;
   const skip = (page - 1) * limit;
 
-  // Build where clause for operators
   const operatorWhere = {
     role: "PRODUKSI",
     ...(plant && { plant: String(plant) }),
   };
 
-  // Get operator IDs matching the filter
   const operators = await prisma.user.findMany({
     where: operatorWhere,
     select: { id: true },
@@ -497,7 +464,6 @@ const getPoinHistory = async (filter, options) => {
 
   const operatorIds = operators.map((op) => op.id);
 
-  // If no operators found, return empty result
   if (operatorIds.length === 0) {
     return {
       data: [],
@@ -510,12 +476,10 @@ const getPoinHistory = async (filter, options) => {
     };
   }
 
-  // Fetch history with pagination
   const whereClause = {
     operatorId: { in: operatorIds },
   };
 
-  // Add date filtering if provided
   if (filter.tanggal) {
     const startDate = new Date(filter.tanggal);
     startDate.setHours(0, 0, 0, 0);
@@ -562,7 +526,6 @@ const getPoinHistory = async (filter, options) => {
     }),
   ]);
 
-  // Transform data for cleaner response
   const transformedData = data.map((item) => ({
     id: item.id,
     nama_operator: item.operator.nama,
@@ -588,27 +551,21 @@ const getPoinHistory = async (filter, options) => {
   };
 };
 
-/**
- * Get weekly stats for discipline points (last 7 days)
- */
 const getWeeklyStats = async (plant) => {
   const labels = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
   const displayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
-  // Calculate date range (last 7 days)
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  // Build where clause for operators (same pattern as getPoinHistory)
   const operatorWhere = {
     role: "PRODUKSI",
     ...(plant && { plant: String(plant) }),
   };
 
-  // Get operator IDs matching the filter
   const operators = await prisma.user.findMany({
     where: operatorWhere,
     select: { id: true },
@@ -616,7 +573,6 @@ const getWeeklyStats = async (plant) => {
 
   const operatorIds = operators.map((op) => op.id);
 
-  // If no operators found, return empty stats
   if (operatorIds.length === 0) {
     return {
       labels: displayLabels,
@@ -627,7 +583,6 @@ const getWeeklyStats = async (plant) => {
     };
   }
 
-  // Fetch data
   const data = await prisma.poinDisiplin.findMany({
     where: {
       tanggal: {
@@ -641,20 +596,12 @@ const getWeeklyStats = async (plant) => {
     },
   });
 
-  // Initialize result structure
   const statsMap = {};
-  // Fill all 7 days with 0
   for (let i = 0; i < 7; i++) {
-    const d = new Date(sevenDaysAgo);
-    d.setDate(sevenDaysAgo.getDate() + i);
-
-    // Use local YYYY-MM-DD format to match data
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const dateStr = `${year}-${month}-${day}`;
-
-    const dayLabel = labels[d.getDay()];
+    const d = moment(sevenDaysAgo).add(i, "days");
+    const dateStr = d.format("YYYY-MM-DD");
+    const dayLabel = labels[d.day()];
+    
     statsMap[dateStr] = {
       label: dayLabel,
       pelanggaran: 0,
@@ -662,15 +609,8 @@ const getWeeklyStats = async (plant) => {
     };
   }
 
-  // Aggregate data
   data.forEach((item) => {
-    // Use local YYYY-MM-DD format
-    const d = new Date(item.tanggal);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const dateStr = `${year}-${month}-${day}`;
-
+    const dateStr = moment(item.tanggal).format("YYYY-MM-DD");
     if (statsMap[dateStr]) {
       const kategori = item.tipeDisiplin.kategori;
       if (kategori === "PELANGGARAN") {
@@ -681,7 +621,6 @@ const getWeeklyStats = async (plant) => {
     }
   });
 
-  // Sort and format for response
   const seriesPelanggaran = [];
   const seriesPenghargaan = [];
 
@@ -708,37 +647,19 @@ const getWeeklyStats = async (plant) => {
   };
 };
 
-/**
- * Get monthly stats for discipline points (last 12 months)
- */
 const getMonthlyStats = async (plant) => {
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "Mei",
-    "Jun",
-    "Jul",
-    "Agu",
-    "Sep",
-    "Okt",
-    "Nov",
-    "Des",
-  ];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
   const today = new Date();
   const currentYear = today.getFullYear();
   const startOfYear = new Date(currentYear, 0, 1);
   const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
 
-  // Build where clause for operators (same pattern as getWeeklyStats)
   const operatorWhere = {
     role: "PRODUKSI",
     ...(plant && { plant: String(plant) }),
   };
 
-  // Get operator IDs matching the filter
   const operators = await prisma.user.findMany({
     where: operatorWhere,
     select: { id: true },
@@ -746,7 +667,6 @@ const getMonthlyStats = async (plant) => {
 
   const operatorIds = operators.map((op) => op.id);
 
-  // If no operators found, return empty stats
   if (operatorIds.length === 0) {
     const emptyData = new Array(12).fill(0);
     return {
@@ -758,7 +678,6 @@ const getMonthlyStats = async (plant) => {
     };
   }
 
-  // Fetch data for the current year
   const data = await prisma.poinDisiplin.findMany({
     where: {
       tanggal: {
@@ -772,7 +691,6 @@ const getMonthlyStats = async (plant) => {
     },
   });
 
-  // Generate January to December list
   const months = [];
   for (let i = 0; i < 12; i++) {
     months.push({
@@ -784,10 +702,8 @@ const getMonthlyStats = async (plant) => {
     });
   }
 
-  // Aggregate data
   data.forEach((item) => {
-    const itemDate = new Date(item.tanggal);
-    const itemMonth = itemDate.getMonth();
+    const itemMonth = new Date(item.tanggal).getMonth();
 
     const monthData = months[itemMonth];
     if (monthData) {
@@ -815,9 +731,6 @@ const getMonthlyStats = async (plant) => {
   };
 };
 
-/**
- * Get user by NFC for discipline preview
- */
 const getUserByNfc = async (uidNfc) => {
   const user = await prisma.user.findUnique({
     where: { uidNfc },
@@ -849,7 +762,6 @@ const getUserByNfc = async (uidNfc) => {
     throw new ApiError(httpStatus.BAD_REQUEST, "User tidak aktif");
   }
 
-  // Check suspension
   if (user.suspendedUntil && new Date(user.suspendedUntil) > new Date()) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
@@ -857,14 +769,10 @@ const getUserByNfc = async (uidNfc) => {
     );
   }
 
-  // Remove sensitive data
   const { password, ...safeUser } = user;
   return safeUser;
 };
 
-/**
- * Record violation using NFC
- */
 const createPelanggaranByNfc = async (payload, staffId) => {
   const { uidNfc, tipeDisiplinId, shiftId, keterangan } = payload;
 
@@ -884,7 +792,6 @@ const createPelanggaranByNfc = async (payload, staffId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, "Operator tidak aktif");
   }
 
-  // Check suspension
   if (
     operator.suspendedUntil &&
     new Date(operator.suspendedUntil) > new Date()
@@ -895,7 +802,6 @@ const createPelanggaranByNfc = async (payload, staffId) => {
     );
   }
 
-  // Delegate to existing logic by preparing payload with operatorId
   const enrichedPayload = {
     operatorId: operator.id,
     tipeDisiplinId,
@@ -906,15 +812,64 @@ const createPelanggaranByNfc = async (payload, staffId) => {
   return createPelanggaran(enrichedPayload, staffId);
 };
 
+const resetAllUsersPoints = async () => {
+  const sekarang = new Date();
+
+  // Ambil semua user PRODUKSI
+  const users = await prisma.user.findMany({
+    where: { role: "PRODUKSI" },
+  });
+
+  // Proses satu per satu untuk mengecek status sanksi dan poin saat ini
+  const updatePromises = users.map(async (user) => {
+    const currentTotal = await getUserCurrentPoin(user.id);
+    const status = getStatusFromPoin(currentTotal);
+
+    // 1. SP3: Skip total (Tidak ikut reset)
+    if (status === "SP3") {
+      return Promise.resolve();
+    }
+
+    // 2. Cek Masa SPAktif (SP1/SP2 yang masih berjalan)
+    const masihSP =
+      (status === "SP1" || status === "SP2") &&
+      user.suspendedUntil &&
+      sekarang < user.suspendedUntil;
+
+    if (masihSP) {
+      // TIDAK di-reset jika masih dalam masa SP aktif.
+      return Promise.resolve();
+    }
+
+    // 3. Tentukan saldo baru untuk siklus baru
+    // Jika poin saat ini >= 100, pertahankan prestasinya sebagai saldo awal.
+    // Jika poin < 100, reset saldo awal ke 100.
+    const poinBaru = currentTotal >= 100 ? currentTotal : BASE_POINT;
+
+    // Perbarui siklus poin untuk semua yang lolos pengecekan di atas
+    return prisma.user.update({
+      where: { id: user.id },
+      data: {
+        currentPoint: poinBaru,
+        pointCycleStart: sekarang, // Reset siklus per hari ini
+        suspendedUntil: null, // Hapus masa sanksi karena siklus baru dimulai
+      },
+    });
+  });
+
+  return Promise.all(updatePromises);
+};
+
 export default {
   getFormData,
-  getUserCurrentPoin,
   createPelanggaran,
+  getUserCurrentPoin,
   getPoinDashboardStats,
   getPoinRankings,
   getPoinHistory,
   getWeeklyStats,
   getMonthlyStats,
+  resetAllUsersPoints,
   getUserByNfc,
   createPelanggaranByNfc,
 };

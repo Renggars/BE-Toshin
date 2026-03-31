@@ -549,14 +549,74 @@ const getDashboardSummary = async (filterTanggal) => {
 };
 
 const getWeeklyTrend = async () => {
-  // Logic untuk mengambil data 7 hari terakhir dan memetakan ke array
-  const startOfWeek = moment().startOf("week").toDate();
-  const trendData = await prisma.rencanaProduksi.groupBy({
-    by: ["tanggal"],
-    _sum: { id: true }, // Simulasi hitung volume
-    where: { tanggal: { gte: startOfWeek } },
+  // 1. Tentukan rentang waktu 7 hari ke belakang dari hari ini
+  const targetDate = moment();
+  const weekStart = targetDate.clone().subtract(6, "days").startOf("day").toDate();
+  const weekEnd = targetDate.clone().endOf("day").toDate();
+
+  // 2. Ambil data Rencana Produksi (Target)
+  const weeklyRph = await prisma.rencanaProduksi.findMany({
+    where: {
+      tanggal: { gte: weekStart, lte: weekEnd },
+    },
+    select: {
+      tanggal: true,
+      target: {
+        select: { totalTarget: true },
+      },
+    },
   });
-  return trendData;
+
+  // 3. Ambil data LRP (Aktual)
+  const weeklyLrp = await prisma.laporanRealisasiProduksi.findMany({
+    where: {
+      tanggal: { gte: weekStart, lte: weekEnd },
+    },
+    select: {
+      tanggal: true,
+      qtyTotalProd: true,
+    },
+  });
+
+  // 4. Inisialisasi map untuk 7 hari terakhir
+  const trendMap = {};
+  for (let i = 0; i < 7; i++) {
+    const dateStr = targetDate.clone().subtract(6 - i, "days").format("YYYY-MM-DD");
+    trendMap[dateStr] = {
+      date: dateStr,
+      totalProduction: 0,
+      totalTarget: 0,
+      percentage: 0,
+    };
+  }
+
+  // 5. Agregasi target dari RPH
+  weeklyRph.forEach((rph) => {
+    const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
+    if (trendMap[dateKey]) {
+      trendMap[dateKey].totalTarget += rph.target?.totalTarget || 0;
+    }
+  });
+
+  // 6. Agregasi aktual dari LRP
+  weeklyLrp.forEach((lrp) => {
+    const dateKey = moment(lrp.tanggal).format("YYYY-MM-DD");
+    if (trendMap[dateKey]) {
+      trendMap[dateKey].totalProduction += lrp.qtyTotalProd || 0;
+    }
+  });
+
+  // 7. Hitung persentase
+  const results = Object.values(trendMap).map((item) => {
+    return {
+      ...item,
+      percentage: item.totalTarget > 0 
+        ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
+        : 0,
+    };
+  });
+
+  return results;
 };
 
 const searchOperator = async (query) => {
@@ -819,7 +879,7 @@ const closeRph = async (rphId) => {
     where: { id: rphId },
     data: {
       status: "CLOSED",
-      end_time: new Date(),
+      endTime: new Date(),
     },
   });
 
