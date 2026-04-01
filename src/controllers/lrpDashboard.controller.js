@@ -27,9 +27,6 @@ const getDashboardSummary = catchAsync(async (req, res) => {
   });
 });
 
-// Redundant endpoints consolidated into getDashboardSummary
-// Removing: getTrendBulananHarian, getTrendBulanan, getOkVsNg, getLrpList
-
 const getLrpDetail = catchAsync(async (req, res) => {
   const result = await lrpDashboardService.getLrpDetail(
     Number(req.params.lrpId),
@@ -40,7 +37,6 @@ const getLrpDetail = catchAsync(async (req, res) => {
   });
 });
 
-// Removed synchronous exportData as per request.
 const updateLrp = catchAsync(async (req, res) => {
   const result = await lrpService.updateLrpById(
     Number(req.params.lrpId),

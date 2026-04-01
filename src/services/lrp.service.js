@@ -165,6 +165,12 @@ const queryLrps = async (filter, options) => {
       operator: true,
       mesin: true,
       shift: true,
+      rencanaProduksi: {
+        include: {
+          produk: true,
+          jenisPekerjaan: true,
+        },
+      },
     },
   });
 
@@ -191,6 +197,12 @@ const getLrpById = async (id) => {
       operator: true,
       mesin: true,
       shift: true,
+      rencanaProduksi: {
+        include: {
+          produk: true,
+          jenisPekerjaan: true,
+        },
+      },
     },
   });
 };

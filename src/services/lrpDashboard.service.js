@@ -303,7 +303,7 @@ const getLrpList = async (filter) => {
       mesin: true,
       shift: true,
       operator: true,
-      rencanaProduksi: { include: { jenisPekerjaan: true } },
+      rencanaProduksi: { include: { jenisPekerjaan: true, produk: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -322,6 +322,8 @@ const getLrpList = async (filter) => {
       tanggal: lrp.tanggal,
       namaShift: lrp.shift?.namaShift || "-",
       namaMesin: lrp.mesin?.namaMesin || "-",
+      produk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
+      namaProduk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
       noKanagata: lrp.noKanagata,
       noLot: lrp.noLot,
       qtyOk: lrp.qtyOk,
