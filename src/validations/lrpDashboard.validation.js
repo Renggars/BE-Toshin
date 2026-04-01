@@ -12,9 +12,6 @@ const getDashboardSummary = {
   }),
 };
 
-// Redundant validations consolidated into getDashboardSummary
-// Removing: getTrendBulananHarian, getTrendBulanan, getOkVsNg, getLrpList
-
 const getLrpDetail = {
   params: Joi.object().keys({
     lrpId: Joi.number().integer().required(),
