@@ -16,4 +16,10 @@ router.get(
   attendanceController.getPresent,
 );
 
+router.put(
+  "/update",
+  auth("ADMIN", "SUPERVISOR"),
+  attendanceController.updateAttendance,
+);
+
 export default router;
