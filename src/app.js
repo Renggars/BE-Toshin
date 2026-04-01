@@ -64,6 +64,7 @@ app.use(compression());
 // Static Files
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 app.use("/exports", express.static(path.join(process.cwd(), "public/exports")));
+app.use("/app-releases", express.static(path.join(process.cwd(), "storage/releases")));
 
 // Route dasar
 app.get("/", (req, res) => {
