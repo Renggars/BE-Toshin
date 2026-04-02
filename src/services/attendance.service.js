@@ -49,6 +49,8 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
       const attendance = r.attendance.length > 0 ? r.attendance[0] : null;
 
       return {
+        rph_id: r.id,
+        operator_id: r.operator.id,
         nama: r.operator.nama,
         statusAbsen: attendance ? "Hadir" : "Belum Hadir",
         is_terlambat: attendance ? attendance.isTerlambat : false,
@@ -216,8 +218,80 @@ const clockIn = async (user, req) => {
   }
 };
 
+const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId }) => {
+  const rph = await prisma.rencanaProduksi.findUnique({
+    where: { id: parseInt(rphId) },
+    include: { shift: true }
+  });
+
+  if (!rph) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Rencana Produksi tidak ditemukan");
+  }
+
+  const existingAttendance = await prisma.attendance.findFirst({
+    where: { rphId: rph.id, userId: parseInt(userId) },
+  });
+
+  if (action === "TIDAK_HADIR") {
+    if (existingAttendance) {
+      await prisma.attendance.delete({ where: { id: existingAttendance.id } });
+    }
+    return { success: true, message: "Kehadiran dihapus, status menjadi Tidak Hadir" };
+  }
+
+  const isTerlambat = action === "TERLAMBAT";
+  let attendanceRecord;
+
+  if (existingAttendance) {
+    attendanceRecord = await prisma.attendance.update({
+      where: { id: existingAttendance.id },
+      data: { isTerlambat },
+    });
+  } else {
+    // Determine the tap time for a manual present mark - lets use start of shift + a bit, or current time
+    // Better to use current time or start of shift. Let's use current time.
+    const now = new Date();
+    attendanceRecord = await prisma.attendance.create({
+      data: {
+        userId: parseInt(userId),
+        rphId: rph.id,
+        jamTap: now,
+        tanggal: new Date(tanggal),
+        isTerlambat,
+      },
+    });
+  }
+
+  // Jika diset terlambat, otomatis potong point (jika belum dipotong)
+  // Untuk menyederhanakan, kita hanya mencatat poin jika dibuat Manual
+  if (isTerlambat && !existingAttendance?.isTerlambat) {
+    try {
+      const tipeDisiplin = await prisma.tipeDisiplin.findUnique({
+        where: { kode: "P01" },
+      });
+
+      if (tipeDisiplin) {
+        await poinService.createPelanggaran(
+          {
+            operatorId: parseInt(userId),
+            tipeDisiplinId: tipeDisiplin.id,
+            shiftId: rph.shiftId,
+            keterangan: `Supervisor/Admin: Manual set terlambat`,
+          },
+          adminId,
+        );
+      }
+    } catch (error) {
+       console.error("[ManualAttendance] Gagal mencatat poin disiplin otomatis:", error);
+    }
+  }
+
+  return attendanceRecord;
+};
+
 export default {
   getScheduledUsers,
   getPresentUsers,
   clockIn,
+  updateAttendanceManual,
 };
