@@ -295,7 +295,14 @@ const getTrendBulanan = async (filter) => {
 };
 
 const getLrpList = async (filter) => {
+  const { page = 1, limit = 10 } = filter;
+  const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+
   const where = buildFilterWhereClause(filter);
+
+  // Get total count for pagination metadata
+  const totalItems = await prisma.laporanRealisasiProduksi.count({ where });
 
   const data = await prisma.laporanRealisasiProduksi.findMany({
     where,
@@ -306,6 +313,8 @@ const getLrpList = async (filter) => {
       rencanaProduksi: { include: { jenisPekerjaan: true, produk: true } },
     },
     orderBy: { createdAt: "desc" },
+    skip,
+    take,
   });
 
   const transformedData = data.map((lrp) => {
@@ -338,7 +347,15 @@ const getLrpList = async (filter) => {
     };
   });
 
-  return transformedData;
+  return {
+    data: transformedData,
+    pagination: {
+      total: totalItems,
+      totalPages: Math.ceil(totalItems / take),
+      currentPage: Number(page),
+      limit: take,
+    },
+  };
 };
 
 /**
@@ -780,7 +797,7 @@ const getUnifiedDashboardData = async (filter) => {
     summary,
     trend_bulanan_harian,
     trend_bulanan,
-    lrp_list,
+    lrp_result,
     trend_produksi_press,
   ] = await Promise.all([
     getDashboardSummary(filter),
@@ -794,7 +811,8 @@ const getUnifiedDashboardData = async (filter) => {
     summary,
     trend_bulanan_harian,
     trend_bulanan,
-    lrp_list,
+    lrp_list: lrp_result.data,
+    pagination: lrp_result.pagination,
     trend_produksi_press,
   };
 };
