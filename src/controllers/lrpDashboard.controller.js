@@ -14,6 +14,8 @@ const getDashboardSummary = catchAsync(async (req, res) => {
     "jenisPekerjaanId",
     "produkId",
     "plant",
+    "page",
+    "limit",
   ]);
 
   if (!filter.startDate && !filter.endDate) {

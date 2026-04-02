@@ -426,6 +426,7 @@ const getDashboardSummary = async (filterTanggal) => {
     select: {
       id: true,
       namaShift: true,
+      tipeShift: true,
       jamMasuk: true,
       jamKeluar: true,
     },
@@ -452,6 +453,7 @@ const getDashboardSummary = async (filterTanggal) => {
     return {
       id: s.id,
       nama: s.namaShift,
+      type: s.tipeShift,
       jam: `${s.jamMasuk} - ${s.jamKeluar}`,
       target,
       tercapai,
