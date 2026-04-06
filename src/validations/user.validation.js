@@ -96,10 +96,17 @@ const deactivateUser = {
   }),
 };
 
+const getUserByEmail = {
+  query: Joi.object().keys({
+    email: Joi.string().email().required(),
+  }),
+};
+
 export default {
   register,
   login,
   getUser,
   updateUser,
   deactivateUser,
+  getUserByEmail,
 };
