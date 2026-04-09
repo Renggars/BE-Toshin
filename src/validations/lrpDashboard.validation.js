@@ -16,7 +16,7 @@ const getDashboardSummary = {
 
 const getLrpDetail = {
   params: Joi.object().keys({
-    lrpId: Joi.number().integer().required(),
+    lrpId: Joi.number().integer().min(1).required(),
   }),
 };
 
@@ -35,7 +35,7 @@ const exportData = {
 
 const updateLrp = {
   params: Joi.object().keys({
-    lrpId: Joi.number().integer().required(),
+    lrpId: Joi.number().integer().min(1).required(),
   }),
   body: Joi.object()
     .keys({
@@ -50,7 +50,7 @@ const updateLrp = {
 
 const deleteLrp = {
   params: Joi.object().keys({
-    lrpId: Joi.number().integer().required(),
+    lrpId: Joi.number().integer().min(1).required(),
   }),
 };
 
