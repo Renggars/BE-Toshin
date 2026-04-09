@@ -8,7 +8,7 @@ const byMesin = catchAsync(async (req, res) => {
 });
 
 const byShift = catchAsync(async (req, res) => {
-  res.json(await oeeService.getOEEByShift(req.params.shiftId));
+  res.json(await oeeService.getOEEByShift(req.params.id));
 });
 
 const plantSummary = catchAsync(async (req, res) => {
