@@ -59,9 +59,32 @@ const deleteLrp = catchAsync(async (req, res) => {
   });
 });
 
+const exportExcel = catchAsync(async (req, res) => {
+  const filter = pick(req.query, [
+    "startDate",
+    "endDate",
+    "mesinId",
+    "shiftId",
+    "jenisPekerjaanId",
+    "produkId",
+    "plant",
+  ]);
+
+  const buffer = await lrpDashboardService.exportData(filter);
+
+  const filename = `LRP_Export_${moment().format("YYYYMMDD_HHmmss")}.xlsx`;
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+  res.send(buffer);
+});
+
 export default {
   getDashboardSummary,
   getLrpDetail,
   updateLrp,
   deleteLrp,
+  exportExcel,
 };

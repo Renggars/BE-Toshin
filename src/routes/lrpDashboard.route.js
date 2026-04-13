@@ -19,6 +19,12 @@ router.get(
   lrpDashboardController.getDashboardSummary,
 );
 
+router.get(
+  "/export",
+  dashboardAuth,
+  validate(lrpDashboardValidation.exportData),
+  lrpDashboardController.exportExcel,
+);
 
 // Async Export Endpoints
 router.post(
