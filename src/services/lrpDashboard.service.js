@@ -502,9 +502,8 @@ const exportData = async (filter) => {
   // SHEET 2 — TREND HARIAN
   // ═══════════════════════════════════════════════════════════════════════════
   const ws2 = {};
-  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${
-    trendHarian.year
-  }`;
+  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${trendHarian.year
+    }`;
   ["A", "B", "C", "D", "E"].forEach((c) => {
     ws2[`${c}1`] = { v: c === "A" ? thTitle : "", s: hdr() };
   });
@@ -516,9 +515,8 @@ const exportData = async (filter) => {
   trendHarian.data.forEach((d, i) => {
     const row = i + 3;
     const isAlt = i % 2 === 0;
-    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${
-      trendHarian.year
-    }`;
+    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${trendHarian.year
+      }`;
     ws2[`A${row}`] = { v: ds, s: cellS(isAlt) };
     ws2[`B${row}`] = { v: d.ok, s: numS(C.okGreen, isAlt) };
     ws2[`C${row}`] = { v: d.ng, s: numS(C.ngRed, isAlt) };

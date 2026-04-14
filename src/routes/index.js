@@ -15,6 +15,7 @@ import notificationRoute from "./notification.route.js";
 import healthRoute from "./health.route.js";
 import metricsRoute from "./metrics.route.js";
 import hardwareRoute from "./hardware.route.js";
+import appVersionRoute from "./appVersion.route.js";
 
 const router = express.Router();
 
@@ -83,6 +84,10 @@ const defaultRoutes = [
     path: "/hardware",
     route: hardwareRoute,
   },
+  {
+    path: "/app-version",
+    route: appVersionRoute,
+  },
 ];
 
 defaultRoutes.forEach((route) => {
@@ -90,3 +95,4 @@ defaultRoutes.forEach((route) => {
 });
 
 export default router;
+

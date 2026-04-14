@@ -548,15 +548,91 @@ const getDashboardSummary = async (filterTanggal) => {
   };
 };
 
-const getWeeklyTrend = async () => {
-  // Logic untuk mengambil data 7 hari terakhir dan memetakan ke array
-  const startOfWeek = moment().startOf("week").toDate();
-  const trendData = await prisma.rencanaProduksi.groupBy({
-    by: ["tanggal"],
-    _sum: { id: true }, // Simulasi hitung volume
-    where: { tanggal: { gte: startOfWeek } },
+const getWeeklyTrend = async (filterTanggal) => {
+  const dateStr = filterTanggal || moment().format("YYYY-MM-DD");
+  const targetDate = moment(dateStr);
+
+  const weekStart = targetDate
+    .clone()
+    .subtract(6, "days")
+    .startOf("day")
+    .toDate();
+  const weekEnd = targetDate.clone().endOf("day").toDate();
+
+  // 1. Ambil target dari Rencana Produksi (RPH)
+  const weeklyData = await prisma.rencanaProduksi.findMany({
+    where: {
+      tanggal: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
+      status: { not: "PLANNED" } // Opsi: hanya menghitung target yang sudah/sedang aktif
+    },
+    select: {
+      tanggal: true,
+      target: {
+        select: {
+          totalTarget: true,
+        },
+      },
+    },
   });
-  return trendData;
+
+  // 2. Ambil aktual produksi dari LRP
+  const weeklyLrpData = await prisma.laporanRealisasiProduksi.findMany({
+    where: {
+      tanggal: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
+    },
+    select: {
+      tanggal: true,
+      qtyTotalProd: true,
+    },
+  });
+
+  // 3. Group by date
+  const trendByDate = {};
+  for (let i = 0; i < 7; i++) {
+    const date = targetDate
+      .clone()
+      .subtract(6 - i, "days")
+      .format("YYYY-MM-DD");
+    trendByDate[date] = {
+      date: date,
+      tanggal: date,
+      target_achievement: 0,
+      total_production: 0,
+      percentage: 0,
+    };
+  }
+
+  // Aggregate target
+  weeklyData.forEach((rph) => {
+    const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
+    if (trendByDate[dateKey]) {
+      trendByDate[dateKey].target_achievement += rph.target?.totalTarget || 0;
+    }
+  });
+
+  // Aggregate aktual
+  weeklyLrpData.forEach((lrp) => {
+    const dateKey = moment(lrp.tanggal).format("YYYY-MM-DD");
+    if (trendByDate[dateKey]) {
+      trendByDate[dateKey].total_production += lrp.qtyTotalProd || 0;
+    }
+  });
+
+  // Calculate percentage
+  Object.keys(trendByDate).forEach((key) => {
+    const data = trendByDate[key];
+    if (data.target_achievement > 0) {
+      data.percentage = parseFloat(((data.total_production / data.target_achievement) * 100).toFixed(1));
+    }
+  });
+
+  return Object.values(trendByDate);
 };
 
 const searchOperator = async (query) => {
