@@ -22,7 +22,8 @@ const getDashboardSummary = catchAsync(async (req, res) => {
 });
 
 const getWeeklyTrend = catchAsync(async (req, res) => {
-  const trend = await rencanaProduksiService.getWeeklyTrend();
+  const { tanggal } = req.query; // Opsional: filter per tanggal
+  const trend = await rencanaProduksiService.getWeeklyTrend(tanggal);
   res.send(trend);
 });
 

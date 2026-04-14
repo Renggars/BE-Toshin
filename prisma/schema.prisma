@@ -212,17 +212,29 @@ model Oee {
   id              Int      @id @default(autoincrement())
   mesinId         Int      @map("fk_id_mesin")
   shiftId         Int?     @map("fk_id_shift")
+  tanggal         DateTime @db.Date
+
   availability    Float    @default(0)
   performance     Float    @default(0)
   quality         Float    @default(0)
   oeeScore        Float    @default(0) @map("oee_score")
+
   loadingTime     Int      @map("loading_time")
   downtime        Int      @default(0)
+  idealCycleTime  Float?   @map("ideal_cycle_time")
+  actualCycleTime Float?   @map("actual_cycle_time")
+
   totalOutput     Int      @default(0) @map("total_output")
   totalOk         Int      @default(0) @map("total_ok")
-  tanggal         DateTime @db.Date
+  totalNg         Int      @default(0) @map("total_ng")
+  totalRework     Int      @default(0) @map("total_rework")
+
+  targetProduksi    Int?     @default(0) @map("target_produksi") 
+  gapProduksi       Int?     @default(0) @map("gap_produksi")    
+  predictedOutput   Int?     @map("predicted_output")            
+  downtimeSignature String?  @db.Text @map("downtime_signature")
+
   createdAt       DateTime @default(now()) @map("created_at")
-  idealCycleTime  Float?   @map("ideal_cycle_time")
   mesin           Mesin    @relation(fields: [mesinId], references: [id])
   shift           Shift?   @relation(fields: [shiftId], references: [id])
 

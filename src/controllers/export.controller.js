@@ -10,6 +10,10 @@ import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import ApiError from "../utils/ApiError.js";
 import { exportQueue } from "../queues/exportQueue.js";
+import lrpDashboardService from "../services/lrpDashboard.service.js"; // Import tambahan
+import fs from "fs";                                                 // Import tambahan
+import path from "path";                                             // Import tambahan
+import { v4 as uuidv4 } from "uuid";                                 // Import tambahan
 
 /**
  * Mendaftarkan pekerjaan export data LRP ke antrean (Queue)
@@ -27,7 +31,32 @@ const requestExport = catchAsync(async (req, res) => {
     produkId: req.query.produkId,
   };
 
-  // 1. Cek apakah user memiliki tugas yang sedang aktif/menunggu untuk Export
+  // [Fallback Tanpa Redis] Jika exportQueue disabled (null), generate file secara sinkron
+  if (!exportQueue) {
+    try {
+      const buffer = await lrpDashboardService.exportData(filter);
+      
+      const exportsDir = path.join(process.cwd(), "public", "exports");
+      if (!fs.existsSync(exportsDir)) {
+        fs.mkdirSync(exportsDir, { recursive: true });
+      }
+      
+      const uid = uuidv4();
+      const fileName = `lrp_export_${userId}_${uid}.xlsx`;
+      const filePath = path.join(exportsDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+      
+      return res.status(httpStatus.ACCEPTED).json({
+        status: "success",
+        message: "Request export berhasil secara sinkron.",
+        jobId: "sync_" + fileName,
+      });
+    } catch (err) {
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Gagal membuat export secara sinkron: " + err.message);
+    }
+  }
+
+  // 1. Cek apakah user memiliki tugas yang sedang aktif/menunggu untuk Export di Redis
   const activeJobs = await exportQueue.getJobs(["active", "waiting"]);
   const userHasActiveJob = activeJobs.find(
     (job) => job.name === "export-data" && job.data.userId === userId,
@@ -62,6 +91,21 @@ const requestExport = catchAsync(async (req, res) => {
 const getExportStatus = catchAsync(async (req, res) => {
   const { jobId } = req.params;
   const userId = req.user.id;
+
+  // [Fallback Tanpa Redis] Jika jobId berawalan 'sync_', file telah selesai digenerate seketika
+  if (jobId.startsWith("sync_")) {
+    const fileName = jobId.replace("sync_", "");
+    const downloadUrl = `/exports/${fileName}`;
+    return res.status(httpStatus.OK).json({
+      status: "completed",
+      message: "Data berhasil diexport.",
+      downloadUrl,
+    });
+  }
+
+  if (!exportQueue) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Job async tidak valid namun redis tidak berjalan.");
+  }
 
   const job = await exportQueue.getJob(jobId);
   if (!job) {
