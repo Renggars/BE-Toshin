@@ -550,29 +550,43 @@ const getDashboardSummary = async (filterTanggal) => {
   };
 };
 
-const getWeeklyTrend = async () => {
-  // 1. Tentukan rentang waktu 7 hari ke belakang dari hari ini
-  const targetDate = moment();
-  const weekStart = targetDate.clone().subtract(6, "days").startOf("day").toDate();
+const getWeeklyTrend = async (filterTanggal) => {
+  const dateStr = filterTanggal || moment().format("YYYY-MM-DD");
+  const targetDate = moment(dateStr);
+
+  const weekStart = targetDate
+    .clone()
+    .subtract(6, "days")
+    .startOf("day")
+    .toDate();
   const weekEnd = targetDate.clone().endOf("day").toDate();
 
-  // 2. Ambil data Rencana Produksi (Target)
-  const weeklyRph = await prisma.rencanaProduksi.findMany({
+  // 1. Ambil target dari Rencana Produksi (RPH)
+  const weeklyData = await prisma.rencanaProduksi.findMany({
     where: {
-      tanggal: { gte: weekStart, lte: weekEnd },
+      tanggal: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
+      status: { not: "PLANNED" }, // Opsi: hanya menghitung target yang sudah/sedang aktif
     },
     select: {
       tanggal: true,
       target: {
-        select: { totalTarget: true },
+        select: {
+          totalTarget: true,
+        },
       },
     },
   });
 
-  // 3. Ambil data LRP (Aktual)
-  const weeklyLrp = await prisma.laporanRealisasiProduksi.findMany({
+  // 2. Ambil aktual produksi dari LRP
+  const weeklyLrpData = await prisma.laporanRealisasiProduksi.findMany({
     where: {
-      tanggal: { gte: weekStart, lte: weekEnd },
+      tanggal: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
     },
     select: {
       tanggal: true,
@@ -580,45 +594,49 @@ const getWeeklyTrend = async () => {
     },
   });
 
-  // 4. Inisialisasi map untuk 7 hari terakhir
-  const trendMap = {};
+  // 3. Group by date
+  const trendByDate = {};
   for (let i = 0; i < 7; i++) {
-    const dateStr = targetDate.clone().subtract(6 - i, "days").format("YYYY-MM-DD");
-    trendMap[dateStr] = {
-      date: dateStr,
-      totalProduction: 0,
-      totalTarget: 0,
+    const date = targetDate
+      .clone()
+      .subtract(6 - i, "days")
+      .format("YYYY-MM-DD");
+    trendByDate[date] = {
+      date: date,
+      tanggal: date,
+      target_achievement: 0,
+      total_production: 0,
       percentage: 0,
     };
   }
 
-  // 5. Agregasi target dari RPH
-  weeklyRph.forEach((rph) => {
+  // Aggregate target
+  weeklyData.forEach((rph) => {
     const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
-    if (trendMap[dateKey]) {
-      trendMap[dateKey].totalTarget += rph.target?.totalTarget || 0;
+    if (trendByDate[dateKey]) {
+      trendByDate[dateKey].target_achievement += rph.target?.totalTarget || 0;
     }
   });
 
-  // 6. Agregasi aktual dari LRP
-  weeklyLrp.forEach((lrp) => {
+  // Aggregate aktual
+  weeklyLrpData.forEach((lrp) => {
     const dateKey = moment(lrp.tanggal).format("YYYY-MM-DD");
-    if (trendMap[dateKey]) {
-      trendMap[dateKey].totalProduction += lrp.qtyTotalProd || 0;
+    if (trendByDate[dateKey]) {
+      trendByDate[dateKey].total_production += lrp.qtyTotalProd || 0;
     }
   });
 
-  // 7. Hitung persentase
-  const results = Object.values(trendMap).map((item) => {
-    return {
-      ...item,
-      percentage: item.totalTarget > 0 
-        ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
-        : 0,
-    };
+  // Calculate percentage
+  Object.keys(trendByDate).forEach((key) => {
+    const data = trendByDate[key];
+    if (data.target_achievement > 0) {
+      data.percentage = parseFloat(
+        ((data.total_production / data.target_achievement) * 100).toFixed(1),
+      );
+    }
   });
 
-  return results;
+  return Object.values(trendByDate);
 };
 
 const searchOperator = async (query) => {
