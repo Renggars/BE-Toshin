@@ -43,7 +43,7 @@ global.__LRPD_MOCKS__ = {
     get: jest.fn(),
     set: jest.fn(),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 

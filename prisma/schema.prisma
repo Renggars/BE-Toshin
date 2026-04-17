@@ -353,11 +353,10 @@ model User {
   status                                String?                    @default("active")
   suspendedUntil                        DateTime?                  @map("suspended_until")
   uidNfc                                String?                    @unique @map("uid_nfc")
-  email                                 String                     @unique
   password                              String
   plant                                 String
   line                                  String
-  noReg                                 String?                    @map("no_reg")
+  noReg                                 String                     @unique @map("no_reg")
   andonCall                             AndonCall[]
   andonEventOperator                    AndonEvent[]               @relation("andon_event_fk_id_operatorTouser")
   andonEventResolvedBy                  AndonEvent[]               @relation("andon_event_resolved_byTouser")

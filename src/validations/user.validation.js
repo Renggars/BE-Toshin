@@ -4,7 +4,7 @@ import { password } from "./custom.validation.js";
 const register = {
   body: Joi.object().keys({
     nama: Joi.string().required(),
-    email: Joi.string().email().required(),
+    noReg: Joi.string().required(),
     password: Joi.string().custom(password).required(),
     uidNfc: Joi.string().optional().allow(null, ""),
     divisiId: Joi.number().integer().required(),
@@ -56,7 +56,6 @@ const updateUser = {
   body: Joi.object()
     .keys({
       nama: Joi.string().optional(),
-      email: Joi.string().email().optional(),
       password: Joi.string().custom(password).optional(),
       uidNfc: Joi.string().optional().allow(null, ""),
       divisiId: Joi.number().integer().optional(),
@@ -96,11 +95,6 @@ const deactivateUser = {
   }),
 };
 
-const getUserByEmail = {
-  query: Joi.object().keys({
-    email: Joi.string().email().required(),
-  }),
-};
 
 export default {
   register,
@@ -108,5 +102,4 @@ export default {
   getUser,
   updateUser,
   deactivateUser,
-  getUserByEmail,
 };

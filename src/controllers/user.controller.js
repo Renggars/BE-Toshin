@@ -22,11 +22,6 @@ const getUser = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success get user", result);
 });
 
-const getUserByEmail = catchAsync(async (req, res) => {
-  const { email } = req.query;
-  const result = await userService.getUserByEmail(email);
-  responseApiSuccess(res, "Success get user", result);
-});
 
 const updateUser = catchAsync(async (req, res) => {
   const result = await userService.updateUserById(
@@ -52,7 +47,6 @@ const getCurrentUser = catchAsync(async (req, res) => {
 export default {
   getUsers,
   getUser,
-  getUserByEmail,
   createUser,
   updateUser,
   getCurrentUser,

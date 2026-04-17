@@ -19,14 +19,12 @@ CREATE TABLE `user` (
     `status` VARCHAR(191) NULL DEFAULT 'active',
     `suspended_until` DATETIME(3) NULL,
     `uid_nfc` VARCHAR(191) NULL,
-    `email` VARCHAR(191) NOT NULL,
     `password` VARCHAR(191) NOT NULL,
     `plant` VARCHAR(191) NOT NULL,
     `line` VARCHAR(191) NOT NULL,
     `no_reg` VARCHAR(191) NULL,
 
     UNIQUE INDEX `user_uid_nfc_key`(`uid_nfc`),
-    UNIQUE INDEX `user_email_key`(`email`),
     INDEX `user_fk_id_divisi_fkey`(`fk_id_divisi`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

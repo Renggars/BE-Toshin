@@ -27,21 +27,21 @@ const loginWithNfc = async (uidNfc, req) => {
 };
 
 /**
- * Login dengan Email & Password
- * @param {string} email
+ * Login dengan No Registrasi & Password
+ * @param {string} noReg
  * @param {string} password
  * @returns {Promise<User>}
  */
-const loginWithEmail = async (email, password, req) => {
-  const user = await userService.getUserByEmail(email);
+const loginWithNoReg = async (noReg, password, req) => {
+  const user = await userService.getUserByNoReg(noReg);
 
   if (!user) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Email atau password salah");
+    throw new ApiError(httpStatus.UNAUTHORIZED, "No Registrasi atau password salah");
   }
 
   const isPasswordMatch = await bcrypt.compare(password, user.password);
   if (!isPasswordMatch) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Email atau password salah");
+    throw new ApiError(httpStatus.UNAUTHORIZED, "No Registrasi atau password salah");
   }
 
   if (user.status === "suspended") {
@@ -51,10 +51,10 @@ const loginWithEmail = async (email, password, req) => {
   await attendanceService.clockIn(user, req);
 
   // Return fresh user data to include updated points
-  return userService.getUserByEmail(email);
+  return userService.getUserByNoReg(noReg);
 };
 
 export default {
   loginWithNfc,
-  loginWithEmail,
+  loginWithNoReg,
 };

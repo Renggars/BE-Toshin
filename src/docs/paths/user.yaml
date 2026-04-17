@@ -39,25 +39,6 @@
             schema:
               $ref: "../components/schemas/user.schema.yaml#/UserList"
 
-/users/searchByEmail:
-  get:
-    summary: Get user by email
-    tags:
-      - User
-    parameters:
-      - in: query
-        name: email
-        schema:
-          type: string
-        required: true
-    responses:
-      200:
-        description: Success get user
-        content:
-          application/json:
-            schema:
-              $ref: "../components/schemas/user.schema.yaml#/GeneralResponse"
-
 /users/upload-photo:
   post:
     summary: Upload user photo

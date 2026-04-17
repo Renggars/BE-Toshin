@@ -32,7 +32,7 @@ global.__NOTIF_MOCKS__ = {
         }
     ),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 

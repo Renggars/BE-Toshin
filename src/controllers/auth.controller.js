@@ -10,10 +10,10 @@ import rencanaProduksiService from "../services/rencanaProduksi.service.js";
 import moment from "moment";
 
 const register = catchAsync(async (req, res) => {
-  // Cek apakah email sudah terdaftar
-  const existingUserByEmail = await userService.getUserByEmail(req.body.email);
-  if (existingUserByEmail) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Email sudah terdaftar");
+  // Cek apakah noReg sudah terdaftar
+  const existingUserByNoReg = await userService.getUserByNoReg(req.body.noReg);
+  if (existingUserByNoReg) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "No Registrasi sudah terdaftar");
   }
 
   const user = await userService.createUser(req.body);
@@ -30,17 +30,17 @@ const register = catchAsync(async (req, res) => {
 const login = catchAsync(async (req, res) => {
   let user;
 
-  // Deteksi metode login: NFC atau Email
+  // Deteksi metode login: NFC atau NoReg
   if (req.body.uidNfc) {
     // Login dengan NFC
     user = await authService.loginWithNfc(req.body.uidNfc, req);
-  } else if (req.body.email && req.body.password) {
-    // Login dengan Email & Password
-    user = await authService.loginWithEmail(req.body.email, req.body.password, req);
+  } else if (req.body.noReg && req.body.password) {
+    // Login dengan NoReg & Password
+    user = await authService.loginWithNoReg(req.body.noReg, req.body.password, req);
   } else {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      "Harus menyertakan uidNfc atau (email dan password)",
+      "Harus menyertakan uidNfc atau (noReg dan password)",
     );
   }
 

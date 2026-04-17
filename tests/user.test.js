@@ -7,13 +7,13 @@ global.__USER_MOCKS__ = {
   userService: {
     queryUsers: jest.fn(),
     getUserById: jest.fn(),
-    getUserByEmail: jest.fn(),
+    getUserByNoReg: jest.fn(),
     updateUserById: jest.fn(),
     deactivateUserById: jest.fn(),
     getCurrentUserData: jest.fn(),
     createUser: jest.fn(),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   auth: {
     auth: jest.fn((...requiredRoles) => (req, res, next) => {
       if (!global.__USER_MOCKS__.isLoggedIn) {
@@ -106,31 +106,6 @@ describe("User Controller - Comprehensive Unit Tests", () => {
     });
   });
 
-  // ===========================================================================
-  // GET /user/searchByEmail
-  // ===========================================================================
-  describe("GET /user/searchByEmail", () => {
-    test("✅ should return 200 and user data for valid email", async () => {
-      const mockUser = { id: 2, email: "test@example.com" };
-      userService.getUserByEmail.mockResolvedValue(mockUser);
-
-      const res = await request(app).get("/user/searchByEmail?email=test@example.com");
-
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body.data).toEqual(mockUser);
-    });
-
-    test("❌ should return 400 for invalid email format", async () => {
-      const res = await request(app).get("/user/searchByEmail?email=invalid-email");
-      expect(res.status).toBe(httpStatus.BAD_REQUEST);
-    });
-
-    test("❌ should return 500 if database crashes", async () => {
-      userService.getUserByEmail.mockRejectedValue(new Error("CRASH"));
-      const res = await request(app).get("/user/searchByEmail?email=test@example.com");
-      expect(res.status).toBe(httpStatus.INTERNAL_SERVER_ERROR);
-    });
-  });
 
   // ===========================================================================
   // GET /user/:userId

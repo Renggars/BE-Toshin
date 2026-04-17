@@ -16,7 +16,7 @@ const invalidateUserCache = async () => {
 };
 
 /**
- * Create a user (email and password are required, uid_nfc is optional)
+ * Create a user (noReg and password are required, uid_nfc is optional)
  * @param {Object} userBody
  * @returns {Promise<User>}
  */
@@ -27,7 +27,6 @@ const createUser = async (userBody) => {
   const result = await prisma.user.create({
     data: {
       nama: userBody.nama,
-      email: userBody.email,
       password: hashedPassword,
       uidNfc: userBody.uidNfc || null,
       role: userBody.role,
@@ -36,7 +35,7 @@ const createUser = async (userBody) => {
       plant: userBody.plant,
       line: userBody.line,
       status: "active",
-      noReg: userBody.noReg || null,
+      noReg: userBody.noReg,
       // Set cycle start jika role-nya PRODUKSI
       pointCycleStart:
         userBody.role === "PRODUKSI" ? new Date(new Date().setDate(1)) : null,
@@ -76,7 +75,6 @@ const queryUsers = async (filter) => {
       id: true,
       fotoProfile: true,
       nama: true,
-      email: true,
       role: true,
       divisi: {
         select: {
@@ -100,17 +98,16 @@ const queryUsers = async (filter) => {
 };
 
 /**
- * Get user by email
- * @param {string} email
+ * Get user by noReg
+ * @param {string} noReg
  * @returns {Promise<User>}
  */
-const getUserByEmail = async (email) => {
+const getUserByNoReg = async (noReg) => {
   return prisma.user.findUnique({
-    where: { email },
+    where: { noReg },
     select: {
       id: true,
       nama: true,
-      email: true,
       password: true,
       fotoProfile: true,
       role: true,
@@ -190,7 +187,6 @@ const getCurrentUserData = async (userId) => {
     select: {
       id: true,
       nama: true,
-      email: true,
       uidNfc: true,
       fotoProfile: true,
       role: true,
@@ -283,7 +279,7 @@ const deactivateUserById = async (userId) => {
 export default {
   createUser,
   queryUsers,
-  getUserByEmail,
+  getUserByNoReg,
   getUserByNfc,
   getUserById,
   getCurrentUserData,

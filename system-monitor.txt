@@ -1,0 +1,114 @@
+3 Pilar Penting monitor & observabilty:
+Metrics
+Logs
+Traces (open telementry -> distribut tracing) tujuan: ini yang buat log per step dan tahu berapa cepat setiap proses/step
+
+secanggih-canggihnya code bikin aplikasi kumungkinan error itu pasti ada tinggal tunggu waktu aja, oleh karena itu penting untuk memonitoring aplikasi kita, agar ketika terjadi error kita bisa dengan cepat mengetahui penyebabnya dan memperbaikinya.
+
+Saran Pengembangan Kedepannya
+1. Penguatan Monitoring & Observability
+
+Saat ini sistem sudah menggunakan:
+
+Grafana
+Prometheus
+Loki
+Tempo
+Alloy
+Saran:
+Menambahkan alerting otomatis
+notifikasi ke Telegram / Email jika terjadi error
+Menentukan SLA & threshold
+contoh: response time > 2 detik → alert
+Membuat dashboard yang lebih spesifik:
+Andon → downtime mesin
+OEE → availability, performance, quality
+LRP → aktivitas logistik
+
+Tujuan:
+
+Mempercepat deteksi dan penanganan masalah sebelum berdampak besar
+
+2. Implementasi Centralized Logging & Tracing
+
+Saat ini observability sudah ada, namun bisa ditingkatkan dengan:
+
+Saran:
+Standarisasi format log (JSON)
+Integrasi penuh dengan OpenTelemetry
+Menggunakan tracing untuk semua request penting
+
+Tujuan:
+
+Memudahkan analisis root cause dan meningkatkan visibilitas sistem
+
+3. Peningkatan High Availability (HA)
+
+Saat ini sistem kemungkinan masih berjalan di 1 server.
+
+Saran:
+Menambahkan lebih dari 1 server (redundancy)
+Menggunakan load balancer
+Replikasi database (PostgreSQL primary–replica)
+Deploy MinIO dalam mode distributed
+
+Tujuan:
+
+Sistem tetap berjalan walaupun terjadi kegagalan pada salah satu komponen
+
+4. Otomatisasi Deployment (DevOps)
+
+Untuk meningkatkan efisiensi pengembangan:
+
+Saran:
+Implementasi CI/CD (auto build & deploy)
+Containerization menggunakan Docker
+Version control & pipeline automation
+
+Tujuan:
+
+Mempercepat proses deployment dan meminimalisir human error
+
+5. Peningkatan Keamanan Sistem
+
+Karena sistem berjalan di lingkungan perusahaan:
+
+Saran:
+Implementasi HTTPS (SSL)
+Pembatasan akses (VPN / internal network)
+Manajemen akses user (role-based access)
+
+Tujuan:
+
+Menjaga keamanan data dan mencegah akses tidak sah
+
+6. Backup & Disaster Recovery
+
+Untuk menghindari kehilangan data:
+
+Saran:
+Backup database secara berkala
+Backup file storage (MinIO)
+Simulasi recovery (restore data)
+
+Tujuan:
+
+Menjamin keberlangsungan sistem saat terjadi kegagalan
+
+7. Skalabilitas Sistem
+
+Jika sistem berkembang:
+
+Saran:
+Desain menuju microservices (jika kompleksitas meningkat)
+Gunakan container orchestration (opsional)
+Pisahkan service sesuai domain (Andon, OEE, LRP)
+
+Tujuan:
+
+Memastikan sistem tetap optimal saat jumlah user & data meningkat
+
+Penutup
+
+Dengan adanya monitoring dan observability, sistem tidak hanya dapat berjalan, tetapi juga dapat dipantau, dianalisis, dan ditingkatkan secara berkelanjutan.
+Kedepannya, pengembangan difokuskan pada peningkatan reliability, scalability, dan security agar sistem siap digunakan dalam skala yang lebih besar dan kompleks.z

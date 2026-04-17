@@ -8,12 +8,6 @@ const router = express.Router();
 
 router.route("/").get(auth("SUPERVISOR", "ADMIN"), userController.getUsers);
 
-router.get(
-  "/searchByEmail",
-  auth("SUPERVISOR", "ADMIN"),
-  validate(userValidation.getUserByEmail),
-  userController.getUserByEmail,
-);
 
 router
   .route("/:userId")

@@ -12,7 +12,7 @@ global.__LRP_MOCKS__ = {
     updateLrpById: jest.fn(),
     deleteLrpById: jest.fn(),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   auth: {
     auth: jest.fn(
       (...requiredRoles) =>
