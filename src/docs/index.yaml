@@ -39,7 +39,7 @@ components:
           type: integer
         nama:
           type: string
-        email:
+        noReg:
           type: string
         uidNfc:
           type: string
@@ -51,9 +51,7 @@ components:
           enum: [PRODUKSI, SUPERVISOR, ENGINEERING, MAINTENANCE]
         plant:
           type: string
-        noReg:
-          type: string
-          nullable: true
+
         line:
           type: string
         currentPoint:
@@ -284,9 +282,8 @@ paths:
     post:
       summary: Register New User
       description: |
-        Register a new user account with email and password.
-        - Email and password are required
-        - uidNfc is not required during registration (will be added separately)
+        - noReg and password are required
+        - Registered via Registration Number (noReg)
         - Returns user data without password
       tags: [Auth]
       security: []
@@ -296,15 +293,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama, email, password, divisiId, role, plant, line]
+              required: [nama, noReg, password, divisiId, role, plant, line]
               properties:
                 nama:
                   type: string
                   example: "John Doe"
-                email:
+                noReg:
                   type: string
-                  format: email
-                  example: "john.doe@example.com"
+                  example: "REG12345"
                 password:
                   type: string
                   format: password
@@ -370,7 +366,7 @@ paths:
                       user:
                         $ref: "#/components/schemas/User"
         "400":
-          description: Bad request - Email already registered or validation error
+          description: Bad request - NoReg already registered or validation error
           content:
             application/json:
               schema:
@@ -382,7 +378,7 @@ paths:
       description: |
         Login with either NFC card or email/password combination.
         - NFC Login: Provide uidNfc only
-        - Email Login: Provide email and password
+        - NoReg Login: Provide noReg and password
         - Returns user data, JWT tokens, and dashboard data (for PRODUKSI role)
       tags: [Auth]
       security: []
@@ -399,12 +395,11 @@ paths:
                       type: string
                       example: "ABC123DEF456"
                 - type: object
-                  required: [email, password]
+                  required: [noReg, password]
                   properties:
-                    email:
+                    noReg:
                       type: string
-                      format: email
-                      example: "john.doe@example.com"
+                      example: "REG12345"
                     password:
                       type: string
                       format: password

@@ -4,9 +4,6 @@
  * @param {Object} helpers
  */
 const password = (value, helpers) => {
-  if (value.length < 8) {
-    return helpers.error("Password minimal 8 karakter");
-  }
   return value;
 };
 

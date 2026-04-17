@@ -17,7 +17,7 @@ function excelTimeToStr(excelTime) {
 }
 
 async function main() {
-  console.log("--- Starting Comprehensive Seed ---");
+  console.log("--- Starting Seed ---");
   const csvDir = path.resolve("prisma/csv");
 
   // 1. Seed Divisi
@@ -39,79 +39,88 @@ async function main() {
   }
 
   // 2. Seed Users
+  // Kolom di data_operator.xlsx (header baris 0):
+  // [0]=nama, [1]=password, [2]=jenis operator/divisi, [3]=Plant, [4]=Line, [5]=Foto, [6]=fk_id_divisi, [7]=NO. REG
   console.log("Seeding Users...");
   const rawOperatorData = xlsx.utils.sheet_to_json(
     operatorWB.Sheets["Operator"],
     { header: 1 },
   );
+
   const salt = await bcrypt.genSalt(10);
+  const hashedPassword123 = await bcrypt.hash("123", salt);
+
   const validRoles = [
-    "PRODUKSI",
-    "QUALITY",
-    "MAINTENANCE",
-    "DIE_MAINT",
-    "ENGINEERING",
-    "MARKETING",
-    "COMMERCIAL",
-    "PPIC",
-    "HCPGA",
-    "WRH_CIBITUNG",
-    "GA",
-    "WAREHOUSE",
-    "PURCHASING",
-    "HC",
-    "ACCOUNTING",
-    "FINANCE",
-    "ADMIN",
+    "PRODUKSI", "QUALITY", "MAINTENANCE", "DIE_MAINT", "ENGINEERING",
+    "MARKETING", "COMMERCIAL", "PPIC", "HCPGA", "WRH_CIBITUNG",
+    "GA", "WAREHOUSE", "PURCHASING", "HC", "ACCOUNTING", "FINANCE",
+    "ADMIN", "SUPERVISOR",
   ];
+
+  let noRegCounter = 90000; // counter fallback jika noReg kosong
+  let uidNfcCounter = 1;
 
   for (let i = 1; i < rawOperatorData.length; i++) {
     const row = rawOperatorData[i];
-    if (!row[1]) continue;
 
-    const rawRole =
-      row[5]?.toString().trim().toUpperCase().replace(/\s+/g, "_") ||
-      "PRODUKSI";
-    let role = validRoles.includes(rawRole)
-      ? rawRole
-      : rawRole === "DIE_MAINT"
-      ? "DIE_MAINT"
-      : rawRole === "WRH_CIBITUNG"
-      ? "WRH_CIBITUNG"
-      : "PRODUKSI";
+    // col[0] = nama
+    const nama = row[0]?.toString().trim();
+    if (!nama || nama.toLowerCase() === "nama") continue;
 
-    const password = row[3]?.toString() || "password123";
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // col[2] = jenis operator / divisi -> role
+    const rawRole = row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRODUKSI";
+    const role = validRoles.includes(rawRole) ? rawRole : "PRODUKSI";
 
-    await prisma.user.upsert({
-      where: {
-        uidNfc: row[4]?.toString() || undefined,
-        email: row[2]?.toString() || undefined,
-      },
-      update: {
-        nama: row[1].toString(),
-        password: hashedPassword,
-        role: role,
-        plant: row[6]?.toString() || "3",
-        line: row[7]?.toString() || "-",
-        fotoProfile: row[8]?.toString() || null,
-        divisiId: parseInt(row[9]) || 1,
-      },
-      create: {
-        nama: row[1].toString(),
-        email: row[2]?.toString() || null,
-        password: hashedPassword,
-        uidNfc: row[4]?.toString() || null,
-        role: role,
-        plant: row[6]?.toString() || "3",
-        line: row[7]?.toString() || "-",
-        fotoProfile: row[8]?.toString() || null,
-        divisiId: parseInt(row[9]) || 1,
-      },
-    });
+    // col[3] = Plant, col[4] = Line
+    const plant = row[3]?.toString().trim() || "3";
+    const line = row[4]?.toString().trim() || "-";
+
+    // col[5] = Foto
+    const fotoProfile = row[5]?.toString().trim() || null;
+
+    // col[6] = fk_id_divisi
+    const divisiId = parseInt(row[6]) || 1;
+
+    // col[7] = NO. REG, fallback ke counter
+    let noReg = row[7]?.toString().trim();
+    if (!noReg || noReg === "") {
+      noReg = `ID${noRegCounter++}`;
+    }
+
+    // uid_nfc auto-increment dari 1
+    let uidNfc = (uidNfcCounter++).toString();
+
+    try {
+      await prisma.user.upsert({
+        where: { noReg },
+        update: {
+          nama,
+          password: hashedPassword123,
+          role,
+          plant,
+          line,
+          fotoProfile: fotoProfile || null,
+          divisiId,
+          uidNfc,
+        },
+        create: {
+          noReg,
+          nama,
+          password: hashedPassword123,
+          uidNfc,
+          role,
+          plant,
+          line,
+          fotoProfile: fotoProfile || null,
+          divisiId,
+        },
+      });
+    } catch (err) {
+      console.error(`[Seed Error] Gagal upsert user "${nama}" (noReg: ${noReg}): ${err.message}`);
+    }
   }
 
-  // 3. Seed Mesin
+  // 4. Seed Mesin
   console.log("Seeding Mesin...");
   const mesinWB = xlsx.readFile(path.join(csvDir, "data_mesin.xlsx"));
   const rawMesinData = xlsx.utils.sheet_to_json(mesinWB.Sheets["data_mesin"], {
@@ -145,7 +154,7 @@ async function main() {
     }
   }
 
-  // 4. Seed TipeDisiplin
+  // 5. Seed TipeDisiplin
   console.log("Seeding TipeDisiplin...");
   const disiplinWB = xlsx.readFile(
     path.join(csvDir, "data_poin_pelanggaran.xlsx"),
@@ -164,7 +173,7 @@ async function main() {
           poin: parseInt(row[2]),
           kategori:
             row[3].toString().toUpperCase() === "PENGHARGAAN"
-              ? "PENGHARGAAN"
+               ? "PENGHARGAAN"
               : "PELANGGARAN",
         },
         create: {
@@ -180,7 +189,7 @@ async function main() {
     }
   }
 
-  // 5. Seed Produk, JenisPekerjaan, Target
+  // 6. Seed Produk, JenisPekerjaan, Target
   console.log("Seeding Produk, JenisPekerjaan, Target...");
   const targetWB = xlsx.readFile(
     path.join(csvDir, "data_produk_jenisPekerjaan_target.xlsx"),
@@ -224,7 +233,6 @@ async function main() {
   });
   for (let i = 1; i < rawTarget.length; i++) {
     const row = rawTarget[i];
-    // Headers: ["PRODUK","JENIS_PEKERJAAN","TARGET","fk_produk","fk_jenis_pekerjaan","CYCLE TIME (menit / pcs)","PEMBULATAN CYCLE TIME (menit / pcs) "]
     if (row[3] && row[4]) {
       const produkId = parseInt(row[3]);
       const jenisPekerjaanId = parseInt(row[4]);
@@ -254,7 +262,7 @@ async function main() {
     }
   }
 
-  // 6. Seed Shift
+  // 7. Seed Shift
   console.log("Seeding Shift...");
   const shiftWB = xlsx.readFile(path.join(csvDir, "data_shift.xlsx"));
   const rawShiftData = xlsx.utils.sheet_to_json(
@@ -291,7 +299,7 @@ async function main() {
     }
   }
 
-  // 7. Seed MasterMasalahAndon (from seed-andon.js)
+  // 8. Seed MasterMasalahAndon
   console.log("Seeding MasterMasalahAndon...");
   const andonFilePath = path.join(csvDir, "data_master_masalah_andon.xlsx");
   const andonWorkbook = xlsx.readFile(andonFilePath);
@@ -338,77 +346,6 @@ async function main() {
       });
     }
   }
-
-  // 8. Update User No Reg (from seed_no_reg.js)
-  console.log("Updating User No Reg from Excel...");
-  const noRegFilePath = path.join(csvDir, "NoRegistrasi.xlsx");
-  console.log(`Reading file: ${noRegFilePath}`);
-  const noRegWorkbook = xlsx.readFile(noRegFilePath);
-
-  let totalUpdated = 0;
-  let totalSkipped = 0;
-
-  for (const sheetName of noRegWorkbook.SheetNames) {
-    const worksheet = noRegWorkbook.Sheets[sheetName];
-    const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
-
-    let nameIndex = -1;
-    let noRegIndex = -1;
-
-    for (let i = 0; i < Math.min(rows.length, 20); i++) {
-      const row = rows[i];
-      if (!row) continue;
-      const nameIdx = row.findIndex(
-        (cell) => cell?.toString().trim().toUpperCase() === "NAMA",
-      );
-      const noRegIdx = row.findIndex(
-        (cell) =>
-          cell?.toString().trim().toUpperCase() === "NO. REG" ||
-          cell?.toString().trim().toUpperCase() === "NO.REG",
-      );
-
-      if (nameIdx !== -1 && noRegIdx !== -1) {
-        nameIndex = nameIdx;
-        noRegIndex = noRegIdx;
-        rows.splice(0, i + 1);
-        break;
-      }
-    }
-
-    if (nameIndex === -1 || noRegIndex === -1) continue;
-
-    for (const row of rows) {
-      const nama = row[nameIndex]?.toString().trim();
-      const noReg = row[noRegIndex]?.toString().trim();
-
-      if (!nama || !noReg || nama.toUpperCase() === "NAMA") {
-        continue;
-      }
-
-      const users = await prisma.user.findMany({
-        where: {
-          nama: {
-            contains: nama,
-          },
-        },
-      });
-
-      const user = users.find(
-        (u) => u.nama.trim().toLowerCase() === nama.toLowerCase(),
-      );
-
-      if (user) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { noReg: noReg },
-        });
-        totalUpdated++;
-      } else {
-        totalSkipped++;
-      }
-    }
-  }
-  console.log(`Total Updated: ${totalUpdated}, Total Skipped: ${totalSkipped}`);
 
   console.log("--- Seed Completed Successfully ---");
 }

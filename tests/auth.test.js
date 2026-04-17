@@ -5,12 +5,12 @@ import httpStatus from "http-status";
 // 1. Global Mock Registry (Shared State for ESM)
 global.__MOCKS__ = {
   userService: {
-    getUserByEmail: jest.fn(),
+    getUserByNoReg: jest.fn(),
     createUser: jest.fn(),
     getUserByNfc: jest.fn(),
   },
   authService: {
-    loginWithEmail: jest.fn(),
+    loginWithNoReg: jest.fn(),
     loginWithNfc: jest.fn(),
   },
   tokenService: {
@@ -46,8 +46,8 @@ describe("Auth Controller Ultimate Unit Tests", () => {
   describe("POST /auth/register", () => {
     const validUser = {
       nama: "Test User",
-      email: "test@example.com",
-      password: "password123!",
+      noReg: "REG12345",
+      password: "123",
       fk_id_divisi: 1,
       role: "PRODUKSI",
       plant: "1",
@@ -55,7 +55,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     };
 
     test("should return 201 on valid registration", async () => {
-      userService.getUserByEmail.mockResolvedValue(null);
+      userService.getUserByNoReg.mockResolvedValue(null);
       userService.createUser.mockResolvedValue({ id: 1, ...validUser });
 
       const res = await request(app).post("/auth/register").send(validUser);
@@ -64,18 +64,18 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should handle registration with optional fields as null", async () => {
-      userService.getUserByEmail.mockResolvedValue(null);
+      userService.getUserByNoReg.mockResolvedValue(null);
       userService.createUser.mockResolvedValue({ id: 1, ...validUser, foto_profile: null, no_reg: null });
 
-      const res = await request(app).post("/auth/register").send({ ...validUser, foto_profile: null, no_reg: "" });
+      const res = await request(app).post("/auth/register").send({ ...validUser, fotoProfile: null });
       expect(res.status).toBe(httpStatus.CREATED);
     });
 
-    test("should return 400 if email is already registered", async () => {
-      userService.getUserByEmail.mockResolvedValue({ id: 1 });
+    test("should return 400 if noReg is already registered", async () => {
+      userService.getUserByNoReg.mockResolvedValue({ id: 1 });
       const res = await request(app).post("/auth/register").send(validUser);
       expect(res.status).toBe(httpStatus.BAD_REQUEST);
-      expect(res.body.message).toBe("Email sudah terdaftar");
+      expect(res.body.message).toBe("NoReg sudah terdaftar");
     });
 
     test("should return 400 if validation fails (e.g., weak password)", async () => {
@@ -89,18 +89,18 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should return 500 on unexpected database error during user check", async () => {
-      userService.getUserByEmail.mockRejectedValue(new Error("DB_DOWN"));
+      userService.getUserByNoReg.mockRejectedValue(new Error("DB_DOWN"));
       const res = await request(app).post("/auth/register").send(validUser);
       expect(res.status).toBe(httpStatus.INTERNAL_SERVER_ERROR);
     });
   });
 
   describe("POST /auth/login", () => {
-    const loginPayload = { email: "test@example.com", password: "password123!" };
-    const nfcPayload = { uid_nfc: "12345" };
+    const loginPayload = { noReg: "REG12345", password: "password123" };
+    const nfcPayload = { uidNfc: "12345" };
 
-    test("should login successfully with email/password", async () => {
-      authService.loginWithEmail.mockResolvedValue({ id: 1, role: "GA" });
+    test("should login successfully with noReg/password", async () => {
+      authService.loginWithNoReg.mockResolvedValue({ id: 1, role: "GA" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
 
       const res = await request(app).post("/auth/login").send(loginPayload);
@@ -119,7 +119,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should return dashboard: null for non-PRODUKSI roles", async () => {
-      authService.loginWithEmail.mockResolvedValue({ id: 1, role: "MAINTENANCE" });
+      authService.loginWithNoReg.mockResolvedValue({ id: 1, role: "MAINTENANCE" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
 
       const res = await request(app).post("/auth/login").send(loginPayload);
@@ -129,7 +129,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should be resilient and return login success even if dashboard service fails", async () => {
-      authService.loginWithEmail.mockResolvedValue({ id: 2, role: "PRODUKSI" });
+      authService.loginWithNoReg.mockResolvedValue({ id: 2, role: "PRODUKSI" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
       rencanaProduksiService.getRencanaProduksiHarian.mockRejectedValue(new Error("Service Unavailable"));
 
@@ -139,7 +139,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should return 401 for wrong credentials", async () => {
-      authService.loginWithEmail.mockRejectedValue(new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized"));
+      authService.loginWithNoReg.mockRejectedValue(new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized"));
       const res = await request(app).post("/auth/login").send(loginPayload);
       expect(res.status).toBe(httpStatus.UNAUTHORIZED);
     });
@@ -151,18 +151,18 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should return 403 for suspended account", async () => {
-      authService.loginWithEmail.mockRejectedValue(new ApiError(httpStatus.FORBIDDEN, "Account Suspended"));
+      authService.loginWithNoReg.mockRejectedValue(new ApiError(httpStatus.FORBIDDEN, "Account Suspended"));
       const res = await request(app).post("/auth/login").send(loginPayload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
 
-    test("should return 400 if neither email nor NFC is provided", async () => {
+    test("should return 400 if neither noReg nor NFC is provided", async () => {
       const res = await request(app).post("/auth/login").send({});
       expect(res.status).toBe(httpStatus.BAD_REQUEST);
     });
 
     test("should return 500 if token generation fails", async () => {
-      authService.loginWithEmail.mockResolvedValue({ id: 1, role: "GA" });
+      authService.loginWithNoReg.mockResolvedValue({ id: 1, role: "GA" });
       tokenService.generateAuthTokens.mockRejectedValue(new Error("JWT_ERROR"));
       const res = await request(app).post("/auth/login").send(loginPayload);
       expect(res.status).toBe(httpStatus.INTERNAL_SERVER_ERROR);

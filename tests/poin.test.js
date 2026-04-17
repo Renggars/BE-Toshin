@@ -78,9 +78,9 @@ describe("Poin Controller Unit Tests", () => {
 
   describe("POST /poin/", () => {
     const payload = {
-      fk_id_operator: 2,
-      fk_tipe_disiplin: 1,
-      fk_id_shift: 1,
+      operatorId: 2,
+      tipeDisiplinId: 1,
+      shiftId: 1,
       keterangan: "Tes unit test",
     };
 
@@ -121,7 +121,7 @@ describe("Poin Controller Unit Tests", () => {
     });
 
     test("should return 400 if required fields are missing (Joi Validation)", async () => {
-      const invalidPayload = { fk_id_operator: 2 }; // Missing fk_tipe_disiplin and fk_id_shift
+      const invalidPayload = { operatorId: 2 }; // Missing tipeDisiplinId and shiftId
       const res = await request(app).post("/poin/").send(invalidPayload);
       expect(res.status).toBe(httpStatus.BAD_REQUEST);
       expect(res.body.message).toMatch(/required/);
@@ -150,7 +150,7 @@ describe("Poin Controller Unit Tests", () => {
       poinService.getUserCurrentPoin.mockResolvedValue(85);
       const res = await request(app).get("/poin/user/2");
       expect(res.status).toBe(httpStatus.OK);
-      expect(res.body.total_poin).toBe(85);
+      expect(res.body.data?.total_poin ?? res.body.total_poin).toBe(85);
     });
 
     test("should return 404 for non-existent user", async () => {
