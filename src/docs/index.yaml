@@ -142,7 +142,7 @@ components:
           type: object
           properties:
             namaMasalah: { type: string }
-            kategori: { type: string }
+            kategori: { type: string, enum: [MAINTENANCE, QUALITY, DIE_MAINT, PRODUKSI, PLAN_DOWNTIME] }
             waktuPerbaikanMenit: { type: integer }
         operator:
           type: object
@@ -569,8 +569,8 @@ paths:
       summary: Resolve Andon
       description: |
         Complete the Andon repair.
-        - Plan Downtime: Can resolve directly from ACTIVE.
-        - Others: Must be IN_REPAIR before resolving.
+        - Plan Downtime: Can resolve directly from ACTIVE. **Auth: Must be same User ID as who started it.**
+        - Others (Breakdown): Must be IN_REPAIR before resolving. **Auth: Authorized by Division/Role.**
         - Calculates total downtime and maintenance wait time.
       tags: [Andon]
       security:
@@ -580,6 +580,21 @@ paths:
           name: id
           required: true
           schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                catatan:
+                  type: string
+                  description: "Optional notes about the resolution"
+                masalahId:
+                  type: integer
+                  description: "Optionally update the problem type at resolve"
+                resolvedBy:
+                  type: integer
+                  description: "Optionally override the resolver user ID"
       responses:
         "200":
           description: Success
@@ -2493,16 +2508,17 @@ paths:
                         properties:
                           id: { type: integer }
                           namaMesin: { type: string }
-                          kategori: { type: string }
+                          line: { type: string }
+                          kategori: { type: string, enum: [PRIMARY, SECONDARY, NON_PRESS] }
                           ideal_cycle_time: { type: number }
                 example:
                   status: "success"
                   message: "Success get machines"
                   data:
-                    press:
+                    primary:
                       - id: 1
                         namaMesin: "A-01"
-                        kategori: "PRESS"
+                        kategori: "PRIMARY"
                     secondary:
                       - id: 10
                         namaMesin: "S-01"
@@ -2523,10 +2539,12 @@ paths:
               properties:
                 namaMesin:
                   type: string
+                line:
+                  type: string
                 kategori:
                   type: string
                   enum:
-                    [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
+                    [PRIMARY, SECONDARY, NON_PRESS]
                   description: Kategori mesin
       responses:
         "201":
@@ -2550,10 +2568,11 @@ paths:
               type: object
               properties:
                 namaMesin: { type: string }
+                line: { type: string }
                 kategori:
                   type: string
                   enum:
-                    [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
+                    [PRIMARY, SECONDARY, NON_PRESS]
       responses:
         "200":
           description: Updated

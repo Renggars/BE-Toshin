@@ -89,6 +89,7 @@ const fetchHistoryHelper = async (where, page, limit) => {
         waktuRepair: true,
         waktuResolved: true,
         durasiDowntime: true,
+        catatan: true,
         status: true,
         plant: true,
         responStatus: true,
@@ -143,6 +144,7 @@ const fetchHistoryHelper = async (where, page, limit) => {
     estimasi_menit: e.masterMasalahAndon?.waktuPerbaikanMenit || 0,
     waktu_resolved: e.waktuResolved,
     respon_status: e.responStatus,
+    catatan: e.catatan || "-",
   }));
 
   return {
@@ -360,6 +362,7 @@ const triggerAndon = async (payload) => {
             totalDurationMenit: duration,
             durasiDowntime: duration,
             resolvedById: detectedOperator,
+            catatan: "Auto-resolved by RPH switch",
           },
         });
       }
@@ -605,12 +608,45 @@ const startRepairAndon = async (id, data) => {
   }
 
   // 2. Fallback to existing AndonEvent logic (e.g. for PLAN_DOWNTIME)
-  const event = await prisma.andonEvent.findUnique({ where: { id } });
+  const event = await prisma.andonEvent.findUnique({
+    where: { id },
+    include: { masterMasalahAndon: true },
+  });
 
   if (!event || event.status !== "ACTIVE") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Hanya Andon ACTIVE (atau WAITING Call) yang bisa mulai diperbaiki",
+    );
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, nama: true },
+  });
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User tidak ditemukan");
+  }
+
+  const roleMapping = {
+    MAINTENANCE: "MAINTENANCE",
+    QUALITY: "QUALITY",
+    DIE_MAINT: "DIE_MAINT",
+    PRODUKSI: "PRODUKSI",
+    PLAN_DOWNTIME: "PRODUKSI",
+  };
+
+  const requiredRole = roleMapping[event.masterMasalahAndon?.kategori || "PRODUKSI"];
+
+  if (
+    user.role !== requiredRole &&
+    user.role !== "SUPERVISOR" &&
+    user.role !== "ADMIN"
+  ) {
+    throw new ApiError(
+      httpStatus.FORBIDDEN,
+      `Hanya divisi ${requiredRole} yang diizinkan melakukan pengerjaan untuk kategori ini.`,
     );
   }
 
@@ -630,11 +666,6 @@ const startRepairAndon = async (id, data) => {
       kategori: problem ? problem.kategori : event.kategori,
     },
     include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
-  });
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { nama: true },
   });
 
   const formattedEvent = {
@@ -678,8 +709,56 @@ const resolveAndon = async (id, data) => {
     );
   }
 
-  // State Machine Validation
   const isPlanDowntime = event.masterMasalahAndon?.kategori === "PLAN_DOWNTIME";
+
+  // Authorization check
+  const resolverId = data.resolvedBy || event.resolvedById;
+  if (!resolverId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "User pelaksana resolve tidak diketahui");
+  }
+
+  const resolverUser = await prisma.user.findUnique({
+    where: { id: resolverId },
+    select: { id: true, role: true, nama: true },
+  });
+
+  if (!resolverUser) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User pelaksana resolve tidak ditemukan");
+  }
+
+  if (isPlanDowntime) {
+    // RULE: For Plan Downtime, Resolver must be the SAME person as the one who started/triggered it.
+    const originalOperatorId = event.resolvedById || event.operatorId;
+    if (resolverUser.id !== originalOperatorId && resolverUser.role !== "SUPERVISOR" && resolverUser.role !== "ADMIN") {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        `Untuk Plan Downtime, user yang melakukan resolve harus sama dengan yang memulai.`,
+      );
+    }
+  } else {
+    // RULE: For Breakdowns, Resolver can be different as long as they are in the same Division/Role.
+    const roleMapping = {
+      MAINTENANCE: "MAINTENANCE",
+      QUALITY: "QUALITY",
+      DIE_MAINT: "DIE_MAINT",
+      PRODUKSI: "PRODUKSI",
+    };
+
+    const requiredRole = roleMapping[event.masterMasalahAndon?.kategori || "PRODUKSI"];
+
+    if (
+      resolverUser.role !== requiredRole &&
+      resolverUser.role !== "SUPERVISOR" &&
+      resolverUser.role !== "ADMIN"
+    ) {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        `Hanya divisi ${requiredRole} yang diizinkan melakukan resolve untuk kategori ini.`,
+      );
+    }
+  }
+
+  // State Machine Validation
   if (!isPlanDowntime && event.status !== "IN_REPAIR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
@@ -735,6 +814,7 @@ const resolveAndon = async (id, data) => {
         lateMenit: lateMinutes,
         isLate: isLate,
         resolvedById: data.resolvedBy || event.resolvedById,
+        catatan: data.catatan || null,
         responStatus: responStatus,
         rphOpenedId: openedRphId,
         masalahId: data.masalahId || event.masalahId,
@@ -764,11 +844,6 @@ const resolveAndon = async (id, data) => {
   await enqueueOeeRecalc(event.mesinId, event.tanggal);
 
   // ✅ WebSocket Events
-  const resolverUser = await prisma.user.findUnique({
-    where: { id: data.resolvedBy || event.resolvedById },
-    select: { nama: true },
-  });
-
   emitAndonResolved({
     andonId: updatedEvent.id,
     tanggal: updatedEvent.waktuTrigger,

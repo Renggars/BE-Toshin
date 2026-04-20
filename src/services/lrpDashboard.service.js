@@ -671,7 +671,7 @@ const exportData = async (filter) => {
   // SHEET 5 — TREND PRESS
   // ═══════════════════════════════════════════════════════════════════════════
   const ws5 = {};
-  const tpTitle = `TREND PRODUKSI PRESS`;
+  const tpTitle = `TREND PRODUKSI PRIMARY & SECONDARY`;
   ["A", "B", "C", "D", "E"].forEach((c) => {
     ws5[`${c}1`] = { v: c === "A" ? tpTitle : "", s: hdr() };
   });
@@ -735,7 +735,7 @@ const getTrendPress = async (filter) => {
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesin: { kategori: "PRESS" },
+    mesin: { kategori: { in: ["PRIMARY", "SECONDARY"] } },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),
