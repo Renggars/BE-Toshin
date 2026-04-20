@@ -21,6 +21,11 @@ const resolve = {
   params: Joi.object({
     id: Joi.number().required(),
   }),
+  body: Joi.object({
+    catatan: Joi.string().allow("", null).optional(),
+    masalahId: Joi.number().optional(), // Allow changing problem during resolve
+    resolvedBy: Joi.number().optional(),
+  }),
 };
 
 const getDashboard = {

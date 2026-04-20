@@ -14,14 +14,13 @@ const createTarget = {
 const createMesin = {
   body: Joi.object().keys({
     namaMesin: Joi.string().required(),
+    line: Joi.string().allow(null, ""),
     kategori: Joi.string()
       .required()
       .valid(
-        "PRESS",
+        "PRIMARY",
         "SECONDARY",
-        "PROGRESIVE_TRANSFER",
-        "FINE_BLANKING",
-        "TACI",
+        "NON_PRESS",
       ),
   }),
 };
@@ -33,12 +32,11 @@ const updateMesin = {
   body: Joi.object()
     .keys({
       namaMesin: Joi.string(),
+      line: Joi.string().allow(null, ""),
       kategori: Joi.string().valid(
-        "PRESS",
+        "PRIMARY",
         "SECONDARY",
-        "PROGRESIVE_TRANSFER",
-        "FINE_BLANKING",
-        "TACI",
+        "NON_PRESS",
       ),
     })
     .min(1),

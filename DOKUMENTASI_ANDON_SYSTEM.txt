@@ -1,0 +1,58 @@
+DOKUMENTASI SISTEM ANDON - TOSHIN BACKEND
+==========================================
+
+1. PENGERTIAN DURASI DOWNTIME & OEE
+----------------------------------
+Sistem membedakan dua jenis durasi untuk kebutuhan yang berbeda:
+
+* Machine Downtime (Digunakan untuk OEE): -> total_duration_downtime
+  Dihitung dari waktu_trigger (saat operator lapor/mesin berhenti) sampai waktu_resolved (selesai).
+  Logika: OEE Availability berkurang segera setelah mesin bermasalah, tanpa menunggu teknisi datang.
+  Tabel: andon_downtime_shift.
+
+* Actual Repair Time -> durasi_downtime:
+  Dihitung dari saat teknisi mulai memperbaiki (waktu_repair) sampai selesai (waktu_resolved).
+  Logika: Digunakan sebagai KPI Teknisi/Maintenance untuk melihat seberapa cepat durasi pengerjaan teknis di lapangan.
+  Tabel: andon_event.
+
+2. LIFECYCLE / ALUR KERJA ANDON
+-------------------------------
+Sistem mengikuti 4 tahapan utama:
+
+A. Trigger (Status: ACTIVE)
+   - Operator menekan tombol masalah di aplikasi.
+   - Sistem mencatat waktu_trigger.
+   - Lampu Andon menyala Merah/Kuning (sesuai kategori).
+
+B. Call (Status: WAITING)
+   - Notifikasi dikirim ke aplikasi Divisi terkait (Maintenance, Quality, dll).
+   - Sistem menunggu respon teknisi.
+
+C. Repair (Status: IN_REPAIR)
+   - Teknisi tiba di mesin dan menekan "Start Repair".
+   - Sistem mencatat waktu_repair.
+   - Lampu di dashboard biasanya berubah menjadi Biru.
+
+D. Resolve (Status: RESOLVED)
+   - Teknisi selesai memperbaiki dan menekan "Resolve".
+   - (Opsional) Teknisi mengisi Catatan perbaikan.
+   - Sistem mencatat waktu_resolved.
+   - Sistem otomatis menghitung durasi_downtime dan memicu perhitungan ulang OEE secara otomatis.
+
+3. LOGIKA KHUSUS: PLAN_DOWNTIME
+-------------------------------
+Untuk kategori PLAN_DOWNTIME (Ganti Produk, Kamar Mandi, Ngisi Laporan, dll):
+* Sistem melewati (bypass) fase Call.
+* Begitu dipicu (Trigger), status bisa langsung ACTIVE (untuk aktivitas berdurasi) atau langsung RESOLVED (jika bersifat auto-resolve pada saat perpindahan RPH).
+* Downtime dihitung dari awal trigger karena merupakan aktivitas yang direncanakan oleh operator.
+
+4. DAMPAK PADA OEE (OVERALL EQUIPMENT EFFECTIVENESS)
+----------------------------------------------------
+Setiap kali status Andon menjadi RESOLVED, sistem akan:
+1. Menjumlahkan durasi_downtime pada mesin & hari tersebut.
+2. Memperbarui nilai Availability pada dashboard OEE.
+3. Semakin tinggi total durasi_downtime, semakin rendah persentase OEE mesin tersebut.
+
+------------------------------------------
+Dokumentasi ini dibuat pada: 2026-04-20
+Project: Toshin-Backend

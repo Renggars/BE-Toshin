@@ -81,6 +81,7 @@ model AndonEvent {
   lateMenit          Float?                   @map("late_menit")
   totalDurationMenit Float?                   @map("total_duration_menit")
   kategori           String?
+  catatan            String?                  @db.Text
   andonCall          AndonCall[]
   andonDowntimeShift AndonDowntimeShift[]
   masterMasalahAndon MasterMasalahAndon       @relation(fields: [masalahId], references: [id])
@@ -182,7 +183,8 @@ model MasterMasalahAndon {
 model Mesin {
   id                        Int                        @id @default(autoincrement())
   namaMesin                 String                     @unique @map("nama_mesin")
-  kategori                  MesinKategori              @default(PRESS)
+  line                      String                     @map("line")
+  kategori                  MesinKategori              @default(PRIMARY)
   andonCall                 AndonCall[]
   andonDowntimeShift        AndonDowntimeShift[]
   andonEvent                AndonEvent[]
@@ -406,11 +408,9 @@ enum MasterMasalahAndonKategori {
 }
 
 enum MesinKategori {
-  PROGRESIVE_TRANSFER
-  FINE_BLANKING
+  PRIMARY
   SECONDARY
-  PRESS
-  TACI
+  NON_PRESS
 
   @@map("mesin_kategori")
 }

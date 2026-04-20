@@ -128,28 +128,27 @@ async function main() {
   });
 
   const validKategoriMesin = [
-    "PROGRESIVE_TRANSFER",
-    "FINE_BLANKING",
+    "PRIMARY",
     "SECONDARY",
-    "PRESS",
-    "TACI",
+    "NON_PRESS",
   ];
 
   for (let i = 1; i < rawMesinData.length; i++) {
     const row = rawMesinData[i];
-    if (row[1]) {
-      const namaMesin = row[1].toString().trim();
+    if (row[0]) {
+      const namaMesin = row[0].toString().trim();
+      const line = row[1]?.toString().trim() || "";
       const rawKategori =
-        row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRESS";
+        row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRIMARY";
 
       let kategori = validKategoriMesin.includes(rawKategori)
         ? rawKategori
-        : "PRESS";
+        : "PRIMARY";
 
       await prisma.mesin.upsert({
         where: { namaMesin },
-        update: { kategori },
-        create: { namaMesin, kategori },
+        update: { kategori, line },
+        create: { namaMesin, kategori, line },
       });
     }
   }
@@ -308,6 +307,7 @@ async function main() {
     QUALITY_CONTROL: "QUALITY",
     DIE_MAINTENANCE: "DIE_MAINT",
     PRODUCTION: "PRODUKSI",
+    PLAN_DOWNTIME: "PLAN_DOWNTIME",
   };
 
   console.log("Clearing existing MasterMasalahAndon records...");
