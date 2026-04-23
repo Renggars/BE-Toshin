@@ -18,6 +18,7 @@ import logger from "../config/logger.js";
 import notificationService from "./notification.service.js";
 
 const TZ = "Asia/Jakarta";
+import { nowWIB } from "../utils/dateWIB.js";
 
 /**
  * Helper: enqueue OEE recalculation job dengan dedup + delay.
@@ -218,7 +219,7 @@ const triggerAndon = async (payload) => {
     operatorId: manualOperator,
   } = payload;
   const mesinId = Number(rawMesinId);
-  const currentTime = moment().tz(TZ);
+  const currentTime = nowWIB();
 
   // 1. Fetch Masalah to check for RPH behavior early
   const masalah = await prisma.masterMasalahAndon.findUnique({
@@ -256,7 +257,7 @@ const triggerAndon = async (payload) => {
 
   // 3. Get Shift Info & Operational Date
   const { shiftId, operationalDate: opDateStr } = await getShiftInfo(
-    currentTime.toDate(),
+    currentTime,
   );
   const operationalDate = new Date(`${opDateStr}T00:00:00.000Z`);
 
@@ -334,7 +335,7 @@ const triggerAndon = async (payload) => {
       if (currentActiveRph) {
         await tx.rencanaProduksi.update({
           where: { id: currentActiveRph.id },
-          data: { status: "CLOSED", endTime: currentTime.toDate() },
+          data: { status: "CLOSED", endTime: currentTime },
         });
         activeRphId = currentActiveRph.id;
       }
@@ -351,14 +352,14 @@ const triggerAndon = async (payload) => {
 
       if (reportAndon) {
         const waktuTrigger = new Date(reportAndon.waktuTrigger);
-        const diffMs = currentTime.toDate() - waktuTrigger;
+        const diffMs = currentTime - waktuTrigger;
         const duration = Number((diffMs / 60000).toFixed(2));
 
         await tx.andonEvent.update({
           where: { id: reportAndon.id },
           data: {
             status: "RESOLVED",
-            waktuResolved: currentTime.toDate(),
+            waktuResolved: currentTime,
             totalDurationMenit: duration,
             durasiDowntime: duration,
             resolvedById: detectedOperator,
@@ -370,7 +371,7 @@ const triggerAndon = async (payload) => {
       // Activate next planned RPH
       await tx.rencanaProduksi.update({
         where: { id: nextPlannedRph.id },
-        data: { status: "ACTIVE", startTime: currentTime.toDate() },
+        data: { status: "ACTIVE", startTime: currentTime },
       });
       openedRphId = nextPlannedRph.id;
 
@@ -385,6 +386,7 @@ const triggerAndon = async (payload) => {
             plant: plantName,
             kategori: masalah.kategori,
             status: "ACTIVE",
+            waktuTrigger: currentTime,
             rphClosedId: activeRphId,
             rphOpenedId: openedRphId,
           },
@@ -440,6 +442,7 @@ const triggerAndon = async (payload) => {
         plant: plantName,
         kategori: masalah.kategori,
         status: "ACTIVE",
+        waktuTrigger: currentTime,
         rphClosedId: currentActiveRph?.id || null,
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
@@ -562,7 +565,7 @@ const startRepairAndon = async (id, data) => {
           masalahId: masalahId,
           kategori: problem.kategori,
           waktuTrigger: call.waktuCall, // waktuTrigger = call.waktuCall
-          waktuRepair: new Date(), // waktuRepair = now()
+          waktuRepair: nowWIB(), // waktuRepair = now() WIB
           status: "IN_REPAIR",
           tanggal: call.tanggal,
           plant: call.plant,
@@ -660,7 +663,7 @@ const startRepairAndon = async (id, data) => {
     where: { id },
     data: {
       status: "IN_REPAIR",
-      waktuRepair: new Date(),
+      waktuRepair: nowWIB(),
       resolvedById: userId,
       masalahId: masalahId || event.masalahId,
       kategori: problem ? problem.kategori : event.kategori,
@@ -766,7 +769,7 @@ const resolveAndon = async (id, data) => {
     );
   }
 
-  const resolvedAt = new Date();
+  const resolvedAt = nowWIB();
   const triggerAt = new Date(event.waktuTrigger);
   const durationMs = resolvedAt - triggerAt;
 
@@ -980,6 +983,7 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
             (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
           ),
           tanggal: event.tanggal,
+          createdAt: nowWIB(),
         },
       });
     }
@@ -1037,6 +1041,7 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
             (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
           ),
           tanggal: event.tanggal, // Operational date from parent
+          createdAt: nowWIB(),
         },
       });
     }

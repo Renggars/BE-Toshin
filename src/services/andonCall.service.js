@@ -10,6 +10,7 @@ import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
 
 const TZ = "Asia/Jakarta";
+import { nowWIB } from "../utils/dateWIB.js";
 
 /**
  * Helper: Determine Shift & Operational Date based on time (WIB)
@@ -51,7 +52,7 @@ const getShiftInfo = async (time) => {
 
 const createCall = async (payload) => {
   const { mesinId, operatorId, targetDivisi } = payload;
-  const currentTime = new Date();
+  const currentTime = nowWIB();
 
   // Check if there's already a WAITING call or ACTIVE/IN_REPAIR event for this machine
   const activeCall = await prisma.andonCall.findFirst({

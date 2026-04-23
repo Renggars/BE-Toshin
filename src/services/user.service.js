@@ -4,6 +4,7 @@ import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
 import redis from "../utils/redis.js";
 import logger from "../config/logger.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 const USER_CACHE_PREFIX = "user_list:";
 
@@ -38,7 +39,7 @@ const createUser = async (userBody) => {
       noReg: userBody.noReg,
       // Set cycle start jika role-nya PRODUKSI
       pointCycleStart:
-        userBody.role === "PRODUKSI" ? new Date(new Date().setDate(1)) : null,
+        userBody.role === "PRODUKSI" ? (() => { const d = nowWIB(); d.setDate(1); return d; })() : null,
     },
     include: {
       divisi: true,

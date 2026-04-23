@@ -15,6 +15,7 @@ import notificationRoute from "./notification.route.js";
 import healthRoute from "./health.route.js";
 import metricsRoute from "./metrics.route.js";
 import hardwareRoute from "./hardware.route.js";
+import documentRoute from "./document.route.js";
 
 const router = express.Router();
 
@@ -82,6 +83,10 @@ const defaultRoutes = [
   {
     path: "/hardware",
     route: hardwareRoute,
+  },
+  {
+    path: "/documents",
+    route: documentRoute,
   },
 ];
 

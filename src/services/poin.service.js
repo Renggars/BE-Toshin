@@ -12,6 +12,7 @@ import {
   getAMEmailTemplate,
   getHREmailTemplate,
 } from "../utils/emailTemplate.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 const BASE_POINT = 100;
 
@@ -202,7 +203,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     ? `/uploads/poin-images/${imageFile.filename}`
     : null;
 
-  const now = new Date();
+  const now = nowWIB();
   let suspendedUntil = operator.suspendedUntil;
 
   // Logic: Set masa SP 6 bulan jika masuk SP1 atau SP2

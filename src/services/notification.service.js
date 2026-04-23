@@ -1,6 +1,7 @@
 import prisma from "../../prisma/index.js";
 import { emitNotification } from "../config/socket.js";
 import logger from "../config/logger.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 // buat notifikasi
 const createNotification = async ({ userId, tipe, judul, pesan }) => {
@@ -11,6 +12,7 @@ const createNotification = async ({ userId, tipe, judul, pesan }) => {
             tipe,
             judul,
             pesan,
+            createdAt: nowWIB(),
         },
     });
 
