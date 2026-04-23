@@ -3,6 +3,7 @@
 import ApiError from "../utils/ApiError.js";
 import httpStatus from "http-status";
 import moment from "moment";
+import { nowWIB } from "../utils/dateWIB.js";
 
 import prisma from "../../prisma/index.js";
 import { calculateProductionTarget } from "../utils/productionCalc.js";
@@ -167,10 +168,10 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       // Update status to ACTIVE in database
       await prisma.rencanaProduksi.update({
         where: { id: plannedRph.id },
-        data: { status: "ACTIVE", startTime: new Date() },
+        data: { status: "ACTIVE", startTime: nowWIB() },
       });
       plannedRph.status = "ACTIVE"; // Update object in memory
-      plannedRph.startTime = new Date();
+      plannedRph.startTime = nowWIB();
       rp = plannedRph;
     }
   }
@@ -252,7 +253,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
 
   if (activeAndonSwitch) {
     andonStatus = "RPH_SWITCH_IN_PROGRESS";
-    const durationMs = new Date() - new Date(activeAndonSwitch.waktuTrigger);
+    const durationMs = nowWIB() - new Date(activeAndonSwitch.waktuTrigger);
     const standardMin = activeAndonSwitch.masterMasalahAndon?.waktuPerbaikanMenit || 0;
 
     // Real decimal minutes (2 decimal precision)
@@ -825,10 +826,10 @@ const getUserRPHList = async (userId, tanggalStr) => {
       const idx = allRphs.length - 1 - plannedIdx;
       await prisma.rencanaProduksi.update({
         where: { id: allRphs[idx].id },
-        data: { status: "ACTIVE", startTime: new Date() },
+        data: { status: "ACTIVE", startTime: nowWIB() },
       });
       allRphs[idx].status = "ACTIVE";
-      allRphs[idx].startTime = new Date();
+      allRphs[idx].startTime = nowWIB();
     }
   }
 
@@ -881,7 +882,7 @@ const closeRph = async (rphId) => {
     where: { id: rphId },
     data: {
       status: "CLOSED",
-      endTime: new Date(),
+      endTime: nowWIB(),
     },
   });
 

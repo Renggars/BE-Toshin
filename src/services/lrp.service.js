@@ -6,6 +6,7 @@ import ApiError from "../utils/ApiError.js";
 import moment from "moment";
 import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
 import { oeeQueue } from "../queues/oeeQueue.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 /**
  * Helper: enqueue OEE recalculation job dengan dedup + delay.
@@ -77,7 +78,7 @@ const createLrp = async (lrpBody) => {
 
     // 4. Hitung loading time (Gunakan start_time ke end_time atau shift)
     let loadingTime = 0;
-    const currentEnd = rph.endTime || new Date();
+    const currentEnd = rph.endTime || nowWIB();
     if (rph.startTime) {
       loadingTime = Math.ceil(
         (new Date(currentEnd) - new Date(rph.startTime)) / 60000,
@@ -114,7 +115,8 @@ const createLrp = async (lrpBody) => {
         counterEnd: data.counterEnd != null ? Number(data.counterEnd) : null,
         noKanagata: data.noKanagata,
         noLot: data.noLot,
-        updatedAt: new Date(),
+        createdAt: nowWIB(),
+        updatedAt: nowWIB(),
       },
     });
 
@@ -123,7 +125,7 @@ const createLrp = async (lrpBody) => {
       where: { id: data.rphId },
       data: {
         status: "CLOSED",
-        endTime: new Date(),
+        endTime: nowWIB(),
       },
     });
 

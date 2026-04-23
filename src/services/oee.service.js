@@ -1,5 +1,6 @@
 import moment from "moment";
 import prisma from "../../prisma/index.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 const calculateLoadingTime = (shift) => {
   const start = moment(shift.jamMasuk, "HH:mm");
@@ -146,6 +147,7 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
         totalOutput: totalOutput,
         totalOk: totalOk,
         idealCycleTime: idealCycleTime,
+        createdAt: nowWIB(),
       },
     });
 

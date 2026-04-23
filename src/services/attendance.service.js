@@ -2,6 +2,7 @@ import httpStatus from "http-status";
 import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
 import poinService from "./poin.service.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 /**
  * Get all users scheduled for a specific shift, date, and optionally division
@@ -118,7 +119,7 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
 const clockIn = async (user, req) => {
   if (user.role !== "PRODUKSI") return;
 
-  const now = new Date();
+  const now = nowWIB();
   const dateStr = now.toLocaleDateString("en-CA"); // YYYY-MM-DD
 
   // 1. Cari RPH hari ini
@@ -250,12 +251,11 @@ const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId 
   } else {
     // Determine the tap time for a manual present mark - lets use start of shift + a bit, or current time
     // Better to use current time or start of shift. Let's use current time.
-    const now = new Date();
     attendanceRecord = await prisma.attendance.create({
       data: {
         userId: parseInt(userId),
         rphId: rph.id,
-        jamTap: now,
+        jamTap:nowWIB(),
         tanggal: new Date(tanggal),
         isTerlambat,
       },

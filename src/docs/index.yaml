@@ -191,6 +191,24 @@ components:
           type: string
           format: date-time
 
+    Document:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        judul: { type: string, example: "SOP Maintenance Mesin A" }
+        deskripsi: { type: string, nullable: true, example: "Panduan perawatan preventif mesin A" }
+        kategori: { type: string, nullable: true, example: "MAINTENANCE" }
+        namaFile: { type: string, example: "sop-maintenance.pdf" }
+        ukuranByte: { type: integer, example: 1048576 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        uploadedBy:
+          type: object
+          properties:
+            id: { type: integer, example: 3 }
+            nama: { type: string, example: "Admin User" }
+            role: { type: string, example: "ADMIN" }
+
 security:
   - bearerAuth: []
 
@@ -242,6 +260,12 @@ tags:
       - `ANDON_RESOLVED` - Saat Andon diselesaikan
 
       **WebSocket Event:** `notification` - Dikirim ke room `user:<userId>` secara real-time
+  - name: Document
+    description: |
+      Sistem Manajemen Dokumen PDF.
+      - **Read**: Bisa diakses semua user.
+      - **CRUD**: Hanya bisa diakses oleh role `ADMIN` atau `SUPERVISOR`.
+      - Mendukung pencarian judul dan pagination.
 
 paths:
   /health:
@@ -4054,3 +4078,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /documents:
+    get:
+      summary: Get Document List
+      description: |
+        Mengambil daftar dokumen PDF dengan fitur pencarian judul dan pagination.
+        Akses: Semua user terautentikasi.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Cari berdasarkan judul dokumen
+        - in: query
+          name: kategori
+          schema: { type: string }
+          description: Filter berdasarkan kategori
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Document" }
+                  meta:
+                    type: object
+                    properties:
+                      totalItems: { type: integer }
+                      totalPages: { type: integer }
+                      currentPage: { type: integer }
+
+    post:
+      summary: Upload New PDF Document
+      description: |
+        Menambahkan dokumen PDF baru ke sistem.
+        Akses: `ADMIN` atau `SUPERVISOR`.
+        Format: `multipart/form-data`.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [judul, file]
+              properties:
+                judul: { type: string, example: "Manual Book Mesin B" }
+                deskripsi: { type: string, example: "Panduan operasional" }
+                kategori: { type: string, example: "PRODUKSI" }
+                file: { type: string, format: binary, description: "File PDF (Max 10MB)" }
+      responses:
+        "201":
+          description: Document uploaded successfully
+        "400":
+          description: Validation error / File not PDF
+
+  /documents/{id}:
+    get:
+      summary: Get Document Detail
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Document" }
+
+    patch:
+      summary: Update Document
+      description: |
+        Update metadata dokumen atau ganti file PDF-nya.
+        Akses: `ADMIN` atau `SUPERVISOR`.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                judul: { type: string }
+                deskripsi: { type: string }
+                kategori: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated successfully
+
+    delete:
+      summary: Delete Document
+      description: Menghapus dokumen dari database dan file fisik dari server.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted successfully
+
+  /documents/{id}/download:
+    get:
+      summary: Download/Preview PDF
+      description: |
+        Mengambil file fisik PDF.
+        Gunakan parameter `?inline=true` untuk membuka di tab baru browser.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: inline
+          schema: { type: boolean }
+          description: Set true untuk preview di browser
+      responses:
+        "200":
+          description: Success (PDF File)
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }

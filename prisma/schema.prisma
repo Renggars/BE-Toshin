@@ -344,6 +344,27 @@ model TipeDisiplin {
   @@map("tipe_disiplin")
 }
 
+model Document {
+  id            Int      @id @default(autoincrement())
+  judul         String   @db.VarChar(255)
+  deskripsi     String?  @db.Text
+  kategori      String?  @db.VarChar(100)
+  namaFile      String   @map("nama_file") @db.VarChar(255)
+  pathFile      String   @map("path_file") @db.VarChar(500)
+  ukuranByte    Int      @map("ukuran_byte")
+  mimeType      String   @map("mime_type") @db.VarChar(50)
+  uploadedById  Int      @map("fk_uploaded_by")
+  createdAt     DateTime @map("created_at")
+  updatedAt     DateTime @map("updated_at")
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([judul])
+  @@index([kategori])
+  @@index([uploadedById])
+  @@index([createdAt])
+  @@map("document")
+}
+
 model User {
   id                                    Int                        @id @default(autoincrement())
   role                                  UserRole                   @default(PRODUKSI)
@@ -368,6 +389,7 @@ model User {
   poinDisiplinOperator                  PoinDisiplin[]             @relation("poin_disiplin_fk_id_operatorTouser")
   poinDisiplinStaff                     PoinDisiplin[]             @relation("poin_disiplin_fk_id_staffTouser")
   rencanaProduksi                       RencanaProduksi[]
+  documents                             Document[]
   divisi                                Divisi                     @relation(fields: [divisiId], references: [id])
 
   @@index([divisiId], map: "user_fk_id_divisi_fkey")
