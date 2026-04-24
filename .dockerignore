@@ -6,5 +6,6 @@ npm-debug.log
 .gitignore
 tmp
 k6
-public/exports/*
-public/uploads/*
+public/exports/
+public/uploads/
+storage/
