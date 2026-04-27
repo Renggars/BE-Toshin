@@ -7,13 +7,13 @@
     "releaseNotes": "Initial Android release",
     "forceUpdate": false,
     "minVersion": "1.0.0"
-  },
+  },  
   "windows": {
-    "version": "1.0.0",
-    "buildNumber": 1,
-    "releaseDate": "2026-03-30",
-    "downloadUrl": "/app-releases/toshin-setup.exe",
-    "releaseNotes": "Initial Windows release",
+    "version": "1.0.2",
+    "buildNumber": 3,
+    "releaseDate": "2026-04-27",
+    "downloadUrl": "/app-releases/toshin.exe",
+    "releaseNotes": "Update aplikasi untuk Windows",
     "forceUpdate": false,
     "minVersion": "1.0.0"
   }
