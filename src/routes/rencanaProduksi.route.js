@@ -26,6 +26,12 @@ router.post(
   rencanaProduksiController.closeActiveRph,
 );
 
+router.post(
+  "/activate-rph/:rphId",
+  auth("PRODUKSI", "SUPERVISOR"),
+  rencanaProduksiController.activateActiveRph,
+);
+
 router.get(
   "/dashboard/summary",
   auth("SUPERVISOR"),
