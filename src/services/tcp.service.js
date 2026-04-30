@@ -17,9 +17,7 @@ const sendCommandToDevice = (deviceId, payload) => {
     if (deviceSocket) {
         try {
             const dataString = JSON.stringify(payload) + '\n';
-
             deviceSocket.write(dataString);
-
             logger.info(`[TCP] Sukses mengirim perintah ke alat ${deviceId}: ${dataString.trim()}`);
             return true;
         } catch (error) {
@@ -43,10 +41,12 @@ const initTcpServer = (port = 4210) => {
         logger.info(`[TCP] Koneksi baru masuk dari: ${socket.remoteAddress}:${socket.remotePort}`);
 
         socket.on('data', (data) => {
-            try {
-                const incomingMsg = data.toString().trim();
-                logger.info(`[TCP] Pesan diterima: ${incomingMsg}`);
+            const incomingMsg = data.toString().trim();
+            if (!incomingMsg) return;
+            
+            logger.info(`[TCP] Pesan diterima: ${incomingMsg}`);
 
+            try {
                 const parsed = JSON.parse(incomingMsg);
 
                 if (parsed.type === 'register' && parsed.deviceId) {
@@ -54,15 +54,24 @@ const initTcpServer = (port = 4210) => {
 
                     connectedDevices.set(currentDeviceId, socket);
 
-                    logger.info(`[TCP] Alat ${currentDeviceId} berhasil diregistrasi.`);
+                    logger.info(`[TCP] Alat ${currentDeviceId} berhasil diregistrasi (via JSON).`);
                     // Opsional: Kirim balasan koneksi sukses ke ESP32
                     socket.write(JSON.stringify({ status: 'registered', deviceId: currentDeviceId }) + '\n');
                 }
 
             } catch (error) {
-                logger.error('[TCP] Gagal membaca data yang masuk sebagai JSON:', error.message);
+                // Fallback: Jika pesan bukan JSON (misal hardware hanya mengirim "ESP32_MASTER")
+                if (!incomingMsg.startsWith('{') && !incomingMsg.startsWith('[')) {
+                    currentDeviceId = incomingMsg; // Anggap string yang masuk adalah deviceId
+                    connectedDevices.set(currentDeviceId, socket);
+                    logger.info(`[TCP] Alat ${currentDeviceId} berhasil diregistrasi (via Raw String).`);
+                    
+                    // Balas dengan format yang diharapkan hardware
+                    socket.write(JSON.stringify({ status: 'registered', deviceId: currentDeviceId }) + '\n');
+                } else {
+                    logger.error('[TCP] Gagal membaca data yang masuk sebagai JSON:', error.message);
+                }
             }
-
         });
 
         socket.on('error', (err) => {
