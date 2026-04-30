@@ -1,6 +1,5 @@
 import prisma from "../../prisma/index.js";
 import { emitNotification } from "../config/socket.js";
-import logger from "../config/logger.js";
 import { nowWIB } from "../utils/dateWIB.js";
 
 // buat notifikasi

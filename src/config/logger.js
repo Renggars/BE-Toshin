@@ -12,11 +12,9 @@ const logger = winston.createLogger({
   level: config.env === "development" ? "debug" : "info",
   format: winston.format.combine(
     enumerateErrorFormat(),
-    config.env === "development"
-      ? winston.format.colorize()
-      : winston.format.uncolorize(),
-    winston.format.splat(),
-    winston.format.printf(({ level, message }) => `${level}: ${message}`)
+    ...(config.env === "development"
+      ? [winston.format.colorize(), winston.format.splat(), winston.format.printf(({ level, message }) => `${level}: ${message}`)]
+      : [winston.format.timestamp(), winston.format.json()])
   ),
   transports: [
     new winston.transports.Console({
