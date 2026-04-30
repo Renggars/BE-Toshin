@@ -9,12 +9,12 @@ import { check, fail } from "k6";
 import { BASE_URL } from "../config.js";
 
 /**
- * Login dengan uid_nfc dan kembalikan data auth.
- * @param {string} uid_nfc
+ * Login dengan uidNfc dan kembalikan data auth.
+ * @param {string} uidNfc
  * @returns {object} { token, user, dashboard }
  */
-export function login(uid_nfc) {
-  const payload = JSON.stringify({ uid_nfc });
+export function login(uidNfc) {
+  const payload = JSON.stringify({ uidNfc });
   const params = {
     headers: {
       "Content-Type": "application/json",
@@ -37,7 +37,7 @@ export function login(uid_nfc) {
   });
 
   if (!ok) {
-    console.error(`Login gagal untuk uid_nfc=${uid_nfc}: ${res.status} - ${res.body}`);
+    console.error(`Login gagal untuk uidNfc=${uidNfc}: ${res.status} - ${res.body}`);
     fail("Login gagal, test dihentikan.");
   }
 

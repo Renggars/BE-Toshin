@@ -1,0 +1,250 @@
+Penjelasan Dashboard Monitoring Grafana kamu
+Dashboard ini menggunakan Grafana + Prometheus untuk memonitor aplikasi dan infrastruktur. Ini yang sedang dimonitor:
+
+📊 Panel yang Ada Sekarang
+Bagian Aplikasi (HTTP Metrics)
+
+Request Rate — jumlah request per detik yang masuk ke aplikasi
+Latency P50/P95/P99 — waktu respons dalam milidetik. P50 = median, P95 = 95% request selesai di bawah nilai ini, P99 = yang paling lambat (worst case)
+Average Latency — rata-rata waktu respons
+Error Rate (%) — persentase request yang gagal (4xx/5xx)
+Status Code Distribution — breakdown response code (200, 404, 500, dll)
+Logs — log aplikasi langsung di Grafana (butuh Loki)
+
+Bagian Infrastruktur (System Metrics)
+
+Goroutines — jumlah goroutine aktif (khusus Go, ini yang akan kamu hapus)
+Resident Memory (MB) — RAM yang benar-benar dipakai proses di OS
+CPU Usage (%) — pemakaian CPU
+Heap Memory (MB) — memori yang dipakai untuk menyimpan objek/data di runtime
+
+
+🧠 Apa itu Resident Memory vs Heap Memory?
+Resident Memory (RSS)Heap MemoryApaTotal RAM yang dipakai proses di OSBagian dari RAM untuk menyimpan objek/variabelDiukur olehOS (node-exporter)Runtime bahasa (Node.js/Go)Lebih besar?Ya, RSS selalu ≥ HeapLebih kecil dari RSSKenapa beda?RSS termasuk code, stack, shared libsHeap hanya objek yang dialokasikan di program
+Analoginya: Heap = isi lemari kamu, RSS = lemari + rumah + garasi semuanya.
+
+✅ Rekomendasi Panel untuk Node.js
+Karena pakai Node.js, hapus Goroutines dan ganti/tambah dengan ini:
+Runtime Node.js
+
+Event Loop Lag (ms) — ini PALING penting di Node.js! Kalau event loop lambat, semua request ikut lambat. Pakai library prom-client dengan collectDefaultMetrics()
+Active Handles & Requests — jumlah koneksi/timer aktif di event loop
+GC Duration — seberapa sering dan lama Garbage Collector jalan (bisa bikin lag)
+GC Pause Count — frekuensi GC per menit
+
+Database & External
+
+DB Query Duration — latency ke database (PostgreSQL/MySQL/MongoDB)
+DB Connection Pool — berapa koneksi yang aktif/idle/waiting
+Redis Hit/Miss Rate — kalau pakai Redis/cache
+
+Business Metrics (opsional tapi berguna)
+
+Active Users / Sessions — user yang sedang aktif
+Queue Length — kalau pakai message queue (RabbitMQ, Bull, dll)
+
+
+🛠️ Setup di Node.js
+Pakai library prom-client:
+javascriptconst client = require('prom-client');
+
+// Auto collect: heap, RSS, event loop lag, GC, handles
+client.collectDefaultMetrics({ timeout: 5000 });
+
+// Expose ke Prometheus
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});
+Ini otomatis akan expose metrik heap memory, RSS, event loop lag, dan GC — tinggal sambungkan ke Prometheus scrape config kamu.You said: karena saya ada web socket apakah itu bisa dimonitoring disitu juga?karena saya ada web socket apakah itu bisa dimonitoring disitu juga?9:57 AMClaude responded: Ya, WebSocket bisa dimonitor di Grafana!Ya, WebSocket bisa dimonitor di Grafana! Ini yang bisa kamu tambahkan:
+
+📡 Metrik WebSocket yang Bisa Dimonitor
+Koneksi
+
+Active Connections — jumlah client yang sedang terkoneksi saat ini
+Connection Rate — berapa koneksi baru per detik
+Disconnection Rate — berapa yang disconnect per detik (normal vs error)
+
+Pesan
+
+Messages Sent/Received per second — throughput pesan
+Message Size (bytes) — rata-rata ukuran payload
+Message Processing Duration — waktu proses tiap pesan
+
+Error
+
+Connection Errors — gagal handshake, timeout, dll
+Abnormal Closures — disconnect tidak normal (kode 1006, dll)
+
+
+🛠️ Implementasi di Node.js
+Kamu perlu buat custom metrics manual pakai prom-client. Contoh kalau pakai ws library:
+javascriptconst client = require('prom-client');
+
+// Define metrics
+const wsActiveConnections = new client.Gauge({
+  name: 'ws_active_connections',
+  help: 'Jumlah WebSocket connections yang aktif',
+});
+
+const wsMessagesTotal = new client.Counter({
+  name: 'ws_messages_total',
+  help: 'Total pesan WebSocket',
+  labelNames: ['direction'], // 'sent' atau 'received'
+});
+
+const wsMessageDuration = new client.Histogram({
+  name: 'ws_message_duration_seconds',
+  help: 'Durasi proses pesan WebSocket',
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
+});
+
+const wsErrorsTotal = new client.Counter({
+  name: 'ws_errors_total',
+  help: 'Total error WebSocket',
+  labelNames: ['type'],
+});
+
+// Pasang ke event handler WebSocket
+wss.on('connection', (ws) => {
+  wsActiveConnections.inc(); // +1 saat connect
+
+  ws.on('message', (data) => {
+    wsMessagesTotal.inc({ direction: 'received' });
+
+    const end = wsMessageDuration.startTimer();
+    
+    // proses pesan kamu di sini...
+    handleMessage(data);
+    
+    end(); // stop timer
+  });
+
+  ws.on('close', (code) => {
+    wsActiveConnections.dec(); // -1 saat disconnect
+
+    if (code !== 1000) { // 1000 = normal closure
+      wsErrorsTotal.inc({ type: 'abnormal_closure' });
+    }
+  });
+
+  ws.on('error', (err) => {
+    wsErrorsTotal.inc({ type: err.code || 'unknown' });
+  });
+});
+
+📊 Panel Grafana yang Ditambahkan
+PanelQuery PrometheusTipeActive Connectionsws_active_connectionsGauge / GraphMessage Raterate(ws_messages_total[1m])GraphAvg Processing Timerate(ws_message_duration_seconds_sum[1m]) / rate(ws_message_duration_seconds_count[1m])GraphError Raterate(ws_errors_total[1m])Graph
+
+⚠️ Yang Perlu Diperhatikan
+
+Scale horizontal — kalau kamu pakai multiple instance/pod, pastikan Prometheus scrape semua instance, lalu di Grafana pakai sum(ws_active_connections) bukan langsung query mentah
+Socket.IO — kalau kamu pakai Socket.IO bukan ws langsung, ada library tambahan socket.io-prometheus-metrics yang bisa auto-instrument tanpa nulis manual
+You said: saya juga ada redis untuk proses synchronus kalkulasi oee jadi saat user submit lrp kan harusnya kalkulasi oee baru return response succes nah saya pakai worke…saya juga ada redis untuk proses synchronus kalkulasi oee jadi saat user submit lrp kan harusnya kalkulasi oee baru return response succes nah saya pakai worker dari redi untuk proses itu tanpa nunggu langsung return response succes create lrp9:59 AMClaude responded: Oh jadi arsitekturnya seperti ini ya:Oh jadi arsitekturnya seperti ini ya:
+User Submit LRP → API return "success" → Redis Queue → Worker proses kalkulasi OEE
+Ini pattern async job queue yang bagus! Berarti kamu pakai Bull/BullMQ atau redis pub/sub langsung?
+
+📊 Metrik Redis & Queue yang Bisa Dimonitor
+Queue Health (paling penting!)
+
+Waiting Jobs — berapa job OEE yang antri belum diproses
+Active Jobs — sedang diproses worker sekarang
+Completed Jobs — berhasil selesai
+Failed Jobs — gagal (ini harus di-alert!)
+Delayed Jobs — job yang dijadwalkan ulang
+
+Worker Performance
+
+Job Processing Duration — berapa lama kalkulasi OEE satu job
+Worker Throughput — berapa job selesai per menit
+Worker Concurrency — berapa worker aktif
+
+Redis Server
+
+Redis Memory Usage — RAM yang dipakai Redis
+Redis Connected Clients — jumlah koneksi ke Redis
+Redis Commands/sec — throughput command
+
+
+🛠️ Implementasi kalau pakai BullMQ
+javascriptconst { Queue, Worker, QueueEvents } = require('bullmq');
+const client = require('prom-client');
+
+// === METRICS DEFINITION ===
+const jobDuration = new client.Histogram({
+  name: 'oee_job_duration_seconds',
+  help: 'Durasi kalkulasi OEE per job',
+  labelNames: ['status'], // 'completed' | 'failed'
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30], // sesuaikan ekspektasi durasi OEE kamu
+});
+
+const jobsTotal = new client.Counter({
+  name: 'oee_jobs_total',
+  help: 'Total job OEE yang diproses',
+  labelNames: ['status'],
+});
+
+const queueSize = new client.Gauge({
+  name: 'oee_queue_waiting',
+  help: 'Jumlah job OEE yang antri',
+});
+
+const activeJobs = new client.Gauge({
+  name: 'oee_queue_active',
+  help: 'Jumlah job OEE yang sedang diproses',
+});
+
+// === QUEUE ===
+const oeeQueue = new Queue('oee-calculation', { connection: redisConfig });
+
+// Update queue size tiap 5 detik
+setInterval(async () => {
+  const waiting = await oeeQueue.getWaitingCount();
+  const active = await oeeQueue.getActiveCount();
+  queueSize.set(waiting);
+  activeJobs.set(active);
+}, 5000);
+
+// === WORKER ===
+const worker = new Worker('oee-calculation', async (job) => {
+  const end = jobDuration.startTimer();
+  
+  try {
+    const result = await hitungOEE(job.data); // logika kalkulasi kamu
+    
+    end({ status: 'completed' });
+    jobsTotal.inc({ status: 'completed' });
+    
+    return result;
+  } catch (err) {
+    end({ status: 'failed' });
+    jobsTotal.inc({ status: 'failed' });
+    throw err;
+  }
+}, { connection: redisConfig });
+
+// === API ENDPOINT ===
+app.post('/lrp', async (req, res) => {
+  await oeeQueue.add('calculate', {
+    lrpId: req.body.id,
+    // data lain...
+  });
+
+  res.json({ success: true, message: 'LRP created, OEE sedang dikalkulasi' });
+});
+
+📊 Panel Grafana yang Ditambahkan
+PanelQueryTipeKenapa PentingQueue Depthoee_queue_waitingGaugeKalau naik terus = worker kewalahanActive Workersoee_queue_activeGaugeBerapa job paralelJob Success Raterate(oee_jobs_total{status="completed"}[5m])GraphThroughput normalJob Failed Raterate(oee_jobs_total{status="failed"}[5m])Graph⚠️ Harus di-alertOEE Calc Durationhistogram_quantile(0.95, oee_job_duration_seconds_bucket)GraphP95 durasi kalkulasi
+
+🚨 Rekomendasi Alert
+Yang paling kritis untuk di-set alert di Grafana:
+# Alert kalau ada job gagal
+rate(oee_jobs_total{status="failed"}[5m]) > 0
+
+# Alert kalau queue numpuk (misal > 50 job antri)
+oee_queue_waiting > 50
+
+# Alert kalau kalkulasi OEE terlalu lama (> 30 detik)
+histogram_quantile(0.95, oee_job_duration_seconds_bucket) > 30
+
+Kalau kamu pakai Bull (bukan BullMQ) atau pub/sub Redis langsung, implementasinya sedikit beda. Kamu pakai yang mana?

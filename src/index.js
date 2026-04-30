@@ -1,3 +1,6 @@
+import { initTracing } from "./config/tracing.js";
+initTracing();
+
 import prisma from "../prisma/index.js";
 import app from "./app.js";
 import config from "./config/config.js";

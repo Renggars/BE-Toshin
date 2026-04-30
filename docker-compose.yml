@@ -20,6 +20,8 @@ services:
       - JWT_REFRESH_EXPIRATION_DAYS=${JWT_REFRESH_EXPIRATION_DAYS:-7}
       - EMAIL_USER=${EMAIL_USER:-}
       - EMAIL_PASS=${EMAIL_PASS:-}
+      - OTEL_SERVICE_NAME=toshin-backend
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
     depends_on:
       mysql:
         condition: service_healthy
@@ -29,7 +31,7 @@ services:
       - exports_data:/app/public/exports
       - uploads_data:/app/public/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-4001}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -143,10 +145,13 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
     ports:
       - "3000:3000"
     depends_on:
       - prometheus
+      - loki
+      - tempo
 
   nginx:
     image: nginx:latest
@@ -172,6 +177,60 @@ services:
     depends_on:
       - redis
 
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: toshin-loki
+    user: root
+    restart: always
+    mem_limit: 512m
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tempo:
+    image: grafana/tempo:main-814c1c6
+    container_name: toshin-tempo
+    user: root
+    restart: always
+    mem_limit: 512m
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./monitoring/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4317"
+    depends_on:
+      - prometheus
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: toshin-alloy
+    restart: always
+    privileged: true
+    ports:
+      - "12345:12345"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    depends_on:
+      - loki
+      - tempo
+
 volumes:
   mysql_data:
   redis_data:
@@ -179,3 +238,5 @@ volumes:
   uploads_data:
   prometheus_data:
   grafana_data:
+  loki_data:
+  tempo_data:
