@@ -165,6 +165,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       .find((r) => r.status === "PLANNED");
     if (plannedRph) {
       rp = plannedRph;
+      justActivated = true;
     }
   }
 
@@ -672,11 +673,7 @@ const getHistoryRPH = async (filterTanggal, userId) => {
       shift: curr.shift ? `${curr.shift.tipeShift}(${curr.shift.jamMasuk}-${curr.shift.jamKeluar})` : "-",
       shift_id: curr.shift?.id,
       kategori_shift: curr.shift?.tipeShift || "-",
-      target: {
-        target_normal: targetKalkulasi.targetNormal,
-        target_lembur: targetKalkulasi.targetLembur,
-        total_target: targetKalkulasi.totalTarget,
-      },
+      target: targetKalkulasi.totalTarget,
       target_id: curr.target?.id,
       jenis_pekerjaan_id: curr.jenisPekerjaanId || curr.target?.jenisPekerjaanId,
       jenis_pekerjaan: curr.jenisPekerjaan?.namaPekerjaan || "-",

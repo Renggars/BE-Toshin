@@ -16,6 +16,19 @@ import {
 import logger from "../config/logger.js";
 
 import notificationService from "./notification.service.js";
+import tcpService from "./tcp.service.js";
+
+const getHardwareDivisi = (divisiStr) => {
+  // TODO: JIKA DIVISI BUKAN HANYA MTC BISA DIUBAH DI KODE INI
+  // if (!divisiStr) return "MTC";
+  // const upper = divisiStr.toUpperCase();
+  // if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
+  // if (upper.includes("QUALITY") || upper === "QC") return "QC";
+  // if (upper.includes("DIE")) return "DIE";
+  // return "PROD";
+  
+  return "MTC"; // Sementara pastikan return selalu MTC
+};
 
 const TZ = "Asia/Jakarta";
 import { nowWIB } from "../utils/dateWIB.js";
@@ -606,6 +619,11 @@ const startRepairAndon = async (id, data) => {
     const plantFilter = newEvent.plant ? { plant: newEvent.plant } : {};
     const summary = await calculateAndonSummary(plantFilter);
     emitAndonSummaryUpdated(summary);
+
+    // Trigger Hardware TCP (Clear Call)
+    const hwMesin = newEvent.mesin?.namaMesin || "UNKNOWN";
+    const hwDivisi = getHardwareDivisi(call.targetDivisi);
+    tcpService.broadcastCommand(`ANDON;${hwMesin};${hwDivisi};CLEAR`);
 
     return newEvent;
   }

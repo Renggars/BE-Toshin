@@ -16,6 +16,7 @@ import healthRoute from "./health.route.js";
 import metricsRoute from "./metrics.route.js";
 import hardwareRoute from "./hardware.route.js";
 import documentRoute from "./document.route.js";
+import appVersionRoute from "./appVersion.route.js";
 
 const router = express.Router();
 
@@ -87,6 +88,10 @@ const defaultRoutes = [
   {
     path: "/documents",
     route: documentRoute,
+  },
+  {
+    path: "/app-version",
+    route: appVersionRoute,
   },
 ];
 

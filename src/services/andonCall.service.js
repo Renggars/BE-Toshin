@@ -8,6 +8,19 @@ import {
 } from "../config/socket.js";
 import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
+import tcpService from "./tcp.service.js";
+
+
+// TODO JIKA DIVISI BUKAN HANYA MTC BISA DIUBAH DI KODE INI
+const getHardwareDivisi = (divisiStr) => {
+  // if (!divisiStr) return "MTC";
+  // const upper = divisiStr.toUpperCase();
+  // if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
+  // if (upper.includes("QUALITY") || upper === "QC") return "QC";
+  // if (upper.includes("DIE")) return "DIE";
+  
+  return "MTC"; // Sementara pastikan return selalu MTC
+};
 
 const TZ = "Asia/Jakarta";
 import { nowWIB } from "../utils/dateWIB.js";
@@ -132,6 +145,11 @@ const createCall = async (payload) => {
   const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
+
+  // Trigger Hardware TCP
+  const hwMesin = newCall.mesin?.namaMesin || "UNKNOWN";
+  const hwDivisi = getHardwareDivisi(targetDivisi);
+  tcpService.broadcastCommand(`ANDON;${hwMesin};${hwDivisi};CALL`);
 
   // Send notification to supervisors of the TARGET division
   const supervisors = await prisma.user.findMany({
