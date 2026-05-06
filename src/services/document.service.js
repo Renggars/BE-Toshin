@@ -14,19 +14,7 @@ import { nowWIB } from "../utils/dateWIB.js";
  * @returns {Promise<Document>}
  */
 const createDocument = async (body, file, uploadedById) => {
-  const { judul, deskripsi, kategori } = body;
-
-  const existing = await prisma.document.findFirst({
-    where: { judul: judul },
-  });
-  if (existing) {
-    // Hapus file yang sudah diupload agar tidak orphan
-    fs.unlink(file.path, () => {});
-    throw new ApiError(
-      httpStatus.CONFLICT,
-      "Dokumen dengan judul ini sudah ada",
-    );
-  }
+  const { judul, deskripsi, kategori, mesinId, produkId, noSeri } = body;
 
   return prisma.document.create({
     data: {
@@ -38,10 +26,17 @@ const createDocument = async (body, file, uploadedById) => {
       ukuranByte: file.size,
       mimeType: file.mimetype,
       uploadedById,
+      mesinId: mesinId ? Number(mesinId) : null,
+      produkId: produkId ? Number(produkId) : null,
+      noSeri: noSeri || null,
       createdAt: nowWIB(),
       updatedAt: nowWIB(),
     },
-    include: { uploadedBy: { select: { id: true, nama: true, role: true } } },
+    include: {
+      uploadedBy: { select: { id: true, nama: true, role: true } },
+      mesin: { select: { id: true, namaMesin: true } },
+      produk: { select: { id: true, namaProduk: true } },
+    },
   });
 };
 
@@ -53,6 +48,8 @@ const getDocuments = async (query) => {
   const {
     search = "",
     kategori,
+    mesinId,
+    produkId,
     page = 1,
     limit = 10,
     sortBy = "createdAt",
@@ -67,6 +64,8 @@ const getDocuments = async (query) => {
       judul: { contains: search },
     }),
     ...(kategori && { kategori }),
+    ...(mesinId && { mesinId: Number(mesinId) }),
+    ...(produkId && { produkId: Number(produkId) }),
   };
 
   const [data, totalItems] = await Promise.all([
@@ -82,9 +81,12 @@ const getDocuments = async (query) => {
         kategori: true,
         namaFile: true,
         ukuranByte: true,
+        noSeri: true,
         createdAt: true,
         updatedAt: true,
         uploadedBy: { select: { id: true, nama: true, role: true } },
+        mesin: { select: { id: true, namaMesin: true } },
+        produk: { select: { id: true, namaProduk: true } },
       },
     }),
     prisma.document.count({ where }),
@@ -107,7 +109,11 @@ const getDocuments = async (query) => {
 const getDocumentById = async (id) => {
   const doc = await prisma.document.findUnique({
     where: { id: Number(id) },
-    include: { uploadedBy: { select: { id: true, nama: true, role: true } } },
+    include: {
+      uploadedBy: { select: { id: true, nama: true, role: true } },
+      mesin: { select: { id: true, namaMesin: true } },
+      produk: { select: { id: true, namaProduk: true } },
+    },
   });
   if (!doc) throw new ApiError(httpStatus.NOT_FOUND, "Dokumen tidak ditemukan");
   return doc;
@@ -125,22 +131,6 @@ const updateDocument = async (id, body, file) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Dokumen tidak ditemukan");
   }
 
-  // Cek duplikat judul (exclude diri sendiri)
-  if (body.judul) {
-    const dup = await prisma.document.findFirst({
-      where: {
-        judul: body.judul,
-        NOT: { id: Number(id) },
-      },
-    });
-    if (dup) {
-      if (file) fs.unlink(file.path, () => {});
-      throw new ApiError(
-        httpStatus.CONFLICT,
-        "Dokumen dengan judul ini sudah ada",
-      );
-    }
-  }
 
   const fileData = file
     ? {
@@ -157,10 +147,17 @@ const updateDocument = async (id, body, file) => {
       ...(body.judul && { judul: body.judul }),
       ...(body.deskripsi !== undefined && { deskripsi: body.deskripsi || null }),
       ...(body.kategori !== undefined && { kategori: body.kategori || null }),
+      ...(body.mesinId !== undefined && { mesinId: body.mesinId ? Number(body.mesinId) : null }),
+      ...(body.produkId !== undefined && { produkId: body.produkId ? Number(body.produkId) : null }),
+      ...(body.noSeri !== undefined && { noSeri: body.noSeri || null }),
       ...fileData,
       updatedAt: nowWIB(),
     },
-    include: { uploadedBy: { select: { id: true, nama: true, role: true } } },
+    include: {
+      uploadedBy: { select: { id: true, nama: true, role: true } },
+      mesin: { select: { id: true, namaMesin: true } },
+      produk: { select: { id: true, namaProduk: true } },
+    },
   });
 
   // Hapus file lama jika file baru diupload
