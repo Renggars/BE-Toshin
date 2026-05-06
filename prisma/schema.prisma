@@ -191,6 +191,7 @@ model Mesin {
   laporanRealisasiProduksi  LaporanRealisasiProduksi[]
   oee                       Oee[]
   rencanaProduksi           RencanaProduksi[]
+  documents                 Document[]
 
   @@map("mesin")
 }
@@ -261,6 +262,7 @@ model Produk {
   namaProduk      String            @unique @map("nama_produk")
   rencanaProduksi RencanaProduksi[]
   target          Target[]
+  documents       Document[]
 
   @@map("produk")
 }
@@ -348,19 +350,26 @@ model Document {
   id            Int      @id @default(autoincrement())
   judul         String   @db.VarChar(255)
   deskripsi     String?  @db.Text
-  kategori      String?  @db.VarChar(100)
+  kategori      String   @db.VarChar(100)
   namaFile      String   @map("nama_file") @db.VarChar(255)
   pathFile      String   @map("path_file") @db.VarChar(500)
   ukuranByte    Int      @map("ukuran_byte")
   mimeType      String   @map("mime_type") @db.VarChar(50)
   uploadedById  Int      @map("fk_uploaded_by")
+  mesinId       Int?     @map("fk_id_mesin")
+  produkId      Int?     @map("fk_id_produk")
+  noSeri        String   @map("no_seri") @db.VarChar(100)
   createdAt     DateTime @map("created_at")
   updatedAt     DateTime @map("updated_at")
   uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+  mesin         Mesin?   @relation(fields: [mesinId], references: [id])
+  produk        Produk?  @relation(fields: [produkId], references: [id])
 
   @@index([judul])
   @@index([kategori])
   @@index([uploadedById])
+  @@index([mesinId])
+  @@index([produkId])
   @@index([createdAt])
   @@map("document")
 }
@@ -414,6 +423,7 @@ enum UserRole {
   ACCOUNTING
   FINANCE
   SUPERVISOR
+  MANDOR
   ADMIN
 
   @@map("user_role")
