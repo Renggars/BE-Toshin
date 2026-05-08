@@ -121,4 +121,25 @@ router.delete(
   masterController.deleteMasalahAndon,
 );
 
+// --- KATEGORI MESIN ---
+router.get("/kategori-mesin", allRoles, masterController.getKategoriMesin);
+router.get("/kategori-mesin/:id", allRoles, masterController.getKategoriMesinById);
+router.post(
+  "/kategori-mesin",
+  managerRoles,
+  validate(masterValidation.createKategoriMesin),
+  masterController.createKategoriMesin,
+);
+router.put(
+  "/kategori-mesin/:id",
+  managerRoles,
+  validate(masterValidation.updateKategoriMesin),
+  masterController.updateKategoriMesin,
+);
+router.delete(
+  "/kategori-mesin/:id",
+  managerRoles,
+  masterController.deleteKategoriMesin,
+);
+
 export default router;

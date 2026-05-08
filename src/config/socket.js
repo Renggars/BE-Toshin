@@ -23,9 +23,16 @@ export const initSocket = (httpServer) => {
     logger.info(`New client connected: ${socket.id}`);
 
     // Emit notifikasi baru ke client spesifik
-    socket.on("join", (userId) => {
+    socket.on("join", ({ userId, role }) => {
       socket.join(`user:${userId}`);
-      logger.info(`Socket ${socket.id} joined room user: ${userId}`);
+      if (role) {
+        socket.join(`role:${role}`);
+        logger.info(
+          `Socket ${socket.id} joined rooms user: ${userId}, role: ${role}`,
+        );
+      } else {
+        logger.info(`Socket ${socket.id} joined room user: ${userId}`);
+      }
     });
 
     socket.on("disconnect", () => {
@@ -204,5 +211,51 @@ export const emitNotification = (userId, notification) => {
     logger.info(`Notification emitted to user: ${userId}`);
   } catch (error) {
     logger.error(`Failed to emit notification to user: ${userId}`, error);
+  }
+};
+
+/**
+ * Emit event real-time untuk Mandor Task
+ * @param {number} userId - ID user penerima (Mandor atau Supervisor)
+ * @param {Object} task - Data task
+ */
+export const emitMandorTaskUpdate = (userId, task) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`user:${userId}`).emit("mandor-task-updated", task);
+    logger.info(`Mandor Task update emitted to user: ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to emit Mandor Task update to user: ${userId}`, error);
+  }
+};
+
+/**
+ * Emit event real-time untuk Pengumuman Operator
+ * @param {number} userId - ID user penerima (Operator)
+ * @param {Object} announcement - Data pengumuman
+ */
+export const emitOperatorAnnouncement = (userId, announcement) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`user:${userId}`).emit("new-announcement", announcement);
+    logger.info(`Announcement emitted to user: ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to emit announcement to user: ${userId}`, error);
+  }
+};
+
+/**
+ * Broadcast event real-time ke semua user dengan role tertentu
+ * @param {string} role - Role penerima (misal: PRODUKSI)
+ * @param {string} event - Nama event
+ * @param {Object} data - Data yang dikirim
+ */
+export const broadcastToRole = (role, event, data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`role:${role}`).emit(event, data);
+    logger.info(`Broadcast ${event} emitted to role: ${role}`);
+  } catch (error) {
+    logger.error(`Failed to broadcast to role: ${role}`, error);
   }
 };

@@ -177,6 +177,7 @@ model MasterMasalahAndon {
   waktuPerbaikanMenit Int                        @map("waktu_perbaikan_menit")
   andonEvent          AndonEvent[]
 
+  @@unique([namaMasalah, kategori])
   @@map("master_masalah_andon")
 }
 
@@ -184,7 +185,7 @@ model Mesin {
   id                        Int                        @id @default(autoincrement())
   namaMesin                 String                     @unique @map("nama_mesin")
   line                      String                     @map("line")
-  kategori                  MesinKategori              @default(PRIMARY)
+  kategoriId                Int?                       @map("fk_id_kategori")
   andonCall                 AndonCall[]
   andonDowntimeShift        AndonDowntimeShift[]
   andonEvent                AndonEvent[]
@@ -192,8 +193,17 @@ model Mesin {
   oee                       Oee[]
   rencanaProduksi           RencanaProduksi[]
   documents                 Document[]
+  kategori                  KategoriMesin?             @relation(fields: [kategoriId], references: [id])
 
   @@map("mesin")
+}
+
+model KategoriMesin {
+  id    Int     @id @default(autoincrement())
+  nama  String  @unique
+  mesin Mesin[]
+
+  @@map("kategori_mesin")
 }
 
 model Notification {
@@ -400,9 +410,47 @@ model User {
   rencanaProduksi                       RencanaProduksi[]
   documents                             Document[]
   divisi                                Divisi                     @relation(fields: [divisiId], references: [id])
+  supervisorTasks                       MandorTask[]               @relation("supervisor_tasks")
+  mandorTasks                           MandorTask[]               @relation("mandor_tasks")
+  mandorAnnouncements                   OperatorAnnouncement[]     @relation("mandor_announcements")
+  operatorAnnouncements                 OperatorAnnouncement[]     @relation("operator_announcements")
 
   @@index([divisiId], map: "user_fk_id_divisi_fkey")
   @@map("user")
+}
+
+model MandorTask {
+  id           Int                @id @default(autoincrement())
+  supervisorId Int                @map("fk_id_supervisor")
+  mandorId     Int                @map("fk_id_mandor")
+  judul        String
+  deskripsi    String             @db.Text
+  prioritas    MandorTaskPriority @default(LOW)
+  status       MandorTaskStatus   @default(TODO)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  supervisor   User               @relation("supervisor_tasks", fields: [supervisorId], references: [id])
+  mandor       User               @relation("mandor_tasks", fields: [mandorId], references: [id])
+
+  @@index([mandorId])
+  @@index([supervisorId])
+  @@map("mandor_task")
+}
+
+model OperatorAnnouncement {
+  id          Int      @id @default(autoincrement())
+  mandorId    Int      @map("fk_id_mandor")
+  operatorId  Int      @map("fk_id_operator")
+  pesan       String   @db.Text
+  isRead      Boolean  @default(false) @map("is_read")
+  broadcastId String?  @map("broadcast_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  mandor      User     @relation("mandor_announcements", fields: [mandorId], references: [id])
+  operator    User     @relation("operator_announcements", fields: [operatorId], references: [id])
+
+  @@index([mandorId])
+  @@index([operatorId])
+  @@map("operator_announcement")
 }
 
 enum UserRole {
@@ -500,4 +548,20 @@ enum RencanaProduksiStatus {
   CLOSED
 
   @@map("rencana_produksi_status")
+}
+
+enum MandorTaskStatus {
+  TODO
+  ON_PROGRESS
+  DONE
+
+  @@map("mandor_task_status")
+}
+
+enum MandorTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("mandor_task_priority")
 }

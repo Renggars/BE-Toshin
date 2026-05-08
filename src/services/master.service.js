@@ -11,6 +11,7 @@ const MASALAH_ANDON_CACHE_KEY = "master_masalah_andon_all";
 const TIPE_DISIPLIN_CACHE_KEY = "master_tipe_disiplin_all";
 const TARGET_CACHE_PREFIX = "master_target:";
 const JENIS_PEKERJAAN_CACHE_KEY = "master_jenis_pekerjaan_all";
+const KATEGORI_MESIN_CACHE_KEY = "master_kategori_mesin_all";
 
 const invalidateMasterCache = async () => {
   try {
@@ -23,6 +24,7 @@ const invalidateMasterCache = async () => {
       redis.del(MASALAH_ANDON_CACHE_KEY),
       redis.del(TIPE_DISIPLIN_CACHE_KEY),
       redis.del(JENIS_PEKERJAAN_CACHE_KEY),
+      redis.del(KATEGORI_MESIN_CACHE_KEY),
       redis.delByPattern(`${TARGET_CACHE_PREFIX}*`),
     ]);
   } catch (err) {
@@ -49,11 +51,13 @@ const getMesin = async () => {
   }
 
   logger.info("[Redis] Cache MISS: Fetching Machines Data from Database...");
-  const allMesin = await prisma.mesin.findMany();
+  const allMesin = await prisma.mesin.findMany({
+    include: { kategori: true },
+  });
 
   // Group by kategori secara dinamis
   const result = allMesin.reduce((acc, mesin) => {
-    const key = mesin.kategori.toLowerCase();
+    const key = mesin.kategori ? mesin.kategori.nama.toLowerCase() : "unassigned";
     if (!acc[key]) acc[key] = [];
     acc[key].push(mesin);
     return acc;
@@ -413,6 +417,39 @@ const deleteTipeDisiplin = async (id) => {
   return res;
 };
 
+// --- Kategori Mesin ---
+const getKategoriMesin = async () => {
+  const cachedData = await redis.get(KATEGORI_MESIN_CACHE_KEY);
+  if (cachedData) return cachedData;
+
+  const result = await prisma.kategoriMesin.findMany();
+  await redis.set(KATEGORI_MESIN_CACHE_KEY, result, 3600);
+  return result;
+};
+const getKategoriMesinById = async (id) => {
+  const result = await prisma.kategoriMesin.findUnique({ where: { id } });
+  if (!result) throw new ApiError(httpStatus.NOT_FOUND, "Kategori Mesin not found");
+  return result;
+};
+
+const createKategoriMesin = async (data) => {
+  const res = await prisma.kategoriMesin.create({ data });
+  await invalidateMasterCache();
+  return res;
+};
+
+const updateKategoriMesin = async (id, data) => {
+  const res = await prisma.kategoriMesin.update({ where: { id }, data });
+  await invalidateMasterCache();
+  return res;
+};
+
+const deleteKategoriMesin = async (id) => {
+  const res = await prisma.kategoriMesin.delete({ where: { id } });
+  await invalidateMasterCache();
+  return res;
+};
+
 export default {
   // Mesin
   getMesin,
@@ -447,6 +484,12 @@ export default {
   createTipeDisiplin,
   updateTipeDisiplin,
   deleteTipeDisiplin,
+  // Kategori Mesin
+  getKategoriMesin,
+  getKategoriMesinById,
+  createKategoriMesin,
+  updateKategoriMesin,
+  deleteKategoriMesin,
   // Aggregated
   getAllMasterData,
 };

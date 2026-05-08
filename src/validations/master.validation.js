@@ -15,13 +15,7 @@ const createMesin = {
   body: Joi.object().keys({
     namaMesin: Joi.string().required(),
     line: Joi.string().allow(null, ""),
-    kategori: Joi.string()
-      .required()
-      .valid(
-        "PRIMARY",
-        "SECONDARY",
-        "NON_PRESS",
-      ),
+    kategoriId: Joi.number().integer().allow(null),
   }),
 };
 
@@ -33,11 +27,7 @@ const updateMesin = {
     .keys({
       namaMesin: Joi.string(),
       line: Joi.string().allow(null, ""),
-      kategori: Joi.string().valid(
-        "PRIMARY",
-        "SECONDARY",
-        "NON_PRESS",
-      ),
+      kategoriId: Joi.number().integer().allow(null),
     })
     .min(1),
 };
@@ -152,6 +142,22 @@ const updateTipeDisiplin = {
     .min(1),
 };
 
+// --- Kategori Mesin ---
+const createKategoriMesin = {
+  body: Joi.object().keys({
+    nama: Joi.string().required(),
+  }),
+};
+
+const updateKategoriMesin = {
+  params: Joi.object().keys({
+    id: Joi.number().required(),
+  }),
+  body: Joi.object().keys({
+    nama: Joi.string().required(),
+  }),
+};
+
 export default {
   createTarget,
   updateTarget,
@@ -166,4 +172,6 @@ export default {
   updateMasalahAndon,
   createTipeDisiplin,
   updateTipeDisiplin,
+  createKategoriMesin,
+  updateKategoriMesin,
 };

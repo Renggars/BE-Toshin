@@ -173,6 +173,41 @@ const deleteTipeDisiplin = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success delete tipe disiplin", null);
 });
 
+// --- Kategori Mesin ---
+const getKategoriMesin = catchAsync(async (req, res) => {
+  const result = await masterService.getKategoriMesin();
+  responseApiSuccess(res, "Success get kategori mesin", result);
+});
+const getKategoriMesinById = catchAsync(async (req, res) => {
+  const result = await masterService.getKategoriMesinById(
+    parseInt(req.params.id),
+  );
+  responseApiSuccess(res, "Success get kategori mesin by id", result);
+});
+
+const createKategoriMesin = catchAsync(async (req, res) => {
+  const result = await masterService.createKategoriMesin(req.body);
+  responseApiSuccess(
+    res,
+    "Success create kategori mesin",
+    result,
+    httpStatus.CREATED,
+  );
+});
+
+const updateKategoriMesin = catchAsync(async (req, res) => {
+  const result = await masterService.updateKategoriMesin(
+    parseInt(req.params.id),
+    req.body,
+  );
+  responseApiSuccess(res, "Success update kategori mesin", result);
+});
+
+const deleteKategoriMesin = catchAsync(async (req, res) => {
+  await masterService.deleteKategoriMesin(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete kategori mesin", null);
+});
+
 export default {
   // Mesin
   getMesin,
@@ -204,6 +239,12 @@ export default {
   createTipeDisiplin,
   updateTipeDisiplin,
   deleteTipeDisiplin,
+  // Kategori Mesin
+  getKategoriMesin,
+  getKategoriMesinById,
+  createKategoriMesin,
+  updateKategoriMesin,
+  deleteKategoriMesin,
   // Aggregated
   getAllMasterData,
 };

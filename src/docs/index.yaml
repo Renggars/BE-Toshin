@@ -266,6 +266,10 @@ tags:
       - **Read**: Bisa diakses semua user.
       - **CRUD**: Hanya bisa diakses oleh role `ADMIN` atau `SUPERVISOR`.
       - Mendukung pencarian judul dan pagination.
+  - name: Mandor Task
+    description: Task management for Mandor by Supervisor
+  - name: Announcement
+    description: Real-time announcements and broadcast for Operators
 
 paths:
   /health:
@@ -369,10 +373,6 @@ paths:
                 line:
                   type: string
                   example: "Line A"
-                noReg:
-                  type: string
-                  example: "REG12345"
-                  nullable: true
       responses:
         "201":
           description: Registration successful
@@ -4237,3 +4237,283 @@ paths:
           content:
             application/pdf:
               schema: { type: string, format: binary }
+  /master/kategori-mesin:
+    get:
+      summary: Get all machine categories
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Create new machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama]
+              properties:
+                nama: { type: string, example: "PRESS" }
+      responses:
+        "201":
+          description: Created
+
+  /master/kategori-mesin/{id}:
+    get:
+      summary: Get machine category by ID
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success
+    put:
+      summary: Update machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama]
+              properties:
+                nama: { type: string, example: "SECONDARY" }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /mandor-tasks:
+    get:
+      summary: Get all mandor tasks
+      description: Get tasks assigned to current mandor or all tasks if Supervisor/Admin.
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Create new mandor task (Supervisor only)
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mandorId, judul, deskripsi]
+              properties:
+                mandorId: { type: integer }
+                judul: { type: string }
+                deskripsi: { type: string }
+                prioritas: { type: string, enum: [LOW, MEDIUM, HIGH], default: "LOW" }
+      responses:
+        "201":
+          description: Created
+
+  /mandor-tasks/{id}:
+    patch:
+      summary: Update mandor task status
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [TODO, ON_PROGRESS, DONE] }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete mandor task (Supervisor only)
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements:
+    get:
+      summary: Get unread announcements for current operator
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Send private announcement to operator (Mandor only)
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operatorId, pesan]
+              properties:
+                operatorId: { type: integer }
+                pesan: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /announcements/broadcast:
+    post:
+      summary: Broadcast announcement to all operators (Mandor only)
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "201":
+          description: Success
+
+  /announcements/broadcast/{broadcastId}:
+    put:
+      summary: Update broadcast announcement group
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: broadcastId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete broadcast announcement group
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: broadcastId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements/{id}:
+    put:
+      summary: Update announcement content
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete announcement
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements/{id}/read:
+    patch:
+      summary: Mark announcement as read
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success

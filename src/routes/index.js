@@ -17,6 +17,8 @@ import metricsRoute from "./metrics.route.js";
 import hardwareRoute from "./hardware.route.js";
 import documentRoute from "./document.route.js";
 import appVersionRoute from "./appVersion.route.js";
+import mandorTaskRoute from "./mandorTask.route.js";
+import announcementRoute from "./announcement.route.js";
 
 const router = express.Router();
 
@@ -92,6 +94,14 @@ const defaultRoutes = [
   {
     path: "/app-version",
     route: appVersionRoute,
+  },
+  {
+    path: "/mandor-tasks",
+    route: mandorTaskRoute,
+  },
+  {
+    path: "/announcements",
+    route: announcementRoute,
   },
 ];
 
