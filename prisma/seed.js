@@ -120,6 +120,21 @@ async function main() {
     }
   }
 
+  // 3. Seed Kategori Mesin
+  console.log("Seeding Kategori Mesin...");
+  const kategoriMesin = [
+    { id: 1, nama: "PRESS" },
+    { id: 2, nama: "SECONDARY" },
+    { id: 3, nama: "NON PRESS" },
+  ];
+  for (const k of kategoriMesin) {
+    await prisma.kategoriMesin.upsert({
+      where: { id: k.id },
+      update: { nama: k.nama },
+      create: { id: k.id, nama: k.nama },
+    });
+  }
+
   // 4. Seed Mesin
   console.log("Seeding Mesin...");
   const mesinWB = xlsx.readFile(path.join(csvDir, "data_mesin.xlsx"));
@@ -127,28 +142,38 @@ async function main() {
     header: 1,
   });
 
-  const validKategoriMesin = [
-    "PRIMARY",
-    "SECONDARY",
-    "NON_PRESS",
-  ];
-
   for (let i = 1; i < rawMesinData.length; i++) {
     const row = rawMesinData[i];
     if (row[0]) {
       const namaMesin = row[0].toString().trim();
       const line = row[1]?.toString().trim() || "";
-      const rawKategori =
-        row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRIMARY";
+      const rawKategori = row[2]?.toString().trim().toUpperCase() || "PRIMARY";
 
-      let kategori = validKategoriMesin.includes(rawKategori)
-        ? rawKategori
-        : "PRIMARY";
+      let kategoriId = 1; // Default PRESS
+
+      // User rule: id mesin 19 keatas non press semua
+      // i di sini mewakili urutan ID jika database kosong (auto-increment)
+      if (i >= 19) {
+        kategoriId = 3; // NON PRESS
+      } else if (rawKategori === "PRIMARY" || rawKategori === "PRESS") {
+        kategoriId = 1; // PRESS
+      } else if (rawKategori === "SECONDARY") {
+        kategoriId = 2; // SECONDARY
+      } else if (rawKategori === "NON_PRESS" || rawKategori === "NON PRESS") {
+        kategoriId = 3; // NON PRESS
+      }
 
       await prisma.mesin.upsert({
         where: { namaMesin },
-        update: { kategori, line },
-        create: { namaMesin, kategori, line },
+        update: {
+          line,
+          kategoriId,
+        },
+        create: {
+          namaMesin,
+          line,
+          kategoriId,
+        },
       });
     }
   }
@@ -310,8 +335,8 @@ async function main() {
     PLAN_DOWNTIME: "PLAN_DOWNTIME",
   };
 
-  console.log("Clearing existing MasterMasalahAndon records...");
-  await prisma.masterMasalahAndon.deleteMany();
+  // console.log("Clearing existing MasterMasalahAndon records...");
+  // await prisma.masterMasalahAndon.deleteMany();
 
   for (const [sheetName, kategoriEnum] of Object.entries(
     andonCategoriesMapping,
@@ -340,9 +365,18 @@ async function main() {
       })
       .filter((record) => record !== null);
 
-    if (records.length > 0) {
-      await prisma.masterMasalahAndon.createMany({
-        data: records,
+    for (const record of records) {
+      await prisma.masterMasalahAndon.upsert({
+        where: {
+          namaMasalah_kategori: {
+            namaMasalah: record.namaMasalah,
+            kategori: record.kategori,
+          },
+        },
+        update: {
+          waktuPerbaikanMenit: record.waktuPerbaikanMenit,
+        },
+        create: record,
       });
     }
   }
