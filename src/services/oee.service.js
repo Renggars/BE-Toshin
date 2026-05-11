@@ -68,8 +68,8 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     let idealCycleTime = 0;
 
     lrpData.forEach((l) => {
-      totalOk += l.qtyOk;
-      totalOutput += l.qtyTotalProd;
+      totalOk = l.qtyOk;
+      totalOutput = l.qtyTotalProd;
       if (l.cycleTime > 0) idealCycleTime = l.cycleTime;
     });
 

@@ -235,6 +235,7 @@ model Oee {
   totalOk         Int      @default(0) @map("total_ok")
   tanggal         DateTime @db.Date
   createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
   idealCycleTime  Float?   @map("ideal_cycle_time")
   mesin           Mesin    @relation(fields: [mesinId], references: [id])
   shift           Shift?   @relation(fields: [shiftId], references: [id])
