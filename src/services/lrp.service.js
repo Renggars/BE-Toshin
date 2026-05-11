@@ -7,6 +7,7 @@ import moment from "moment";
 import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
 import { oeeQueue } from "../queues/oeeQueue.js";
 import { nowWIB } from "../utils/dateWIB.js";
+import oeeService from "./oee.service.js";
 
 /**
  * Helper: enqueue OEE recalculation job dengan dedup + delay.
@@ -14,7 +15,12 @@ import { nowWIB } from "../utils/dateWIB.js";
  * sama hanya akan trigger 1 recalc setelah window delay 3 detik selesai.
  */
 const enqueueOeeRecalc = async (mesinId, tanggal) => {
-  if (!oeeQueue) return;
+  // Jika Redis mati, lakukan kalkulasi langsung (fallback)
+  if (!oeeQueue) {
+    console.info(`[OEE] Redis disabled, performing manual recalculation for machine ${mesinId}`);
+    await oeeService.recalculateByMesin(mesinId, tanggal);
+    return;
+  }
   // Normalize ke YYYY-MM-DD agar jobId selalu konsisten
   // (tanggal bisa berupa Date object atau ISO string)
   const tanggalStr = moment(tanggal).format("YYYY-MM-DD");
@@ -30,118 +36,143 @@ const enqueueOeeRecalc = async (mesinId, tanggal) => {
 };
 
 /**
- * Create LRP
+ * Upsert LRP by RPH ID — Buat DRAFT jika belum ada, update jika sudah ada.
+ * Dapat dipanggil kapan saja selama shift (berkala / saat istirahat).
+ * RPH tidak pernah ditutup di sini.
+ *
+ * @param {number} rphId  - ID Rencana Produksi Harian
+ * @param {Object} data   - Body dari request (qty, noKanagata, noLot, dll)
+ * @returns {Promise<LaporanRealisasiProduksi>}
  */
-const createLrp = async (lrpBody) => {
-  const data = lrpBody;
+const upsertLrpByRphId = async (rphId, data) => {
+  const parsedRphId = parseInt(rphId);
 
-  // 1. Validasi ID RPH
-  if (!data.rphId) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "ID Rencana Produksi (rphId) wajib diisi",
-    );
-  }
+  // === Cek apakah LRP sudah ada untuk RPH ini ===
+  const existingLrp = await prisma.laporanRealisasiProduksi.findUnique({
+    where: { rphId: parsedRphId },
+  });
 
-  const result = await prisma.$transaction(async (tx) => {
-    const rph = await tx.rencanaProduksi.findUnique({
-      where: { id: data.rphId },
-      include: { target: true, shift: true },
-    });
-
-    if (!rph) {
-      throw new ApiError(
-        httpStatus.NOT_FOUND,
-        "Rencana Produksi tidak ditemukan",
-      );
-    }
-
-    // 2. State Guardrails: LRP hanya untuk RPH yang ACTIVE atau CLOSED
-    // RPH tetap ACTIVE agar downtime administrasi tetap masuk ke RPH ini
-    if (rph.status !== "ACTIVE" && rph.status !== "CLOSED") {
+  if (existingLrp) {
+    // ─── UPDATE PATH ────────────────────────────────────────────────────────
+    // Guard: LRP yang sudah SUBMITTED tidak dapat diubah lagi.
+    if (existingLrp.statusLrp === "SUBMITTED") {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        "LRP hanya dapat dibuat untuk Rencana Produksi (RPH) yang berstatus ACTIVE atau CLOSED.",
+        "LRP sudah final (SUBMITTED) dan tidak dapat diubah. Gunakan POST /lrp/:id/submit untuk finalisasi.",
       );
     }
 
-    // 3. Enforce 1:1 Mapping
-    const existingLrp = await tx.laporanRealisasiProduksi.findUnique({
-      where: { rphId: data.rphId },
-    });
-    if (existingLrp) {
-      throw new ApiError(
-        httpStatus.CONFLICT,
-        "LRP for this rphId already exists (Strict 1:1 Mapping)",
-      );
-    }
+    // Recalculate qtyTotalProd dengan data existing sebagai fallback (no extra query)
+    const qtyOk      = data.qtyOk      !== undefined ? Number(data.qtyOk)      : existingLrp.qtyOk;
+    const qtyNgProses = data.qtyNgProses !== undefined ? Number(data.qtyNgProses) : existingLrp.qtyNgProses;
+    const qtyRework  = data.qtyRework  !== undefined ? Number(data.qtyRework)  : existingLrp.qtyRework;
+    const qtyNgPrev  = data.qtyNgPrev  !== undefined ? Number(data.qtyNgPrev)  : existingLrp.qtyNgPrev;
+    const qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
 
-    // 4. Hitung loading time (Gunakan start_time ke end_time atau shift)
-    let loadingTime = 0;
-    const currentEnd = rph.endTime || nowWIB();
-    if (rph.startTime) {
-      loadingTime = Math.ceil(
-        (new Date(currentEnd) - new Date(rph.startTime)) / 60000,
-      );
-    } else {
-      loadingTime = calculateLoadingTimeFromShift(rph.shift);
-    }
-
-    // 5. Hitung total produksi
-    const qtyTotalProd =
-      Number(data.qtyOk || 0) +
-      Number(data.qtyNgProses || 0) +
-      Number(data.qtyRework || 0);
-
-    // 6. Simpan LRP
-    const lrp = await tx.laporanRealisasiProduksi.create({
+    const updatedLrp = await prisma.laporanRealisasiProduksi.update({
+      where: { rphId: parsedRphId },
       data: {
-        rphId: data.rphId,
-        mesinId: data.mesinId,
-        shiftId: data.shiftId,
-        operatorId: data.operatorId || data.userId,
-        tanggal: data.tanggal ? new Date(data.tanggal) : undefined,
-        keterangan: data.keterangan,
-        qtyOk: Number(data.qtyOk || 0),
-        qtyNgProses: Number(data.qtyNgProses || 0),
-        qtyNgPrev: Number(data.qtyNgPrev || 0),
-        qtyRework: Number(data.qtyRework || 0),
+        ...(data.qtyOk       !== undefined && { qtyOk:      Number(data.qtyOk) }),
+        ...(data.qtyNgProses !== undefined && { qtyNgProses: Number(data.qtyNgProses) }),
+        ...(data.qtyNgPrev   !== undefined && { qtyNgPrev:  Number(data.qtyNgPrev) }),
+        ...(data.qtyRework   !== undefined && { qtyRework:  Number(data.qtyRework) }),
         qtyTotalProd,
-        loadingTime,
-        cycleTime: rph.target.idealCycleTime || 0,
-        noReg: data.noReg || null,
-        counterStart:
-          data.counterStart != null ? Number(data.counterStart) : null,
-        counterEnd: data.counterEnd != null ? Number(data.counterEnd) : null,
-        noKanagata: data.noKanagata,
-        noLot: data.noLot,
-        createdAt: nowWIB(),
+        ...(data.counterStart !== undefined && { counterStart: data.counterStart != null ? Number(data.counterStart) : null }),
+        ...(data.counterEnd   !== undefined && { counterEnd:   data.counterEnd   != null ? Number(data.counterEnd)   : null }),
+        ...(data.noKanagata && { noKanagata: data.noKanagata }),
+        ...(data.noLot      && { noLot:      data.noLot }),
         updatedAt: nowWIB(),
       },
     });
 
-    // 7. Auto-Close RPH: Ubah status menjadi CLOSED agar tidak bisa login/submit lagi
-    await tx.rencanaProduksi.update({
-      where: { id: data.rphId },
+    // OEE recalc — Mandor bisa pantau progress real-time di dashboard
+    await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+    return updatedLrp;
+  }
+
+  // ─── CREATE PATH (LRP pertama kali untuk RPH ini) ───────────────────────
+  // noKanagata dan noLot wajib diisi saat pertama kali input
+  if (!data.noKanagata) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "noKanagata wajib diisi saat pertama kali input LRP");
+  }
+  if (!data.noLot) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "noLot wajib diisi saat pertama kali input LRP");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Ambil RPH beserta relasi yang dibutuhkan
+    const rph = await tx.rencanaProduksi.findUnique({
+      where: { id: parsedRphId },
+      include: {
+        target: true,
+        shift: true,
+        operator: { select: { noReg: true } }, // noReg operator bisa di-derive dari RPH
+      },
+    });
+
+    if (!rph) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Rencana Produksi tidak ditemukan");
+    }
+
+    // Hanya RPH yang PLANNED atau ACTIVE yang boleh di-input LRP
+    if (rph.status === "CLOSED") {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "RPH sudah CLOSED. LRP tidak dapat dibuat untuk RPH yang sudah selesai.",
+      );
+    }
+
+    // Hitung loading time dari startTime RPH atau fallback ke durasi shift
+    let loadingTime = 0;
+    if (rph.startTime) {
+      loadingTime = Math.ceil((nowWIB() - new Date(rph.startTime)) / 60000);
+    } else {
+      loadingTime = calculateLoadingTimeFromShift(rph.shift);
+    }
+
+    const qtyOk      = Number(data.qtyOk      || 0);
+    const qtyNgProses = Number(data.qtyNgProses || 0);
+    const qtyNgPrev  = Number(data.qtyNgPrev   || 0);
+    const qtyRework  = Number(data.qtyRework   || 0);
+    const qtyTotalProd = qtyOk + qtyNgProses + qtyNgPrev + qtyRework;
+
+    // Buat LRP dengan status DRAFT — semua identitas di-derive dari RPH
+    const lrp = await tx.laporanRealisasiProduksi.create({
       data: {
-        status: "CLOSED",
-        endTime: nowWIB(),
+        rphId:      parsedRphId,
+        mesinId:    rph.mesinId,
+        shiftId:    rph.shiftId,
+        operatorId: rph.userId,
+        tanggal:    rph.tanggal,
+        noReg:      rph.operator?.noReg || data.noReg || "",
+        noKanagata: data.noKanagata,
+        noLot:      data.noLot,
+        qtyOk,
+        qtyNgProses,
+        qtyNgPrev,
+        qtyRework,
+        qtyTotalProd,
+        loadingTime,
+        cycleTime:    rph.target.idealCycleTime || 0,
+        counterStart: data.counterStart != null ? Number(data.counterStart) : null,
+        counterEnd:   data.counterEnd   != null ? Number(data.counterEnd)   : null,
+        statusLrp:    "DRAFT",
+        createdAt:    nowWIB(),
+        updatedAt:    nowWIB(),
       },
     });
 
     return lrp;
   });
 
-  // 8. Enqueue OEE recalc ke background worker (non-blocking)
-  // Response 201 sudah dikirim, recalc jalan setelah delay 3 detik
+  // OEE recalc non-blocking setelah transaksi selesai
   await enqueueOeeRecalc(result.mesinId, result.tanggal);
-
   return result;
 };
 
 /**
  * Query for LRPs
- * @param {Object} filter - Mongo style filter? Prisma filter.
+ * @param {Object} filter
  * @param {Object} options - Limit, page, sortBy
  * @returns {Promise<QueryResult>}
  */
@@ -190,7 +221,6 @@ const queryLrps = async (filter, options) => {
 /**
  * Get LRP by ID
  * @param {number} id
- * @returns {Promise<LaporanRealisasiProduksi>}
  */
 const getLrpById = async (id) => {
   return prisma.laporanRealisasiProduksi.findUnique({
@@ -210,53 +240,98 @@ const getLrpById = async (id) => {
 };
 
 /**
- * Update LRP
+ * Submit LRP (Simpan Final) — Update data terakhir, finalkan LRP, tutup RPH, dan cek tugas baru.
  * @param {number} lrpId
- * @param {Object} updateBody
- * @returns {Promise<LaporanRealisasiProduksi>}
+ * @param {Object} updateBody - Data qty terakhir (opsional)
+ * @returns {{ lrp: LaporanRealisasiProduksi, next_rph: RencanaProduksi | null }}
  */
-const updateLrpById = async (lrpId, updateBody) => {
+const submitLrpById = async (lrpId, updateBody = {}) => {
   const lrp = await getLrpById(lrpId);
   if (!lrp) {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Sync OEE (Recalculate) and Recalculate qtyTotalProd
+  // Guard: Jangan double-submit
+  if (lrp.statusLrp === "SUBMITTED") {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "LRP sudah pernah di-submit sebelumnya.",
+    );
+  }
+
+  // Jika ada updateBody, hitung ulang qtyTotalProd
+  let finalData = { ...updateBody };
   if (
     updateBody.qtyOk !== undefined ||
     updateBody.qtyNgProses !== undefined ||
     updateBody.qtyNgPrev !== undefined ||
     updateBody.qtyRework !== undefined
   ) {
-    const qtyOk =
-      updateBody.qtyOk !== undefined ? Number(updateBody.qtyOk) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyOk);
-    const qtyNgProses =
-      updateBody.qtyNgProses !== undefined ? Number(updateBody.qtyNgProses) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyNgProses);
-    const qtyRework =
-      updateBody.qtyRework !== undefined ? Number(updateBody.qtyRework) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyRework);
-    const qtyNgPrev =
-      updateBody.qtyNgPrev !== undefined ? Number(updateBody.qtyNgPrev) : await prisma.laporanRealisasiProduksi.findUnique({where: {id: lrpId}}).then(r => r.qtyNgPrev);
-    
-    updateBody.qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
+    const qtyOk = updateBody.qtyOk !== undefined ? Number(updateBody.qtyOk) : lrp.qtyOk;
+    const qtyNgProses = updateBody.qtyNgProses !== undefined ? Number(updateBody.qtyNgProses) : lrp.qtyNgProses;
+    const qtyRework = updateBody.qtyRework !== undefined ? Number(updateBody.qtyRework) : lrp.qtyRework;
+    const qtyNgPrev = updateBody.qtyNgPrev !== undefined ? Number(updateBody.qtyNgPrev) : lrp.qtyNgPrev;
 
-    // Update LRP first
-    const updatedLrp = await prisma.laporanRealisasiProduksi.update({
-      where: { id: lrpId },
-      data: updateBody,
-    });
-
-    // Quantity berubah → enqueue OEE recalc ke background worker
-    await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
-    return updatedLrp;
+    finalData.qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
   }
 
-  // Update LRP
-  const updatedLrp = await prisma.laporanRealisasiProduksi.update({
-    where: { id: lrpId },
-    data: updateBody,
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Update data terakhir & Finalkan LRP: status -> SUBMITTED
+    const submittedLrp = await tx.laporanRealisasiProduksi.update({
+      where: { id: lrpId },
+      data: {
+        ...finalData,
+        statusLrp: "SUBMITTED",
+        updatedAt: nowWIB(),
+      },
+    });
+
+    // 2. Tutup RPH yang terkait: ACTIVE → CLOSED
+    await tx.rencanaProduksi.update({
+      where: { id: submittedLrp.rphId },
+      data: { status: "CLOSED", endTime: nowWIB() },
+    });
+
+    // 3. Cek apakah ada RPH PLANNED berikutnya untuk operator yang sama
+    //    pada hari yang sama. Ini memberitahu Frontend untuk mengarahkan
+    //    operator ke tugas produksi berikutnya.
+    const nextRph = await tx.rencanaProduksi.findFirst({
+      where: {
+        userId: submittedLrp.operatorId,
+        status: "PLANNED",
+        tanggal: submittedLrp.tanggal,
+        id: { not: submittedLrp.rphId },
+      },
+      include: {
+        mesin: { select: { id: true, namaMesin: true } },
+        produk: { select: { id: true, namaProduk: true } },
+        shift: { select: { id: true, namaShift: true, jamMasuk: true, jamKeluar: true } },
+        target: { select: { totalTarget: true } },
+      },
+      orderBy: { id: "asc" },
+    });
+
+    return { lrp: submittedLrp, nextRph };
   });
 
-  return updatedLrp;
+  // 4. Trigger OEE recalc setelah transaksi selesai (non-blocking)
+  await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
+
+  return {
+    lrp: result.lrp,
+    next_rph: result.nextRph
+      ? {
+          id: result.nextRph.id,
+          mesin: result.nextRph.mesin.namaMesin,
+          mesin_id: result.nextRph.mesin.id,
+          produk: result.nextRph.produk.namaProduk,
+          produk_id: result.nextRph.produk.id,
+          shift: result.nextRph.shift.namaShift,
+          jam: `${result.nextRph.shift.jamMasuk} - ${result.nextRph.shift.jamKeluar}`,
+          total_target: result.nextRph.target.totalTarget,
+        }
+      : null,
+  };
 };
 
 /**
@@ -284,9 +359,10 @@ const deleteLrpById = async (lrpId) => {
 };
 
 export default {
-  createLrp,
+  upsertLrpByRphId,
   queryLrps,
   getLrpById,
-  updateLrpById,
+  submitLrpById,
   deleteLrpById,
 };
+

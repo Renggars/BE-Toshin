@@ -216,6 +216,18 @@ const clockIn = async (user, req) => {
         );
       }
     }
+  } else {
+    // LOGIKA FITUR: Login Kedua -> Aktifkan RPH (PLANNED -> ACTIVE)
+    // Jika user login lagi dan sudah ada record attendance, berarti dia mulai bekerja.
+    if (rph.status === "PLANNED") {
+      await prisma.rencanaProduksi.update({
+        where: { id: rph.id },
+        data: {
+          status: "ACTIVE",
+          startTime: now, // Catat waktu mulai kerja yang sesungguhnya
+        },
+      });
+    }
   }
 };
 

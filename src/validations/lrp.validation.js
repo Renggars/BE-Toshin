@@ -1,48 +1,34 @@
 import Joi from "joi";
 
-const createLrp = {
+// Schema untuk Upsert LRP (PATCH /lrp/rph/:rphId)
+// - Pertama kali: noKanagata & noLot wajib (dicek di service layer)
+// - Update berikutnya: semua opsional, minimal 1 field
+const upsertLrp = {
+  params: Joi.object().keys({
+    rphId: Joi.number().integer().required(),
+  }),
   body: Joi.object()
     .keys({
-      tanggal: Joi.date().required(),
-      shiftId: Joi.number().integer().required(),
-      mesinId: Joi.number().integer().required(),
-      operatorId: Joi.number().integer().required(),
-      rphId: Joi.number().integer().required(),
-
-      noKanagata: Joi.string().required(),
-      noLot: Joi.string().required(),
-      noReg: Joi.string().required(),
-
-      qtyOk: Joi.number().integer().min(0).required(),
-      qtyNgPrev: Joi.number().integer().min(0).default(0),
-      qtyNgProses: Joi.number().integer().min(0).default(0),
-      qtyRework: Joi.number().integer().min(0).default(0),
-
-      counterStart: Joi.number().integer().min(0).allow(null).optional(),
-      counterEnd: Joi.number().integer().min(0).allow(null).optional(),
+      noKanagata:   Joi.string(),
+      noLot:        Joi.string(),
+      qtyOk:        Joi.number().integer().min(0),
+      qtyNgPrev:    Joi.number().integer().min(0),
+      qtyNgProses:  Joi.number().integer().min(0),
+      qtyRework:    Joi.number().integer().min(0),
+      counterStart: Joi.number().integer().min(0).allow(null),
+      counterEnd:   Joi.number().integer().min(0).allow(null),
     })
-    .custom((value, helpers) => {
-      const total =
-        value.qtyOk +
-        (value.qtyNgPrev || 0) +
-        (value.qtyNgProses || 0) +
-        (value.qtyRework || 0);
-
-      if (total <= 0) {
-        return helpers.error("any.invalid");
-      }
-      return value;
-    }),
+    .min(1),
 };
 
 const getLrps = {
   query: Joi.object().keys({
-    tanggal: Joi.date(),
-    shiftId: Joi.number(),
+    tanggal:    Joi.date(),
+    shiftId:    Joi.number(),
     noKanagata: Joi.string(),
-    sortBy: Joi.string(),
-    limit: Joi.number().integer(),
-    page: Joi.number().integer(),
+    sortBy:     Joi.string(),
+    limit:      Joi.number().integer(),
+    page:       Joi.number().integer(),
   }),
 };
 
@@ -52,15 +38,21 @@ const getLrp = {
   }),
 };
 
-const updateLrp = {
+// Schema untuk "Simpan Final" — butuh lrpId di params, body opsional untuk update terakhir
+const submitLrp = {
   params: Joi.object().keys({
     lrpId: Joi.number().integer().required(),
   }),
-  body: Joi.object()
-    .keys({
-      statusLrp: Joi.string().valid("SUBMITTED", "VERIFIED"),
-    })
-    .min(1),
+  body: Joi.object().keys({
+    noKanagata:   Joi.string(),
+    noLot:        Joi.string(),
+    qtyOk:        Joi.number().integer().min(0),
+    qtyNgPrev:    Joi.number().integer().min(0),
+    qtyNgProses:  Joi.number().integer().min(0),
+    qtyRework:    Joi.number().integer().min(0),
+    counterStart: Joi.number().integer().min(0).allow(null),
+    counterEnd:   Joi.number().integer().min(0).allow(null),
+  }),
 };
 
 const deleteLrp = {
@@ -70,10 +62,9 @@ const deleteLrp = {
 };
 
 export default {
-  createLrp,
+  upsertLrp,
   getLrps,
   getLrp,
-  getLrp,
-  updateLrp,
+  submitLrp,
   deleteLrp,
 };

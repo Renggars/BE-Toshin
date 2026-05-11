@@ -2618,139 +2618,167 @@ paths:
   # ==========================================
   # LRP PATHS
   # ==========================================
-  /lrp:
-    post:
-      summary: Create LRP (Submit Laporan Realisasi Produksi) (PRODUKSI / ADMIN)
-      description: |
-        Submit laporan realisasi produksi baru. RPH yang direferensikan harus berstatus **ACTIVE** atau **CLOSED**.
 
-        **Field yang dihitung otomatis oleh backend (tidak perlu dikirim):**
-        - `qty_total_prod` = qty_ok + qty_ng_proses + qty_rework
-        - `loading_time` = dihitung dari `start_time` → `end_time` RPH
-        - `cycle_time` = diambil dari `target.ideal_cycle_time` RPH
-        - `statusLrp` = default "SUBMITTED"
+  # ─── UPSERT (Pertama Kali / Update Progress) ──────────────────────────────
+  /lrp/rph/{rphId}:
+    patch:
+      summary: "[STEP 1 & 2] Upsert LRP — Input / Update Progres (PRODUKSI / ADMIN)"
+      description: |
+        Endpoint utama untuk input dan update data produksi. Bersifat **upsert**:
+        - **Jika LRP belum ada** untuk RPH ini → **buat LRP baru** dengan `statusLrp: DRAFT`
+        - **Jika LRP sudah ada** → **update data qty** yang ada
+
+        Dapat dipanggil **kapan saja** selama shift: saat pertama input, saat istirahat,
+        atau berkala setiap jam. RPH **tidak pernah ditutup** di endpoint ini.
+
+        ---
+        ## Alur Lengkap LRP (Wajib Dibaca Frontend)
+
+        ```
+        [STEP 1 & 2] PATCH /lrp/rph/{rphId}  → Upsert LRP (kapan saja, berulang)
+                                                  • Pertama kali: buat LRP DRAFT baru
+                                                  • Berikutnya  : update data qty
+                                                  statusLrp: "DRAFT", RPH: tetap ACTIVE
+                                                  Mandor bisa pantau di dashboard real-time.
+                                                      │
+        [STEP 3]     POST /lrp/{lrpId}/submit → Simpan Final (di akhir shift)
+                                                  statusLrp: "SUBMITTED", RPH: → CLOSED
+                                                  Response mengandung `next_rph` jika ada
+                                                  RPH baru yang PLANNED untuk hari yang sama.
+        ```
+
+        ---
+        ## Rules Saat Pertama Kali (CREATE path)
+        - `noKanagata` **wajib** diisi
+        - `noLot` **wajib** diisi
+        - Field identitas (mesinId, shiftId, operatorId, tanggal, noReg) **di-derive otomatis dari RPH**
+          sehingga tidak perlu dikirim dari frontend.
+
+        ## Rules Update Berikutnya (UPDATE path)
+        - Semua field opsional, minimal 1 field harus diisi
+        - `noKanagata` dan `noLot` dapat diubah jika diperlukan
+
+        > **Guard:** LRP yang sudah `SUBMITTED` tidak dapat diubah. Return `400 Bad Request`.
       tags: [LRP]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: rphId
+          required: true
+          schema:
+            type: integer
+          description: ID Rencana Produksi Harian (RPH)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - rphId
-                - mesinId
-                - shiftId
-                - operatorId
-                - tanggal
-                - no_kanagata
-                - no_lot
-                - noReg
-                - qty_ok
+              description: |
+                Saat **pertama kali** (CREATE): `noKanagata` dan `noLot` wajib diisi.
+                Saat **update berikutnya**: semua opsional, minimal 1 field.
               properties:
-                rphId:
-                  type: integer
-                  description: "ID Rencana Produksi Harian (RPH) yang sedang ACTIVE"
-                  example: 1
-                mesinId:
-                  type: integer
-                  description: "ID Mesin"
-                  example: 3
-                shiftId:
-                  type: integer
-                  description: "ID Shift"
-                  example: 2
-                operatorId:
-                  type: integer
-                  description: "ID User operator PRODUKSI"
-                  example: 5
-                tanggal:
+                noKanagata:
                   type: string
-                  format: date
-                  description: "Tanggal produksi"
-                  example: "2026-02-23"
-                no_kanagata:
-                  type: string
-                  description: "Nomor kanagata / cetakan"
+                  description: "Nomor kanagata / cetakan. WAJIB saat pertama kali."
                   example: "K-2024-01"
-                no_lot:
+                noLot:
                   type: string
-                  description: "Nomor lot produksi"
+                  description: "Nomor lot produksi. WAJIB saat pertama kali."
                   example: "LOT-001"
-                noReg:
-                  type: string
-                  description: "Nomor registrasi operator"
-                  example: "REG-1234"
-                qty_ok:
+                qtyOk:
                   type: integer
-                  description: "Jumlah produk OK"
+                  minimum: 0
+                  description: "Jumlah produk OK (default 0 jika tidak diisi)"
                   example: 100
-                qty_ng_prev:
+                qtyNgPrev:
                   type: integer
-                  description: "Jumlah NG dari proses sebelumnya (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah NG dari proses sebelumnya (default 0)"
                   example: 0
-                qty_ng_proses:
+                qtyNgProses:
                   type: integer
-                  description: "Jumlah NG dalam proses ini (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah NG dalam proses ini (default 0)"
                   example: 2
-                qty_rework:
+                qtyRework:
                   type: integer
-                  description: "Jumlah produk rework (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah produk rework (default 0)"
                   example: 1
-                counter_start:
+                counterStart:
                   type: integer
+                  minimum: 0
                   nullable: true
-                  description: "Counter mesin saat mulai produksi (opsional)"
+                  description: "Counter mesin saat mulai (opsional)"
                   example: 0
-                counter_end:
+                counterEnd:
                   type: integer
+                  minimum: 0
                   nullable: true
-                  description: "Counter mesin saat selesai produksi (opsional)"
+                  description: "Counter mesin saat update (opsional)"
                   example: 500
-            example:
-              rphId: 1
-              mesinId: 3
-              shiftId: 2
-              operatorId: 5
-              tanggal: "2026-02-23"
-              no_kanagata: "K-2024-01"
-              no_lot: "LOT-001"
-              noReg: "REG-1234"
-              qty_ok: 100
-              qty_ng_prev: 0
-              qty_ng_proses: 2
-              qty_rework: 1
-              counter_start: 0
-              counter_end: 500
+            examples:
+              pertama_kali:
+                summary: "Pertama kali input LRP (CREATE)"
+                value:
+                  noKanagata: "K-2024-01"
+                  noLot: "LOT-001"
+                  qtyOk: 100
+                  qtyNgPrev: 0
+                  qtyNgProses: 2
+                  qtyRework: 1
+                  counterStart: 0
+                  counterEnd: 103
+              update_progres:
+                summary: "Update progres di tengah shift (UPDATE)"
+                value:
+                  qtyOk: 250
+                  qtyNgPrev: 0
+                  qtyNgProses: 5
+                  qtyRework: 2
+                  counterEnd: 257
       responses:
         "201":
-          description: LRP berhasil dibuat
+          description: LRP Draft baru berhasil dibuat.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  id:
-                    type: integer
-                  noReg:
-                    type: string
-                  qty_ok:
-                    type: integer
-                  qty_total_prod:
-                    type: integer
-                  loading_time:
-                    type: number
-                  cycle_time:
-                    type: number
-                  statusLrp:
-                    type: string
-                    example: "SUBMITTED"
+                  id: { type: integer, example: 42 }
+                  rphId: { type: integer, example: 5 }
+                  statusLrp: { type: string, enum: [DRAFT], example: "DRAFT" }
+                  qtyOk: { type: integer, example: 100 }
+                  qtyTotalProd: { type: integer, example: 103 }
+                  loadingTime: { type: number, example: 120 }
+                  cycleTime: { type: number, example: 30 }
+                  noKanagata: { type: string, example: "K-2024-01" }
+                  noLot: { type: string, example: "LOT-001" }
+                  createdAt: { type: string, format: date-time }
+        "200":
+          description: Progres LRP berhasil diperbarui. RPH tetap ACTIVE.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, example: 42 }
+                  statusLrp: { type: string, enum: [DRAFT], example: "DRAFT" }
+                  qtyOk: { type: integer, example: 250 }
+                  qtyTotalProd: { type: integer, example: 257 }
+                  updatedAt: { type: string, format: date-time }
         "400":
-          description: Validasi gagal (noReg kosong, RPH tidak ditemukan, atau status RPH tidak valid)
-        "409":
-          description: LRP untuk RPH ini sudah pernah dibuat (1 RPH = 1 LRP)
+          description: |
+            - `noKanagata` atau `noLot` tidak diisi saat pertama kali
+            - LRP sudah `SUBMITTED` dan tidak dapat diubah
+            - RPH sudah `CLOSED`
+        "404":
+          description: RPH tidak ditemukan
 
+  # ─── GET LIST ──────────────────────────────────────────────────────────────
+  /lrp:
     get:
       summary: Get LRP List
       tags: [LRP]
@@ -2759,32 +2787,24 @@ paths:
       parameters:
         - in: query
           name: tanggal
-          schema:
-            type: string
-            format: date
+          schema: { type: string, format: date }
         - in: query
           name: shiftId
-          schema:
-            type: integer
+          schema: { type: integer }
         - in: query
-          name: no_kanagata
-          schema:
-            type: string
+          name: noKanagata
+          schema: { type: string }
         - in: query
           name: page
-          schema:
-            type: integer
-            default: 1
+          schema: { type: integer, default: 1 }
         - in: query
           name: limit
-          schema:
-            type: integer
-            default: 10
+          schema: { type: integer, default: 10 }
       responses:
         "200":
           description: Success
 
-
+  # ─── GET DETAIL & DELETE ───────────────────────────────────────────────────
   /lrp/{lrpId}:
     get:
       summary: Get LRP Detail
@@ -2795,36 +2815,11 @@ paths:
         - in: path
           name: lrpId
           required: true
-          schema:
-            type: integer
+          schema: { type: integer }
       responses:
         "200":
           description: Success
 
-    patch:
-      summary: Update LRP (Supervisor/Admin)
-      description: Edit LRP (biasanya oleh Supervisor/QC)
-      tags: [LRP]
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: lrpId
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                qty_ok: { type: integer }
-                qty_ng_proses: { type: integer }
-                status: { type: string, enum: [SUBMITTED, VERIFIED] }
-      responses:
-        "200":
-          description: Success Update
     delete:
       summary: Delete LRP (Supervisor/Admin)
       description: Hapus LRP dan re-sync OEE
@@ -2835,11 +2830,112 @@ paths:
         - in: path
           name: lrpId
           required: true
-          schema:
-            type: integer
+          schema: { type: integer }
       responses:
         "200":
           description: Success Delete LRP
+
+  # ─── SUBMIT FINAL ──────────────────────────────────────────────────────────
+  /lrp/{lrpId}/submit:
+    post:
+      summary: "[STEP 3] Simpan Final LRP — Selesai Shift (PRODUKSI / ADMIN)"
+      description: |
+        Finalkan LRP di akhir shift. Ini adalah aksi **"Selesai Shift"** dari sisi operator.
+
+        **Yang terjadi di backend saat endpoint ini dipanggil:**
+        1. `statusLrp` LRP diubah dari `DRAFT` → `SUBMITTED`
+        2. Status RPH yang terkait diubah dari `ACTIVE` → `CLOSED`
+        3. Backend mengecek apakah ada RPH lain berstatus `PLANNED` untuk operator yang sama di hari yang sama.
+        4. OEE recalculation di-trigger secara asinkron.
+
+        **Response `next_rph`:**
+        - Jika `next_rph !== null`: Ada RPH baru. Frontend tampilkan notifikasi/dialog agar operator beralih ke tugas berikutnya.
+        - Jika `next_rph === null`: Tidak ada tugas berikutnya. Tampilkan pesan "Shift selesai!".
+
+        > ⚠️ **Guard:** Endpoint ini hanya bisa dipanggil sekali. Jika LRP sudah `SUBMITTED`, return `400 Bad Request`.
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema: { type: integer }
+          description: ID LRP yang ingin di-submit
+      requestBody:
+        description: "Data update terakhir sebelum submit (opsional)."
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                noKanagata:   { type: string, example: "K-2024-01" }
+                noLot:        { type: string, example: "LOT-001" }
+                qtyOk:        { type: integer, example: 300 }
+                qtyNgPrev:    { type: integer, example: 0 }
+                qtyNgProses:  { type: integer, example: 5 }
+                qtyRework:    { type: integer, example: 2 }
+                counterStart: { type: integer, example: 0 }
+                counterEnd:   { type: integer, example: 1200 }
+      responses:
+        "200":
+          description: LRP berhasil disimpan final
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "LRP berhasil disimpan final" }
+                  data:
+                    type: object
+                    properties:
+                      lrp:
+                        type: object
+                        description: "Data LRP yang sudah SUBMITTED"
+                        properties:
+                          id: { type: integer, example: 42 }
+                          statusLrp: { type: string, enum: [SUBMITTED], example: "SUBMITTED" }
+                          qtyOk: { type: integer, example: 250 }
+                          qtyTotalProd: { type: integer, example: 257 }
+                          updatedAt: { type: string, format: date-time }
+                      next_rph:
+                        description: |
+                          RPH berikutnya yang PLANNED untuk operator yang sama hari ini.
+                          **`null`** jika tidak ada tugas produksi berikutnya.
+                        nullable: true
+                        oneOf:
+                          - type: object
+                            properties:
+                              id: { type: integer, example: 7 }
+                              mesin: { type: string, example: "FB1200B" }
+                              mesin_id: { type: integer, example: 4 }
+                              produk: { type: string, example: "Part B" }
+                              produk_id: { type: integer, example: 2 }
+                              shift: { type: string, example: "Shift 1" }
+                              jam: { type: string, example: "06:00 - 14:00" }
+                              total_target: { type: integer, example: 300 }
+                          - type: 'null'
+              examples:
+                ada_rph_baru:
+                  summary: "Operator punya tugas RPH baru"
+                  value:
+                    message: "LRP berhasil disimpan final"
+                    data:
+                      lrp: { id: 42, statusLrp: "SUBMITTED", qtyOk: 250, qtyTotalProd: 257, updatedAt: "2026-05-11T07:30:00.000Z" }
+                      next_rph: { id: 7, mesin: "FB1200B", mesin_id: 4, produk: "Part B", produk_id: 2, shift: "Shift 1", jam: "06:00 - 14:00", total_target: 300 }
+                tidak_ada_rph_baru:
+                  summary: "Tidak ada tugas berikutnya — shift selesai"
+                  value:
+                    message: "LRP berhasil disimpan final"
+                    data:
+                      lrp: { id: 42, statusLrp: "SUBMITTED", qtyOk: 250, qtyTotalProd: 257, updatedAt: "2026-05-11T07:30:00.000Z" }
+                      next_rph: null
+        "400":
+          description: LRP sudah pernah di-submit sebelumnya (double submit)
+        "404":
+          description: LRP tidak ditemukan
+
+
 
   /master/produk:
     get:
