@@ -8,6 +8,7 @@ import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShif
 import { oeeQueue } from "../queues/oeeQueue.js";
 import { nowWIB } from "../utils/dateWIB.js";
 import oeeService from "./oee.service.js";
+import { emitOperatorProgressUpdate } from "../config/socket.js";
 
 /**
  * Helper: enqueue OEE recalculation job dengan dedup + delay.
@@ -87,6 +88,14 @@ const upsertLrpByRphId = async (rphId, data) => {
 
     // OEE recalc — Mandor bisa pantau progress real-time di dashboard
     await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+
+    // Real-time progress update for Mandor
+    emitOperatorProgressUpdate({
+      mesinId: updatedLrp.mesinId,
+      shiftId: updatedLrp.shiftId,
+      tanggal: updatedLrp.tanggal,
+    });
+
     return updatedLrp;
   }
 
@@ -167,6 +176,14 @@ const upsertLrpByRphId = async (rphId, data) => {
 
   // OEE recalc non-blocking setelah transaksi selesai
   await enqueueOeeRecalc(result.mesinId, result.tanggal);
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({
+    mesinId: result.mesinId,
+    shiftId: result.shiftId,
+    tanggal: result.tanggal,
+  });
+
   return result;
 };
 
@@ -317,6 +334,13 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
   // 4. Trigger OEE recalc setelah transaksi selesai (non-blocking)
   await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
 
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({
+    mesinId: result.lrp.mesinId,
+    shiftId: result.lrp.shiftId,
+    tanggal: result.lrp.tanggal,
+  });
+
   return {
     lrp: result.lrp,
     next_rph: result.nextRph
@@ -335,6 +359,56 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
 };
 
 /**
+ * Get Operator Progress for Mandor Dashboard
+ * @param {Object} filter - plant, line, tanggal
+ */
+const getOperatorProgress = async (filter) => {
+  const { plant, line, tanggal } = filter;
+  const targetDate = tanggal
+    ? moment.utc(tanggal).startOf("day").toDate()
+    : moment().startOf("day").toDate();
+
+  const activeRph = await prisma.rencanaProduksi.findMany({
+    where: {
+      tanggal: targetDate,
+      // Kita ambil RPH yang PLANNED atau ACTIVE untuk melihat progres hari ini
+      status: { in: ["PLANNED", "ACTIVE", "CLOSED"] },
+      operator: {
+        plant: plant,
+        ...(line && { line: line }),
+      },
+    },
+    include: {
+      operator: { select: { id: true, nama: true, fotoProfile: true } },
+      mesin: { select: { namaMesin: true } },
+      produk: { select: { namaProduk: true } },
+      target: { select: { totalTarget: true } },
+      laporanRealisasiProduksi: { select: { qtyOk: true, updatedAt: true } },
+    },
+    orderBy: { id: "asc" },
+  });
+
+  return activeRph.map((rph) => {
+    const qtyOk = rph.laporanRealisasiProduksi?.qtyOk || 0;
+    const targetQty = rph.target?.totalTarget || 0;
+
+    return {
+      rphId: rph.id,
+      operatorId: rph.operator.id,
+      operatorName: rph.operator.nama,
+      fotoProfile: rph.operator.fotoProfile,
+      machineName: rph.mesin.namaMesin,
+      productName: rph.produk.namaProduk,
+      qtyOk,
+      targetQty,
+      percentage: targetQty > 0 ? Math.min(100, Math.round((qtyOk / targetQty) * 100)) : 0,
+      status: rph.status,
+      lastUpdate: rph.laporanRealisasiProduksi?.updatedAt || null,
+    };
+  });
+};
+
+/**
  * Delete LRP
  * @param {number} lrpId
  * @returns {Promise<LaporanRealisasiProduksi>}
@@ -345,9 +419,7 @@ const deleteLrpById = async (lrpId) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Delete (Logs should cascade via Prisma/DB relation if configured,
-  // schema says: lrpLog[] but usually relation onDelete: Cascade is needed in schema.
-  // In existing schema: `logs LrpLog[]` and `laporan ... onDelete: Cascade` (Verified).
+  // Delete
   await prisma.laporanRealisasiProduksi.delete({
     where: { id: lrpId },
   });
@@ -364,5 +436,6 @@ export default {
   getLrpById,
   submitLrpById,
   deleteLrpById,
+  getOperatorProgress,
 };
 

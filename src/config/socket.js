@@ -259,3 +259,16 @@ export const broadcastToRole = (role, event, data) => {
     logger.error(`Failed to broadcast to role: ${role}`, error);
   }
 };
+/**
+ * Emit event real-time ketika ada update progres operator (LRP)
+ * @param {Object} data - Progress data
+ */
+export const emitOperatorProgressUpdate = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("operator-progress-updated", data);
+    logger.info("WebSocket: operator-progress-updated emitted");
+  } catch (error) {
+    logger.error("Failed to emit operator-progress-updated event", error);
+  }
+};

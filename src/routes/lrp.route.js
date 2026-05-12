@@ -36,6 +36,15 @@ router
     lrpController.submitLrp,
   );
 
+// ─── DASHBOARD MANDOR ──────────────────────────────────────────────────────
+router
+  .route("/operator-progress")
+  .get(
+    auth("MANDOR", "SUPERVISOR", "ADMIN"),
+    validate(lrpValidation.getOperatorProgress),
+    lrpController.getOperatorProgress,
+  );
+
 // ─── CRUD STANDAR ──────────────────────────────────────────────────────────
 router
   .route("/")

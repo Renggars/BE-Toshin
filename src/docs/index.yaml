@@ -2804,6 +2804,57 @@ paths:
         "200":
           description: Success
 
+  /lrp/operator-progress:
+    get:
+      summary: "Get Real-time Operator Progress List (MANDOR / ADMIN)"
+      description: |
+        Mengambil daftar progres produksi seluruh operator yang sedang aktif hari ini di plant yang sama.
+        Data ini mencakup nama operator, mesin, produk, pencapaian (qtyOk), dan target.
+
+        **Real-time Update:** Client (Mandor Dashboard) bisa mendengarkan event socket `operator-progress-updated`
+        untuk mengetahui kapan harus memanggil endpoint ini lagi (atau mengupdate UI).
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Filter berdasarkan tanggal (Default hari ini WIB)
+        - in: query
+          name: line
+          schema: { type: string }
+          description: Filter berdasarkan line produksi (opsional)
+      responses:
+        "200":
+          description: Berhasil mengambil daftar progres operator
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    {
+                      type: string,
+                      example: "Operator progress retrieved successfully",
+                    }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rphId: { type: integer, example: 10 }
+                        operatorId: { type: integer, example: 5 }
+                        operatorName: { type: string, example: "Budi Santoso" }
+                        fotoProfile: { type: string, example: "https://..." }
+                        machineName: { type: string, example: "Mesin Extruder 01" }
+                        productName: { type: string, example: "Plastik HD 0.5" }
+                        qtyOk: { type: integer, example: 750 }
+                        targetQty: { type: integer, example: 1000 }
+                        percentage: { type: integer, example: 75 }
+                        status: { type: string, example: "ACTIVE" }
+                        lastUpdate: { type: string, format: date-time }
+
   # ─── GET DETAIL & DELETE ───────────────────────────────────────────────────
   /lrp/{lrpId}:
     get:
@@ -4199,6 +4250,14 @@ paths:
         - in: query
           name: limit
           schema: { type: integer, default: 10 }
+        - in: query
+          name: mesinId
+          schema: { type: integer }
+          description: Filter berdasarkan ID Mesin
+        - in: query
+          name: produkId
+          schema: { type: integer }
+          description: Filter berdasarkan ID Produk
       responses:
         "200":
           description: Success
@@ -4238,6 +4297,9 @@ paths:
                 judul: { type: string, example: "Manual Book Mesin B" }
                 deskripsi: { type: string, example: "Panduan operasional" }
                 kategori: { type: string, example: "PRODUKSI" }
+                mesinId: { type: integer, example: 1 }
+                produkId: { type: integer, example: 1 }
+                noSeri: { type: string, example: "SN-12345" }
                 file: { type: string, format: binary, description: "File PDF (Max 10MB)" }
       responses:
         "201":
