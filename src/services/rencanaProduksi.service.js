@@ -76,15 +76,32 @@ const createRencanaProduksi = async (payload) => {
     },
   });
 
-  //kirim notifikasi ke user yang di assign
-  await notificationService.createNotification({
-    userId: userId,
-    tipe: "RPH_ASSIGNED",
-    judul: "RPH Baru Ditugaskan",
-    pesan: `RPH baru telah ditambahkan pada ${moment().format(
-      "DD-MM-YYYY HH:mm",
-    )}`,
+  // Cek apakah ini rph pertama untuk hari ini bagi operator tersebut
+  const startOfDay = moment(tanggal).startOf("day").toDate();
+  const endOfDay = moment(tanggal).endOf("day").toDate();
+  
+  const existingRphCount = await prisma.rencanaProduksi.count({
+    where: {
+      userId: userId,
+      tanggal: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+      id: { not: rph.id } // exclude the newly created rph
+    }
   });
+
+  // Hanya kirim notifikasi jika bukan RPH pertama hari ini (artinya RPH tambahan/susulan)
+  if (existingRphCount > 0) {
+    await notificationService.createNotification({
+      userId: userId,
+      tipe: "RPH_ASSIGNED",
+      judul: "RPH Baru Ditugaskan",
+      pesan: `RPH baru telah ditambahkan pada ${moment().format(
+        "DD-MM-YYYY HH:mm",
+      )}`,
+    });
+  }
 
   return rph;
 };
@@ -117,6 +134,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     target: {
       include: { jenisPekerjaan: true },
     },
+    laporanRealisasiProduksi: true,
     attendance: {
       take: 1,
       orderBy: { jamTap: "asc" },
@@ -280,6 +298,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       mesin: rp.mesin.namaMesin,
       produk: rp.produk.namaProduk,
       jenis_pekerjaan: rp.target.jenisPekerjaan.namaPekerjaan,
+      no_kanagata: rp.laporanRealisasiProduksi?.noKanagata,
       status_rph: rp.status,
       catatan: rp.keterangan || "Tidak ada catatan untuk hari ini",
     },
@@ -607,7 +626,7 @@ const getWeeklyTrend = async () => {
   const results = Object.values(trendMap).map((item) => {
     return {
       ...item,
-      percentage: item.totalTarget > 0 
+      percentage: item.totalTarget > 0
         ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
         : 0,
     };
@@ -701,14 +720,31 @@ const updateRencanaProduksi = async (rphId, payload) => {
 
   // Jika ada perubahan user, kirim notifikasi ke user baru
   if (payload.userId && payload.userId !== rph.userId) {
-    await notificationService.createNotification({
-      userId: payload.userId,
-      tipe: "RPH_ASSIGNED",
-      judul: "RPH Baru Ditugaskan",
-      pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
-        "DD-MM-YYYY HH:mm",
-      )} (Update)`,
+    const rphDate = payload.tanggal || rph.tanggal;
+    const startOfDay = moment(rphDate).startOf("day").toDate();
+    const endOfDay = moment(rphDate).endOf("day").toDate();
+    
+    const existingRphCount = await prisma.rencanaProduksi.count({
+      where: {
+        userId: payload.userId,
+        tanggal: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        id: { not: rphId }
+      }
     });
+
+    if (existingRphCount > 0) {
+      await notificationService.createNotification({
+        userId: payload.userId,
+        tipe: "RPH_ASSIGNED",
+        judul: "RPH Baru Ditugaskan",
+        pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
+          "DD-MM-YYYY HH:mm",
+        )} (Update)`,
+      });
+    }
   }
 
   const updatedRph = await prisma.rencanaProduksi.update({

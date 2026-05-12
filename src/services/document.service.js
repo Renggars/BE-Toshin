@@ -50,6 +50,7 @@ const getDocuments = async (query) => {
     kategori,
     mesinId,
     produkId,
+    noSeri,
     page = 1,
     limit = 10,
     sortBy = "createdAt",
@@ -66,6 +67,7 @@ const getDocuments = async (query) => {
     ...(kategori && { kategori }),
     ...(mesinId && { mesinId: Number(mesinId) }),
     ...(produkId && { produkId: Number(produkId) }),
+    ...(noSeri && { noSeri }),
   };
 
   const [data, totalItems] = await Promise.all([
@@ -127,18 +129,18 @@ const updateDocument = async (id, body, file) => {
     where: { id: Number(id) },
   });
   if (!existing) {
-    if (file) fs.unlink(file.path, () => {});
+    if (file) fs.unlink(file.path, () => { });
     throw new ApiError(httpStatus.NOT_FOUND, "Dokumen tidak ditemukan");
   }
 
 
   const fileData = file
     ? {
-        namaFile: file.originalname,
-        pathFile: file.path.replace(/\\/g, "/"),
-        ukuranByte: file.size,
-        mimeType: file.mimetype,
-      }
+      namaFile: file.originalname,
+      pathFile: file.path.replace(/\\/g, "/"),
+      ukuranByte: file.size,
+      mimeType: file.mimetype,
+    }
     : {};
 
   const updated = await prisma.document.update({
@@ -162,7 +164,7 @@ const updateDocument = async (id, body, file) => {
 
   // Hapus file lama jika file baru diupload
   if (file && existing.pathFile) {
-    fs.unlink(existing.pathFile, () => {});
+    fs.unlink(existing.pathFile, () => { });
   }
 
   return updated;
@@ -181,7 +183,7 @@ const deleteDocument = async (id) => {
 
   // Hapus file fisik
   if (existing.pathFile && fs.existsSync(existing.pathFile)) {
-    fs.unlink(existing.pathFile, () => {});
+    fs.unlink(existing.pathFile, () => { });
   }
 
   return { id: existing.id, judul: existing.judul };
