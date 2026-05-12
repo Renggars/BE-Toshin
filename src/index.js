@@ -17,7 +17,8 @@ import {
 
 let server;
 
-if (prisma) {
+try {
+  await prisma.$connect();
   logger.info("Connected to Database");
 
   // Connect to Redis only if enabled
@@ -49,6 +50,9 @@ if (prisma) {
     const tcpServer = process.env.TCP_PORT || 4210;
     tcpService.initTcpServer(tcpServer);
   });
+} catch (error) {
+  logger.error("Failed to connect to Database", error);
+  process.exit(1);
 }
 
 const exitHandler = () => {

@@ -61,10 +61,18 @@ const deleteLrp = {
   }),
 };
 
+const getOperatorProgress = {
+  query: Joi.object().keys({
+    line: Joi.string(),
+    tanggal: Joi.date(),
+  }),
+};
+
 export default {
   upsertLrp,
   getLrps,
   getLrp,
   submitLrp,
   deleteLrp,
+  getOperatorProgress,
 };

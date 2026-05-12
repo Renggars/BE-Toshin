@@ -79,10 +79,21 @@ const deleteLrp = catchAsync(async (req, res) => {
   responseApiSuccess(res, "LRP deleted successfully");
 });
 
+const getOperatorProgress = catchAsync(async (req, res) => {
+  const filter = {
+    plant: req.user.plant,
+    line: req.query.line,
+    tanggal: req.query.tanggal,
+  };
+  const result = await lrpService.getOperatorProgress(filter);
+  responseApiSuccess(res, "Operator progress retrieved successfully", result);
+});
+
 export default {
   upsertLrp,
   getLrps,
   getLrp,
   submitLrp,
   deleteLrp,
+  getOperatorProgress,
 };
