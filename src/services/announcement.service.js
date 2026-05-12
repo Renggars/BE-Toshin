@@ -4,6 +4,7 @@ import {
   broadcastToRole,
 } from "../config/socket.js";
 import { v4 as uuidv4 } from "uuid";
+import notificationService from "./notification.service.js";
 
 const sendAnnouncement = async (data) => {
   const announcement = await prisma.operatorAnnouncement.create({
@@ -21,6 +22,14 @@ const sendAnnouncement = async (data) => {
   emitOperatorAnnouncement(data.operatorId, {
     type: "NEW_ANNOUNCEMENT",
     announcement,
+  });
+
+  // Also create a standard notification so it appears in the operator's notification history
+  await notificationService.createNotification({
+    userId: data.operatorId,
+    tipe: "ANNOUNCEMENT",
+    judul: "Pesan dari Mandor",
+    pesan: data.pesan,
   });
 
   return announcement;
@@ -52,6 +61,17 @@ const sendBroadcastAnnouncement = async (data) => {
     mandorId: data.mandorId,
     broadcastId,
   });
+
+  // Also create a standard notification so it appears in all operators' notification histories
+  const operatorIds = operators.map((op) => op.id);
+  if (operatorIds.length > 0) {
+    await notificationService.createBulkNotifications(
+      operatorIds,
+      "ANNOUNCEMENT",
+      "Pesan dari Mandor",
+      data.pesan
+    );
+  }
 
   return { ...res, broadcastId };
 };

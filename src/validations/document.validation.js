@@ -66,6 +66,7 @@ const getDocuments = {
     kategori: Joi.string().trim().max(100).allow("", null).optional(),
     mesinId: Joi.number().integer().allow("", null).optional(),
     produkId: Joi.number().integer().allow("", null).optional(),
+    noSeri: Joi.string().trim().max(100).allow("", null).optional(),
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(10),
     sortBy: Joi.string()
