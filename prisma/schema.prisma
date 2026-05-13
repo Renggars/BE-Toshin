@@ -500,6 +500,7 @@ enum NotificationTipe {
   RPH_ASSIGNED
   ANDON_CALL
   ANDON_RESOLVED
+  ANNOUNCEMENT
 
   @@map("notification_tipe")
 }
