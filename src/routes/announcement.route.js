@@ -14,7 +14,7 @@ router
     announcementController.sendAnnouncement,
   )
   .get(
-    auth("PRODUKSI", "ADMIN"),
+    auth("PRODUKSI", "MANDOR", "ADMIN"),
     announcementController.getMyAnnouncements,
   );
 

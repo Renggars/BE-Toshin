@@ -16,9 +16,12 @@ import { nowWIB } from "../utils/dateWIB.js";
 const createDocument = async (body, file, uploadedById) => {
   const { judul, deskripsi, kategori, mesinId, produkId, noSeri } = body;
 
+  // Auto-generate judul final: KATEGORI-NOSERI-JUDUL_ASLI
+  const judulFinal = `${kategori}-${noSeri}-${judul}`;
+
   return prisma.document.create({
     data: {
-      judul,
+      judul: judulFinal,
       deskripsi: deskripsi || null,
       kategori: kategori || null,
       namaFile: file.originalname,
