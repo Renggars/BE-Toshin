@@ -26,6 +26,7 @@ const register = {
         "ACCOUNTING",
         "FINANCE",
         "SUPERVISOR",
+        "MANDOR",
         "ADMIN",
       )
       .required(),

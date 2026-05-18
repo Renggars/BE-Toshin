@@ -18,16 +18,17 @@ import logger from "../config/logger.js";
 import notificationService from "./notification.service.js";
 import tcpService from "./tcp.service.js";
 
+
 const getHardwareDivisi = (divisiStr) => {
-  // TODO: JIKA DIVISI BUKAN HANYA MTC BISA DIUBAH DI KODE INI
-  // if (!divisiStr) return "MTC";
-  // const upper = divisiStr.toUpperCase();
-  // if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
-  // if (upper.includes("QUALITY") || upper === "QC") return "QC";
-  // if (upper.includes("DIE")) return "DIE";
-  // return "PROD";
-  
-  return "MTC"; // Sementara pastikan return selalu MTC
+  if (!divisiStr) return "MTC";
+  const upper = divisiStr.toUpperCase();
+
+  if (upper.includes("DIE_MAINT") || upper.includes("DIE")) return "DM";
+  if (upper.includes("PRODUKSI") || upper.includes("PROD")) return "PRD";
+  if (upper.includes("QUALITY") || upper.includes("QC")) return "QC";
+  if (upper.includes("MAINTENANCE") || upper.includes("MTC")) return "MTC";
+
+  return "MTC"; // Default fallback
 };
 
 const TZ = "Asia/Jakarta";
@@ -139,20 +140,20 @@ const fetchHistoryHelper = async (where, page, limit) => {
     downtime:
       e.waktuResolved && e.waktuRepair
         ? Number(
-            (
-              (new Date(e.waktuResolved) - new Date(e.waktuRepair)) /
-              60000
-            ).toFixed(2),
-          )
+          (
+            (new Date(e.waktuResolved) - new Date(e.waktuRepair)) /
+            60000
+          ).toFixed(2),
+        )
         : e.durasiDowntime || 0,
     real_downtime:
       e.waktuResolved && e.waktuTrigger
         ? Number(
-            (
-              (new Date(e.waktuResolved) - new Date(e.waktuTrigger)) /
-              60000
-            ).toFixed(2),
-          )
+          (
+            (new Date(e.waktuResolved) - new Date(e.waktuTrigger)) /
+            60000
+          ).toFixed(2),
+        )
         : e.totalDurationMenit || 0,
     status: e.status,
     estimasi_menit: e.masterMasalahAndon?.waktuPerbaikanMenit || 0,
@@ -407,14 +408,14 @@ const triggerAndon = async (payload) => {
         }),
         resolvedReportAndon: reportAndon
           ? await tx.andonEvent.findUnique({
-              where: { id: reportAndon.id },
-              include: {
-                mesin: true,
-                masterMasalahAndon: true,
-                operator: true,
-                shift: true,
-              },
-            })
+            where: { id: reportAndon.id },
+            include: {
+              mesin: true,
+              masterMasalahAndon: true,
+              operator: true,
+              shift: true,
+            },
+          })
           : null,
       };
     });
@@ -673,8 +674,8 @@ const startRepairAndon = async (id, data) => {
 
   const problem = masalahId
     ? await prisma.masterMasalahAndon.findUnique({
-        where: { id: masalahId },
-      })
+      where: { id: masalahId },
+    })
     : null;
 
   const updated = await prisma.andonEvent.update({
@@ -841,10 +842,10 @@ const resolveAndon = async (id, data) => {
         masalahId: data.masalahId || event.masalahId,
         kategori: data.masalahId
           ? (
-              await tx.masterMasalahAndon.findUnique({
-                where: { id: data.masalahId },
-              })
-            )?.kategori
+            await tx.masterMasalahAndon.findUnique({
+              where: { id: data.masalahId },
+            })
+          )?.kategori
           : event.kategori,
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
@@ -914,8 +915,7 @@ const resolveAndon = async (id, data) => {
       supervisors.map((s) => s.id),
       "ANDON_RESOLVED",
       "Andon Telah Diselesaikan",
-      `Andon di mesin ${
-        updatedEvent.mesin?.namaMesin || "Unknown"
+      `Andon di mesin ${updatedEvent.mesin?.namaMesin || "Unknown"
       } telah diselesaikan. Durasi downtime: ${repairDurationMinutes} menit (Total: ${realDurationMinutes} menit)`,
       JSON.stringify({
         andonId: id,
@@ -928,11 +928,11 @@ const resolveAndon = async (id, data) => {
 
   const waitTime = event.waktuRepair
     ? Number(
-        (
-          (new Date(event.waktuRepair) - new Date(event.waktuTrigger)) /
-          60000
-        ).toFixed(2),
-      )
+      (
+        (new Date(event.waktuRepair) - new Date(event.waktuTrigger)) /
+        60000
+      ).toFixed(2),
+    )
     : 0;
 
   return {
@@ -1229,14 +1229,14 @@ const getActiveEvents = async (userId, query = {}) => {
   const filter = mesinId ? { mesinId: Number(mesinId) } : {};
   const userFilter = userId
     ? {
-        calls: { operatorId: Number(userId) },
-        events: {
-          OR: [
-            { operatorId: Number(userId) },
-            { resolvedById: Number(userId) },
-          ],
-        },
-      }
+      calls: { operatorId: Number(userId) },
+      events: {
+        OR: [
+          { operatorId: Number(userId) },
+          { resolvedById: Number(userId) },
+        ],
+      },
+    }
     : { calls: {}, events: {} };
 
   const [calls, events] = await Promise.all([

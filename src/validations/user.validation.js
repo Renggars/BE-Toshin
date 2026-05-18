@@ -27,6 +27,7 @@ const register = {
         "ACCOUNTING",
         "FINANCE",
         "SUPERVISOR",
+        "MANDOR",
         "ADMIN",
       )
       .required(),
@@ -78,6 +79,7 @@ const updateUser = {
           "ACCOUNTING",
           "FINANCE",
           "SUPERVISOR",
+          "MANDOR",
           "ADMIN",
         )
         .optional(),

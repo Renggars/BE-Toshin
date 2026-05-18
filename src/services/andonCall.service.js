@@ -13,13 +13,15 @@ import tcpService from "./tcp.service.js";
 
 // TODO JIKA DIVISI BUKAN HANYA MTC BISA DIUBAH DI KODE INI
 const getHardwareDivisi = (divisiStr) => {
-  // if (!divisiStr) return "MTC";
-  // const upper = divisiStr.toUpperCase();
-  // if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
-  // if (upper.includes("QUALITY") || upper === "QC") return "QC";
-  // if (upper.includes("DIE")) return "DIE";
+  if (!divisiStr) return "MTC";
+  const upper = divisiStr.toUpperCase();
+  if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
+  if (upper.includes("QUALITY") || upper === "QC") return "QC";
+  if (upper.includes("DIE_MAINT") || upper.includes("DIE")) return "DM";
+  if (upper.includes("PRODUKSI") || upper.includes("PROD")) return "PRD";
+
   
-  return "MTC"; // Sementara pastikan return selalu MTC
+  return "MTC"; // fallbck MTC
 };
 
 const TZ = "Asia/Jakarta";
