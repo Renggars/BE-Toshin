@@ -25,6 +25,12 @@ router.post(
   announcementController.sendBroadcast,
 );
 
+router.get(
+  "/sent",
+  auth("MANDOR", "ADMIN"),
+  announcementController.getSentAnnouncements,
+);
+
 router
   .route("/broadcast/:broadcastId")
   .put(

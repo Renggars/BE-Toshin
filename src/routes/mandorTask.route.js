@@ -3,6 +3,7 @@ import mandorTaskController from "../controllers/mandorTask.controller.js";
 import validate from "../middlewares/validate.js";
 import mandorTaskValidation from "../validations/mandorTask.validation.js";
 import { auth } from "../middlewares/auth.js";
+import upload from "../utils/upload.js";
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ router
   .route("/")
   .post(
     auth("SUPERVISOR", "ADMIN"),
+    upload.single("foto"),
     validate(mandorTaskValidation.createTask),
     mandorTaskController.createTask,
   )
@@ -22,8 +24,9 @@ router
   .route("/:id")
   .patch(
     auth("MANDOR", "SUPERVISOR", "ADMIN"),
-    validate(mandorTaskValidation.updateStatus),
-    mandorTaskController.updateStatus,
+    upload.single("foto"),
+    validate(mandorTaskValidation.updateTask),
+    mandorTaskController.updateTask,
   )
   .delete(
     auth("SUPERVISOR", "ADMIN"),

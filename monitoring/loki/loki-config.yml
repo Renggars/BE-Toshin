@@ -26,6 +26,12 @@ schema_config:
         prefix: index_
         period: 24h
 
+# Bug Fix #6: tambahkan compactor agar retention_period benar-benar aktif
+compactor:
+  working_directory: /tmp/loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+
 limits_config:
   retention_period: 168h # 7 days
   reject_old_samples: true

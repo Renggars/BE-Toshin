@@ -107,15 +107,19 @@ services:
     container_name: toshin-node-exporter
     restart: always
     mem_limit: 128m
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    # Catatan: Volume mounts /proc /sys / hanya berfungsi di Linux.
+    # Di Windows Docker Desktop, mount ini tidak tersedia.
+    # Jalankan tanpa mount (metrics host terbatas, tapi container tetap hidup).
+    # Uncomment bagian volumes & command di bawah jika deploy ke VPS Linux.
+    # volumes:
+    #   - /proc:/host/proc:ro
+    #   - /sys:/host/sys:ro
+    #   - /:/rootfs:ro
+    # command:
+    #   - '--path.procfs=/host/proc'
+    #   - '--path.rootfs=/rootfs'
+    #   - '--path.sysfs=/host/sys'
+    #   - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
 
   prometheus:
     image: prom/prometheus:latest
@@ -131,6 +135,8 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/console_templates'
       - '--web.enable-lifecycle'
+      # Bug Fix: aktifkan remote-write-receiver agar Tempo metrics_generator bisa push metrics
+      - '--web.enable-remote-write-receiver'
     ports:
       - "9090:9090"
     depends_on:
@@ -207,7 +213,8 @@ services:
       - tempo_data:/tmp/tempo
     ports:
       - "3200:3200"
-      - "4317"
+      # Port 4317 tidak perlu di-expose ke host karena Alloy yang expose 4317:4317
+      # Komunikasi Alloy -> Tempo tetap lewat internal Docker network
     depends_on:
       - prometheus
 

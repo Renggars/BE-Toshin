@@ -735,7 +735,7 @@ const getTrendPress = async (filter) => {
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesin: { kategori: { in: ["PRIMARY", "SECONDARY"] } },
+    mesin: { kategori: { nama: { in: ["PRIMARY", "SECONDARY"] } } },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),

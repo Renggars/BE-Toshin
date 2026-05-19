@@ -73,6 +73,12 @@ const deleteBroadcast = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success delete broadcast", null);
 });
 
+const getSentAnnouncements = catchAsync(async (req, res) => {
+  const mandorId = req.user.id;
+  const result = await announcementService.getSentByMandor(mandorId);
+  responseApiSuccess(res, "Success get sent announcements", result);
+});
+
 export default {
   sendAnnouncement,
   sendBroadcast,
@@ -82,4 +88,5 @@ export default {
   deleteAnnouncement,
   updateBroadcast,
   deleteBroadcast,
+  getSentAnnouncements,
 };
