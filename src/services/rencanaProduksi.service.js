@@ -8,6 +8,7 @@ import { nowWIB } from "../utils/dateWIB.js";
 import prisma from "../../prisma/index.js";
 import { calculateProductionTarget } from "../utils/productionCalc.js";
 import notificationService from "./notification.service.js";
+import { emitOperatorProgressUpdate } from "../config/socket.js";
 
 const createRencanaProduksi = async (payload) => {
   const {
@@ -913,6 +914,9 @@ const closeRph = async (rphId) => {
     },
   });
 
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
+
   return updatedRph;
 };
 
@@ -945,6 +949,9 @@ const activateRph = async (rphId) => {
       startTime: nowWIB(),
     },
   });
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
 
   return updatedRph;
 };

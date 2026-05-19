@@ -35,20 +35,22 @@ metrics_generator:
       cluster: docker-compose
 
   storage:
-    path: /var/tempo/generator/wal
+    # Bug Fix #2: path harus sesuai dengan volume mount di docker-compose.yml (/tmp/tempo)
+    path: /tmp/tempo/generator/wal
     remote_write:
       - url: http://prometheus:9090/api/v1/write
         send_exemplars: true
   traces_storage:
-    path: /var/tempo/generator/traces
+    path: /tmp/tempo/generator/traces
 
 storage:
   trace:
     backend: local
     wal:
-      path: /var/tempo/wal
+      # Bug Fix #2: semua path diperbaiki dari /var/tempo ke /tmp/tempo
+      path: /tmp/tempo/wal
     local:
-      path: /var/tempo/blocks
+      path: /tmp/tempo/blocks
 
 overrides:
   defaults:

@@ -428,6 +428,8 @@ model MandorTask {
   deskripsi    String             @db.Text
   prioritas    MandorTaskPriority @default(LOW)
   status       MandorTaskStatus   @default(TODO)
+  catatan      String?            @db.Text
+  foto         String?            @map("foto")
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
   supervisor   User               @relation("supervisor_tasks", fields: [supervisorId], references: [id])
