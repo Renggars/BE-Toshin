@@ -732,10 +732,21 @@ const getTrendPress = async (filter) => {
   delete innerFilter.startDate;
   delete innerFilter.endDate;
 
+  // Ambil mesin ID yang sesuai kategori terlebih dahulu untuk menghindari limitasi groupBy pada prisma relation filter
+  const matchingMesin = await prisma.mesin.findMany({
+    where: {
+      kategori: {
+        nama: { in: ["PRIMARY", "SECONDARY"] },
+      },
+    },
+    select: { id: true },
+  });
+  const mesinIds = matchingMesin.map((m) => m.id);
+
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesin: { kategori: { in: ["PRIMARY", "SECONDARY"] } },
+    mesinId: { in: mesinIds },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),

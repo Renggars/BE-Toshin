@@ -158,6 +158,21 @@ const updateKategoriMesin = {
   }),
 };
 
+const createLine = {
+  body: Joi.object().keys({
+    nama: Joi.string().required(),
+  }),
+};
+
+const updateLine = {
+  params: Joi.object().keys({
+    id: Joi.number().required(),
+  }),
+  body: Joi.object().keys({
+    nama: Joi.string().required(),
+  }),
+};
+
 export default {
   createTarget,
   updateTarget,
@@ -174,4 +189,6 @@ export default {
   updateTipeDisiplin,
   createKategoriMesin,
   updateKategoriMesin,
+  createLine,
+  updateLine,
 };

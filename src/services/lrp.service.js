@@ -430,12 +430,61 @@ const deleteLrpById = async (lrpId) => {
   return lrp;
 };
 
+/**
+ * Update LRP by ID
+ * @param {number} lrpId
+ * @param {Object} updateBody
+ * @returns {Promise<LaporanRealisasiProduksi>}
+ */
+const updateLrpById = async (lrpId, updateBody) => {
+  const lrp = await getLrpById(lrpId);
+  if (!lrp) {
+    throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
+  }
+
+  let finalData = { ...updateBody };
+  if (
+    updateBody.qtyOk !== undefined ||
+    updateBody.qtyNgProses !== undefined ||
+    updateBody.qtyNgPrev !== undefined ||
+    updateBody.qtyRework !== undefined
+  ) {
+    const qtyOk = updateBody.qtyOk !== undefined ? Number(updateBody.qtyOk) : lrp.qtyOk;
+    const qtyNgProses = updateBody.qtyNgProses !== undefined ? Number(updateBody.qtyNgProses) : lrp.qtyNgProses;
+    const qtyRework = updateBody.qtyRework !== undefined ? Number(updateBody.qtyRework) : lrp.qtyRework;
+    const qtyNgPrev = updateBody.qtyNgPrev !== undefined ? Number(updateBody.qtyNgPrev) : lrp.qtyNgPrev;
+
+    finalData.qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
+  }
+
+  const updatedLrp = await prisma.laporanRealisasiProduksi.update({
+    where: { id: lrpId },
+    data: {
+      ...finalData,
+      updatedAt: nowWIB(),
+    },
+  });
+
+  // Enqueue OEE recalc karena data LRP berubah
+  await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({
+    mesinId: updatedLrp.mesinId,
+    shiftId: updatedLrp.shiftId,
+    tanggal: updatedLrp.tanggal,
+  });
+
+  return updatedLrp;
+};
+
 export default {
   upsertLrpByRphId,
   queryLrps,
   getLrpById,
   submitLrpById,
   deleteLrpById,
+  updateLrpById,
   getOperatorProgress,
 };
 

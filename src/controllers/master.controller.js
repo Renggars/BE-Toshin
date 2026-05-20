@@ -9,6 +9,11 @@ const getMesin = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success get mesin", result);
 });
 
+const getLineMesin = catchAsync(async (req, res) => {
+  const result = await masterService.getLineMesin();
+  responseApiSuccess(res, "Success get line mesin", result);
+});
+
 const createMesin = catchAsync(async (req, res) => {
   const result = await masterService.createMesin(req.body);
   responseApiSuccess(res, "Success create mesin", result, httpStatus.CREATED);
@@ -208,9 +213,34 @@ const deleteKategoriMesin = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success delete kategori mesin", null);
 });
 
+// --- Line CRUD ---
+const getLines = catchAsync(async (req, res) => {
+  const result = await masterService.getLines();
+  responseApiSuccess(res, "Success get master lines", result);
+});
+
+const createLine = catchAsync(async (req, res) => {
+  const result = await masterService.createLine(req.body);
+  responseApiSuccess(res, "Success create master line", result, httpStatus.CREATED);
+});
+
+const updateLine = catchAsync(async (req, res) => {
+  const result = await masterService.updateLine(
+    parseInt(req.params.id),
+    req.body
+  );
+  responseApiSuccess(res, "Success update master line", result);
+});
+
+const deleteLine = catchAsync(async (req, res) => {
+  await masterService.deleteLine(parseInt(req.params.id));
+  responseApiSuccess(res, "Success delete master line", null);
+});
+
 export default {
   // Mesin
   getMesin,
+  getLineMesin,
   createMesin,
   updateMesin,
   deleteMesin,
@@ -245,6 +275,11 @@ export default {
   createKategoriMesin,
   updateKategoriMesin,
   deleteKategoriMesin,
+  // Line CRUD
+  getLines,
+  createLine,
+  updateLine,
+  deleteLine,
   // Aggregated
   getAllMasterData,
 };

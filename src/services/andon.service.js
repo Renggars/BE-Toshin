@@ -18,7 +18,6 @@ import logger from "../config/logger.js";
 import notificationService from "./notification.service.js";
 import tcpService from "./tcp.service.js";
 
-
 const getHardwareDivisi = (divisiStr) => {
   if (!divisiStr) return "MTC";
   const upper = divisiStr.toUpperCase();
@@ -28,7 +27,7 @@ const getHardwareDivisi = (divisiStr) => {
   if (upper.includes("QUALITY") || upper.includes("QC")) return "QC";
   if (upper.includes("MAINTENANCE") || upper.includes("MTC")) return "MTC";
 
-  return "MTC"; // Default fallback
+  return "MTC";
 };
 
 const TZ = "Asia/Jakarta";

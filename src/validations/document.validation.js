@@ -82,9 +82,30 @@ const documentId = {
   }),
 };
 
+const createKategoriDokumen = {
+  body: Joi.object().keys({
+    nama: Joi.string().trim().required().messages({
+      "any.required": "Nama kategori wajib diisi",
+    }),
+  }),
+};
+
+const updateKategoriDokumen = {
+  params: Joi.object().keys({
+    id: Joi.number().integer().positive().required(),
+  }),
+  body: Joi.object().keys({
+    nama: Joi.string().trim().required().messages({
+      "any.required": "Nama kategori wajib diisi",
+    }),
+  }),
+};
+
 export default {
   createDocument,
   updateDocument,
   getDocuments,
   documentId,
+  createKategoriDokumen,
+  updateKategoriDokumen,
 };
