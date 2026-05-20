@@ -210,6 +210,41 @@ const getDocumentFilePath = async (id) => {
   return { absPath, namaFile: doc.namaFile, mimeType: doc.mimeType };
 };
 
+// --- KategoriDokumen CRUD ---
+const getKategoriDokumens = async () => {
+  let result = await prisma.kategoriDokumen.findMany({
+    orderBy: { nama: "asc" }
+  });
+
+  if (result.length === 0) {
+    const distinctKategori = await prisma.document.findMany({
+      select: { kategori: true },
+      distinct: ['kategori'],
+    });
+    const categories = distinctKategori.map(d => d.kategori).filter(Boolean);
+    await prisma.kategoriDokumen.createMany({
+      data: categories.map(nama => ({ nama })),
+      skipDuplicates: true,
+    });
+    result = await prisma.kategoriDokumen.findMany({
+      orderBy: { nama: "asc" }
+    });
+  }
+  return result;
+};
+
+const createKategoriDokumen = async (data) => {
+  return prisma.kategoriDokumen.create({ data });
+};
+
+const updateKategoriDokumen = async (id, data) => {
+  return prisma.kategoriDokumen.update({ where: { id: Number(id) }, data });
+};
+
+const deleteKategoriDokumen = async (id) => {
+  return prisma.kategoriDokumen.delete({ where: { id: Number(id) } });
+};
+
 export default {
   createDocument,
   getDocuments,
@@ -217,4 +252,8 @@ export default {
   updateDocument,
   deleteDocument,
   getDocumentFilePath,
+  getKategoriDokumens,
+  createKategoriDokumen,
+  updateKategoriDokumen,
+  deleteKategoriDokumen,
 };

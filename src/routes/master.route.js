@@ -36,6 +36,23 @@ router.get("/all", managerRoles, masterController.getAllMasterData);
 
 // --- MESIN ---
 router.get("/mesin", allRoles, masterController.getMesin);
+router.get("/mesin/line", allRoles, masterController.getLineMesin);
+
+// --- LINE CRUD ---
+router.get("/line", allRoles, masterController.getLines);
+router.post(
+  "/line",
+  managerRoles,
+  validate(masterValidation.createLine),
+  masterController.createLine,
+);
+router.put(
+  "/line/:id",
+  managerRoles,
+  validate(masterValidation.updateLine),
+  masterController.updateLine,
+);
+router.delete("/line/:id", managerRoles, masterController.deleteLine);
 router.post(
   "/mesin",
   managerRoles,

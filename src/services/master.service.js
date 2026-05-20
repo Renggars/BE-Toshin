@@ -12,6 +12,7 @@ const TIPE_DISIPLIN_CACHE_KEY = "master_tipe_disiplin_all";
 const TARGET_CACHE_PREFIX = "master_target:";
 const JENIS_PEKERJAAN_CACHE_KEY = "master_jenis_pekerjaan_all";
 const KATEGORI_MESIN_CACHE_KEY = "master_kategori_mesin_all";
+const LINE_MESIN_CACHE_KEY = "master_line_mesin_all";
 
 const invalidateMasterCache = async () => {
   try {
@@ -25,6 +26,7 @@ const invalidateMasterCache = async () => {
       redis.del(TIPE_DISIPLIN_CACHE_KEY),
       redis.del(JENIS_PEKERJAAN_CACHE_KEY),
       redis.del(KATEGORI_MESIN_CACHE_KEY),
+      redis.del(LINE_MESIN_CACHE_KEY),
       redis.delByPattern(`${TARGET_CACHE_PREFIX}*`),
     ]);
   } catch (err) {
@@ -68,6 +70,68 @@ const getMesin = async () => {
   logger.info("[Redis] Cache SET: Machines Data cached successfully");
 
   return result;
+};
+
+
+const getLines = async () => {
+  const cachedData = await redis.get("master_line_all");
+  if (cachedData) return cachedData;
+
+  let result = await prisma.masterLine.findMany({
+    orderBy: { nama: "asc" }
+  });
+
+  if (result.length === 0) {
+    const distinctLines = await prisma.mesin.findMany({
+      select: { line: true },
+      distinct: ['line'],
+    });
+    const lines = distinctLines.map(m => m.line).filter(Boolean);
+    if (lines.length > 0) {
+      await prisma.masterLine.createMany({
+        data: lines.map(nama => ({ nama })),
+        skipDuplicates: true,
+      });
+      result = await prisma.masterLine.findMany({
+        orderBy: { nama: "asc" }
+      });
+    }
+  }
+
+  await redis.set("master_line_all", result, 3600);
+  return result;
+};
+
+const getLineMesin = async () => {
+  const cachedData = await redis.get(LINE_MESIN_CACHE_KEY);
+  if (cachedData) return cachedData;
+
+  const lines = await getLines();
+  const result = lines.map(l => l.nama);
+
+  await redis.set(LINE_MESIN_CACHE_KEY, result, 3600);
+  return result;
+};
+
+const createLine = async (data) => {
+  const res = await prisma.masterLine.create({ data });
+  await redis.del("master_line_all");
+  await redis.del(LINE_MESIN_CACHE_KEY);
+  return res;
+};
+
+const updateLine = async (id, data) => {
+  const res = await prisma.masterLine.update({ where: { id }, data });
+  await redis.del("master_line_all");
+  await redis.del(LINE_MESIN_CACHE_KEY);
+  return res;
+};
+
+const deleteLine = async (id) => {
+  const res = await prisma.masterLine.delete({ where: { id } });
+  await redis.del("master_line_all");
+  await redis.del(LINE_MESIN_CACHE_KEY);
+  return res;
 };
 
 const createMesin = async (data) => {
@@ -453,6 +517,7 @@ const deleteKategoriMesin = async (id) => {
 export default {
   // Mesin
   getMesin,
+  getLineMesin,
   createMesin,
   updateMesin,
   deleteMesin,
@@ -490,6 +555,11 @@ export default {
   createKategoriMesin,
   updateKategoriMesin,
   deleteKategoriMesin,
+  // Line CRUD
+  getLines,
+  createLine,
+  updateLine,
+  deleteLine,
   // Aggregated
   getAllMasterData,
 };

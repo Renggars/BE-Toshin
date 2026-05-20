@@ -206,6 +206,20 @@ model KategoriMesin {
   @@map("kategori_mesin")
 }
 
+model MasterLine {
+  id   Int    @id @default(autoincrement())
+  nama String @unique
+
+  @@map("master_line")
+}
+
+model KategoriDokumen {
+  id   Int    @id @default(autoincrement())
+  nama String @unique
+
+  @@map("master_kategori_dokumen")
+}
+
 model Notification {
   id        Int              @id @default(autoincrement())
   userId    Int              @map("fk_id_user")

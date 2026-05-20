@@ -72,6 +72,35 @@ const deleteDocument = catchAsync(async (req, res) => {
   });
 });
 
+// --- KategoriDokumen CRUD ---
+const getKategoriDokumens = catchAsync(async (req, res) => {
+  const result = await documentService.getKategoriDokumens();
+  res.send({ status: true, data: result });
+});
+
+const createKategoriDokumen = catchAsync(async (req, res) => {
+  const result = await documentService.createKategoriDokumen(req.body);
+  res.status(httpStatus.CREATED).send({
+    status: true,
+    message: "Kategori dokumen berhasil dibuat",
+    data: result,
+  });
+});
+
+const updateKategoriDokumen = catchAsync(async (req, res) => {
+  const result = await documentService.updateKategoriDokumen(req.params.id, req.body);
+  res.send({
+    status: true,
+    message: "Kategori dokumen berhasil diperbarui",
+    data: result,
+  });
+});
+
+const deleteKategoriDokumen = catchAsync(async (req, res) => {
+  await documentService.deleteKategoriDokumen(req.params.id);
+  res.send({ status: true, message: "Kategori dokumen berhasil dihapus" });
+});
+
 export default {
   createDocument,
   getDocuments,
@@ -79,4 +108,8 @@ export default {
   downloadDocument,
   updateDocument,
   deleteDocument,
+  getKategoriDokumens,
+  createKategoriDokumen,
+  updateKategoriDokumen,
+  deleteKategoriDokumen,
 };

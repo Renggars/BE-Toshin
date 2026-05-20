@@ -58,4 +58,20 @@ router.get(
   documentController.downloadDocument,
 );
 
+// --- KategoriDokumen CRUD ---
+router.get("/kategori/all", allRoles, documentController.getKategoriDokumens);
+router.post(
+  "/kategori",
+  adminOrSupervisor,
+  validate(documentValidation.createKategoriDokumen),
+  documentController.createKategoriDokumen,
+);
+router.put(
+  "/kategori/:id",
+  adminOrSupervisor,
+  validate(documentValidation.updateKategoriDokumen),
+  documentController.updateKategoriDokumen,
+);
+router.delete("/kategori/:id", adminOrSupervisor, documentController.deleteKategoriDokumen);
+
 export default router;
