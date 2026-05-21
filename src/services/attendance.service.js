@@ -3,6 +3,7 @@ import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
 import poinService from "./poin.service.js";
 import { nowWIB } from "../utils/dateWIB.js";
+import { emitOperatorProgressUpdate } from "../config/socket.js";
 
 /**
  * Get all users scheduled for a specific shift, date, and optionally division
@@ -229,6 +230,9 @@ const clockIn = async (user, req) => {
       });
     }
   }
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
 };
 
 const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId }) => {
@@ -297,6 +301,9 @@ const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId 
        console.error("[ManualAttendance] Gagal mencatat poin disiplin otomatis:", error);
     }
   }
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
 
   return attendanceRecord;
 };

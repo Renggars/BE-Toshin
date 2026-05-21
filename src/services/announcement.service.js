@@ -5,6 +5,8 @@ import {
 } from "../config/socket.js";
 import { v4 as uuidv4 } from "uuid";
 import notificationService from "./notification.service.js";
+import httpStatus from "http-status";
+import ApiError from "../utils/ApiError.js";
 
 const sendAnnouncement = async (data) => {
   const announcement = await prisma.operatorAnnouncement.create({
@@ -36,44 +38,65 @@ const sendAnnouncement = async (data) => {
 };
 
 const sendBroadcastAnnouncement = async (data) => {
-  const operators = await prisma.user.findMany({
-    where: { role: "PRODUKSI" },
-    select: { id: true },
+  // Cari operator (dengan role PRODUKSI) yang memiliki RPH berstatus ACTIVE saat ini
+  const activeRphs = await prisma.rencanaProduksi.findMany({
+    where: {
+      status: "ACTIVE",
+      operator: { role: "PRODUKSI" },
+    },
+    select: { userId: true },
   });
 
-  const broadcastId = uuidv4();
+  const activeOperatorIds = [...new Set(activeRphs.map((r) => r.userId))];
 
-  const announcementData = operators.map((op) => ({
-    mandorId: data.mandorId,
-    operatorId: op.id,
-    pesan: data.pesan,
-    broadcastId,
-  }));
-
-  const res = await prisma.operatorAnnouncement.createMany({
-    data: announcementData,
-  });
-
-  // Emit to role room
-  broadcastToRole("PRODUKSI", "new-announcement", {
-    type: "BROADCAST_ANNOUNCEMENT",
-    pesan: data.pesan,
-    mandorId: data.mandorId,
-    broadcastId,
-  });
-
-  // Also create a standard notification so it appears in all operators' notification histories
-  const operatorIds = operators.map((op) => op.id);
-  if (operatorIds.length > 0) {
-    await notificationService.createBulkNotifications(
-      operatorIds,
-      "ANNOUNCEMENT",
-      "Pesan dari Mandor",
-      data.pesan
+  if (activeOperatorIds.length === 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Tidak ada operator yang sedang aktif saat ini untuk menerima broadcast.",
     );
   }
 
-  return { ...res, broadcastId };
+  const broadcastId = uuidv4();
+
+  // Gunakan Promise.all dengan create agar kita mendapatkan ID dari masing-masing record yang terbuat
+  const createdAnnouncements = await Promise.all(
+    activeOperatorIds.map(async (operatorId) => {
+      return await prisma.operatorAnnouncement.create({
+        data: {
+          mandorId: data.mandorId,
+          operatorId: operatorId,
+          pesan: data.pesan,
+          broadcastId,
+        },
+        include: {
+          mandor: { select: { nama: true } },
+        },
+      });
+    }),
+  );
+
+  // Emit secara spesifik ke room user masing-masing operator yang aktif dengan menyertakan ID
+  createdAnnouncements.forEach((ann) => {
+    emitOperatorAnnouncement(ann.operatorId, {
+      type: "BROADCAST_ANNOUNCEMENT",
+      id: ann.id,
+      pesan: ann.pesan,
+      mandorId: ann.mandorId,
+      broadcastId: ann.broadcastId,
+      mandor: ann.mandor,
+      createdAt: ann.createdAt,
+    });
+  });
+
+  // Buat notifikasi standar hanya untuk operator yang aktif
+  await notificationService.createBulkNotifications(
+    activeOperatorIds,
+    "ANNOUNCEMENT",
+    "Pesan dari Mandor",
+    data.pesan
+  );
+
+  return { count: createdAnnouncements.length, broadcastId };
 };
 
 const updateBroadcast = async (broadcastId, data) => {
@@ -129,6 +152,62 @@ const deleteAnnouncement = async (id) => {
   });
 };
 
+const getSentByMandor = async (mandorId) => {
+  const announcements = await prisma.operatorAnnouncement.findMany({
+    where: { mandorId },
+    include: {
+      operator: {
+        select: { id: true, nama: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Grouping di memory
+  const broadcastsMap = new Map();
+  const privateList = [];
+
+  announcements.forEach((ann) => {
+    if (ann.broadcastId) {
+      if (!broadcastsMap.has(ann.broadcastId)) {
+        broadcastsMap.set(ann.broadcastId, {
+          id: ann.broadcastId, // gunakan broadcastId sebagai ID unik riwayat
+          type: "BROADCAST",
+          pesan: ann.pesan,
+          createdAt: ann.createdAt,
+          totalRecipients: 0,
+          readCount: 0,
+          recipients: [],
+        });
+      }
+      const group = broadcastsMap.get(ann.broadcastId);
+      group.totalRecipients += 1;
+      if (ann.isRead) group.readCount += 1;
+      group.recipients.push({
+        operatorId: ann.operatorId,
+        operatorName: ann.operator?.nama || `Operator #${ann.operatorId}`,
+        isRead: ann.isRead,
+      });
+    } else {
+      privateList.push({
+        id: ann.id.toString(),
+        type: "PRIVATE",
+        pesan: ann.pesan,
+        createdAt: ann.createdAt,
+        operatorId: ann.operatorId,
+        operatorName: ann.operator?.nama || `Operator #${ann.operatorId}`,
+        isRead: ann.isRead,
+      });
+    }
+  });
+
+  // Gabungkan dan urutkan kembali berdasarkan createdAt desc
+  const combined = [...broadcastsMap.values(), ...privateList];
+  combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return combined;
+};
+
 export default {
   sendAnnouncement,
   sendBroadcastAnnouncement,
@@ -138,4 +217,5 @@ export default {
   markAsRead,
   updateAnnouncement,
   deleteAnnouncement,
+  getSentByMandor,
 };
