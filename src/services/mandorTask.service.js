@@ -10,6 +10,8 @@ const createTask = async (data) => {
       deskripsi: data.deskripsi,
       prioritas: data.prioritas || "LOW",
       status: "TODO",
+      catatan: data.catatan,
+      foto: data.foto,
     },
     include: {
       supervisor: { select: { nama: true } },
@@ -56,10 +58,14 @@ const getTasksForSupervisor = async (supervisorId) => {
   });
 };
 
-const updateTaskStatus = async (id, status) => {
+const updateTaskStatus = async (id, { status, catatan, foto }) => {
   const task = await prisma.mandorTask.update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      catatan: catatan !== undefined ? catatan : undefined,
+      foto: foto !== undefined ? foto : undefined,
+    },
     include: {
       mandor: { select: { nama: true } },
       supervisor: { select: { id: true } },

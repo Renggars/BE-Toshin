@@ -9,6 +9,12 @@ const storage = multer.diskStorage({
     if (req.baseUrl.includes("/poin") || req.path.includes("/poin")) {
       dir = "public/uploads/poin-images";
     }
+    if (
+      req.baseUrl.includes("/mandor-tasks") ||
+      req.path.includes("/mandor-tasks")
+    ) {
+      dir = "public/uploads/mandor-task-images";
+    }
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }

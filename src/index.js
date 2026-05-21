@@ -39,7 +39,7 @@ try {
     logger.info("Redis is disabled, skipping connection and workers.");
   }
 
-  server = app.listen(config.port, () => {
+  server = app.listen(config.port, "0.0.0.0", () => {
     logger.info(`Server is running on http://localhost:${config.port}`);
     console.log(`Docs available at http://localhost:${config.port}/api-docs`);
 
