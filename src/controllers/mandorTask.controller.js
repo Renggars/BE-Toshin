@@ -5,9 +5,11 @@ import mandorTaskService from "../services/mandorTask.service.js";
 
 const createTask = catchAsync(async (req, res) => {
   const supervisorId = req.user.id;
+  const foto = req.file ? req.file.path : null;
   const result = await mandorTaskService.createTask({
     ...req.body,
     supervisorId,
+    foto,
   });
   responseApiSuccess(
     res,
@@ -33,11 +35,13 @@ const getMyTasks = catchAsync(async (req, res) => {
 
 const updateStatus = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
-  const result = await mandorTaskService.updateTaskStatus(
-    parseInt(id),
+  const { status, catatan } = req.body;
+  const foto = req.file ? req.file.path : null;
+  const result = await mandorTaskService.updateTaskStatus(parseInt(id), {
     status,
-  );
+    catatan,
+    foto,
+  });
   responseApiSuccess(res, "Success update mandor task status", result);
 });
 

@@ -6,6 +6,8 @@ const createTask = {
     judul: Joi.string().required(),
     deskripsi: Joi.string().required(),
     prioritas: Joi.string().valid("LOW", "MEDIUM", "HIGH").optional(),
+    catatan: Joi.string().optional().allow(null, ""),
+    foto: Joi.string().optional().allow(null, ""),
   }),
 };
 
@@ -15,6 +17,8 @@ const updateStatus = {
   }),
   body: Joi.object().keys({
     status: Joi.string().required().valid("TODO", "ON_PROGRESS", "DONE"),
+    catatan: Joi.string().optional().allow(null, ""),
+    foto: Joi.string().optional().allow(null, ""),
   }),
 };
 
