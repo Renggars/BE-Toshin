@@ -5,9 +5,11 @@ import mandorTaskService from "../services/mandorTask.service.js";
 
 const createTask = catchAsync(async (req, res) => {
   const supervisorId = req.user.id;
+  const foto = req.file ? `/uploads/mandor-tasks/${req.file.filename}` : req.body.foto;
   const result = await mandorTaskService.createTask({
     ...req.body,
     supervisorId,
+    ...(foto && { foto }),
   });
   responseApiSuccess(
     res,
@@ -31,14 +33,14 @@ const getMyTasks = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success get mandor tasks", result);
 });
 
-const updateStatus = catchAsync(async (req, res) => {
+const updateTask = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
-  const result = await mandorTaskService.updateTaskStatus(
-    parseInt(id),
-    status,
-  );
-  responseApiSuccess(res, "Success update mandor task status", result);
+  const foto = req.file ? `/uploads/mandor-tasks/${req.file.filename}` : req.body.foto;
+  const result = await mandorTaskService.updateTask(parseInt(id), {
+    ...req.body,
+    ...(foto && { foto }),
+  });
+  responseApiSuccess(res, "Success update mandor task", result);
 });
 
 const deleteTask = catchAsync(async (req, res) => {
@@ -50,6 +52,6 @@ const deleteTask = catchAsync(async (req, res) => {
 export default {
   createTask,
   getMyTasks,
-  updateStatus,
+  updateTask,
   deleteTask,
 };
