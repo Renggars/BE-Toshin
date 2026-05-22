@@ -331,7 +331,7 @@ CREATE TABLE `document` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `judul` VARCHAR(255) NOT NULL,
     `deskripsi` TEXT NULL,
-    `kategori` VARCHAR(100) NOT NULL,
+    `fk_id_kategori` INTEGER NULL,
     `nama_file` VARCHAR(255) NOT NULL,
     `path_file` VARCHAR(500) NOT NULL,
     `ukuran_byte` INTEGER NOT NULL,
@@ -344,7 +344,7 @@ CREATE TABLE `document` (
     `updated_at` DATETIME(3) NOT NULL,
 
     INDEX `document_judul_idx`(`judul`),
-    INDEX `document_kategori_idx`(`kategori`),
+    INDEX `document_fk_id_kategori_idx`(`fk_id_kategori`),
     INDEX `document_fk_uploaded_by_idx`(`fk_uploaded_by`),
     INDEX `document_fk_id_mesin_idx`(`fk_id_mesin`),
     INDEX `document_fk_id_produk_idx`(`fk_id_produk`),
@@ -384,6 +384,8 @@ CREATE TABLE `mandor_task` (
     `deskripsi` TEXT NOT NULL,
     `prioritas` ENUM('LOW', 'MEDIUM', 'HIGH') NOT NULL DEFAULT 'LOW',
     `status` ENUM('TODO', 'ON_PROGRESS', 'DONE') NOT NULL DEFAULT 'TODO',
+    `catatan` TEXT NULL,
+    `foto` VARCHAR(191) NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
@@ -523,6 +525,9 @@ ALTER TABLE `document` ADD CONSTRAINT `document_fk_id_mesin_fkey` FOREIGN KEY (`
 
 -- AddForeignKey
 ALTER TABLE `document` ADD CONSTRAINT `document_fk_id_produk_fkey` FOREIGN KEY (`fk_id_produk`) REFERENCES `produk`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `document` ADD CONSTRAINT `document_fk_id_kategori_fkey` FOREIGN KEY (`fk_id_kategori`) REFERENCES `master_kategori_dokumen`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `user` ADD CONSTRAINT `user_fk_id_divisi_fkey` FOREIGN KEY (`fk_id_divisi`) REFERENCES `divisi`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
