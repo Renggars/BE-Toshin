@@ -214,8 +214,9 @@ model MasterLine {
 }
 
 model KategoriDokumen {
-  id   Int    @id @default(autoincrement())
-  nama String @unique
+  id        Int        @id @default(autoincrement())
+  nama      String     @unique
+  documents Document[]
 
   @@map("master_kategori_dokumen")
 }
@@ -372,26 +373,27 @@ model TipeDisiplin {
 }
 
 model Document {
-  id            Int      @id @default(autoincrement())
-  judul         String   @db.VarChar(255)
-  deskripsi     String?  @db.Text
-  kategori      String   @db.VarChar(100)
-  namaFile      String   @map("nama_file") @db.VarChar(255)
-  pathFile      String   @map("path_file") @db.VarChar(500)
-  ukuranByte    Int      @map("ukuran_byte")
-  mimeType      String   @map("mime_type") @db.VarChar(50)
-  uploadedById  Int      @map("fk_uploaded_by")
-  mesinId       Int?     @map("fk_id_mesin")
-  produkId      Int?     @map("fk_id_produk")
-  noSeri        String   @map("no_seri") @db.VarChar(100)
-  createdAt     DateTime @map("created_at")
-  updatedAt     DateTime @map("updated_at")
-  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
-  mesin         Mesin?   @relation(fields: [mesinId], references: [id])
-  produk        Produk?  @relation(fields: [produkId], references: [id])
+  id           Int              @id @default(autoincrement())
+  judul        String           @db.VarChar(255)
+  deskripsi    String?          @db.Text
+  kategoriId   Int?             @map("fk_id_kategori")
+  namaFile     String           @map("nama_file") @db.VarChar(255)
+  pathFile     String           @map("path_file") @db.VarChar(500)
+  ukuranByte   Int              @map("ukuran_byte")
+  mimeType     String           @map("mime_type") @db.VarChar(50)
+  uploadedById Int              @map("fk_uploaded_by")
+  mesinId      Int?             @map("fk_id_mesin")
+  produkId     Int?             @map("fk_id_produk")
+  noSeri       String           @map("no_seri") @db.VarChar(100)
+  createdAt    DateTime         @map("created_at")
+  updatedAt    DateTime         @map("updated_at")
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id])
+  mesin        Mesin?           @relation(fields: [mesinId], references: [id])
+  produk       Produk?          @relation(fields: [produkId], references: [id])
+  kategori     KategoriDokumen? @relation(fields: [kategoriId], references: [id])
 
   @@index([judul])
-  @@index([kategori])
+  @@index([kategoriId])
   @@index([uploadedById])
   @@index([mesinId])
   @@index([produkId])

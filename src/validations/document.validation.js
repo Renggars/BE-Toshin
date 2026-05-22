@@ -9,7 +9,7 @@ const createDocument = {
       "any.required": "Judul wajib diisi",
     }),
     deskripsi: Joi.string().trim().max(1000).allow("", null).optional(),
-    kategori: Joi.string().trim().max(100).required().messages({
+    kategoriId: Joi.number().integer().required().messages({
       "any.required": "Kategori wajib diisi",
     }),
     mesinId: Joi.number().integer().allow(null).optional(),
@@ -40,7 +40,7 @@ const updateDocument = {
     .keys({
       judul: Joi.string().trim().min(3).max(255).optional(),
       deskripsi: Joi.string().trim().max(1000).allow("", null).optional(),
-      kategori: Joi.string().trim().max(100).allow("", null).optional(),
+      kategoriId: Joi.number().integer().allow(null).optional(),
       mesinId: Joi.number().integer().allow(null).optional(),
       produkId: Joi.number().integer().allow(null).optional(),
       noSeri: Joi.string().trim().max(100).allow("", null).optional(),
@@ -63,14 +63,14 @@ const updateDocument = {
 const getDocuments = {
   query: Joi.object().keys({
     search: Joi.string().trim().max(255).allow("", null).optional(),
-    kategori: Joi.string().trim().max(100).allow("", null).optional(),
+    kategoriId: Joi.number().integer().allow("", null).optional(),
     mesinId: Joi.number().integer().allow("", null).optional(),
     produkId: Joi.number().integer().allow("", null).optional(),
     noSeri: Joi.string().trim().max(100).allow("", null).optional(),
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(10),
     sortBy: Joi.string()
-      .valid("judul", "createdAt", "kategori")
+      .valid("judul", "createdAt", "kategoriId")
       .default("createdAt"),
     sortOrder: Joi.string().valid("asc", "desc").default("desc"),
   }),
