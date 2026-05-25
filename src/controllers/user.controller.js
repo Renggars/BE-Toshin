@@ -22,7 +22,6 @@ const getUser = catchAsync(async (req, res) => {
   responseApiSuccess(res, "Success get user", result);
 });
 
-
 const updateUser = catchAsync(async (req, res) => {
   const result = await userService.updateUserById(
     parseInt(req.params.userId),

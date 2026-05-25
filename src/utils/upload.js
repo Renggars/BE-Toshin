@@ -8,6 +8,8 @@ const storage = multer.diskStorage({
     let dir = "public/uploads/user-profiles";
     if (req.baseUrl.includes("/poin") || req.path.includes("/poin")) {
       dir = "public/uploads/poin-images";
+    } else if (req.baseUrl.includes("/branding") || req.path.includes("/branding")) {
+      dir = "public/uploads/branding-images";
     }
     if (
       req.baseUrl.includes("/mandor-tasks") ||
@@ -32,7 +34,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 1 * 1024 * 1024, // Batasi maksimal 1MB
+    fileSize: 10 * 1024 * 1024, // Batasi maksimal 2MB
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
