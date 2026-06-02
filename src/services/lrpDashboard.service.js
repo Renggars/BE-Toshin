@@ -30,15 +30,16 @@ const buildFilterWhereClause = (filter) => {
 
   // 3. Filter Relation (Jenis Pekerjaan & Produk)
   // Filter ini ada di model RencanaProduksi
-  if (filter.jenisPekerjaanId || filter.produkId) {
+  const jId = filter.jenisPekerjaanId || filter.workTypeId;
+  const pId = filter.produkId || filter.productId;
+
+  if (jId || pId) {
     where.rencanaProduksi = {};
-    if (filter.jenisPekerjaanId) {
-      where.rencanaProduksi.jenisPekerjaanId = Number(
-        filter.jenisPekerjaanId,
-      );
+    if (jId) {
+      where.rencanaProduksi.jenisPekerjaanId = Number(jId);
     }
-    if (filter.produkId) {
-      where.rencanaProduksi.produkId = Number(filter.produkId);
+    if (pId) {
+      where.rencanaProduksi.produkId = Number(pId);
     }
   }
 
@@ -54,6 +55,11 @@ const buildFilterWhereClause = (filter) => {
     where.noKanagata = { contains: filter.noKanagata, mode: "insensitive" };
   if (filter.noLot)
     where.noLot = { contains: filter.noLot, mode: "insensitive" };
+
+  // 6. Filter Status LRP
+  if (filter.statusLrp && filter.statusLrp !== "ALL") {
+    where.statusLrp = filter.statusLrp;
+  }
 
   return where;
 };
@@ -138,7 +144,8 @@ const getTrendBulananHarian = async (filter) => {
   const daysInMonth = lastDay.date();
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = moment.utc([year, month, d]).format("YYYY-MM-DD");
+    const current = moment.utc([year, month, d]);
+    const dateStr = current.format("YYYY-MM-DD");
 
     const existing = data.find((item) => {
       const itemDate = moment.utc(item.tanggal).format("YYYY-MM-DD");
@@ -310,7 +317,9 @@ const getLrpList = async (filter) => {
       mesin: true,
       shift: true,
       operator: true,
-      rencanaProduksi: { include: { jenisPekerjaan: true, produk: true } },
+      rencanaProduksi: {
+        include: { jenisPekerjaan: true, produk: true, target: true },
+      },
     },
     orderBy: { createdAt: "desc" },
     skip,
@@ -324,7 +333,7 @@ const getLrpList = async (filter) => {
     const counterEnd = lrp.counterEnd;
     const counterEndFormatted =
       counterEnd != null
-        ? `${Math.floor(counterEnd / 60)} h ${counterEnd % 60} m`
+        ? counterEnd.toString()
         : "-";
     return {
       id: lrp.id,
@@ -341,6 +350,7 @@ const getLrpList = async (filter) => {
       qtyTotalProd: lrp.qtyTotalProd,
       jenisPekerjaan:
         lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
+      targetQty: lrp.rencanaProduksi?.target?.totalTarget || 0,
       counterEndFormatted: counterEndFormatted,
       jamKerja: `${hours}h ${minutes}m`,
       statusLrp: lrp.statusLrp,
@@ -368,6 +378,13 @@ const getLrpDetail = async (id) => {
       mesin: true,
       shift: true,
       operator: true,
+      rencanaProduksi: {
+        include: {
+          produk: true,
+          jenisPekerjaan: true,
+          target: true,
+        },
+      },
     },
   });
 
@@ -375,15 +392,85 @@ const getLrpDetail = async (id) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Summary Waktu (Placeholder since logs are removed)
+  // Fetch all LRPs for the same machine, shift, and date as an operator breakdown
+  const breakdownRaw = await prisma.laporanRealisasiProduksi.findMany({
+    where: {
+      mesinId: lrp.mesinId,
+      shiftId: lrp.shiftId,
+      tanggal: lrp.tanggal,
+    },
+    include: {
+      operator: { select: { nama: true } },
+    },
+  });
+
+  const operatorBreakdown = breakdownRaw.map((item) => ({
+    id: item.id,
+    operatorName: item.operator?.nama || "-",
+    qtyOk: item.qtyOk,
+    qtyNg: (item.qtyNgPrev || 0) + (item.qtyNgProses || 0),
+    qtyRework: item.qtyRework,
+    qtyTotal: item.qtyTotalProd,
+  }));
+
+  // Fetch actual activity logs (breakdown) linked to this RPH
+  const logsRaw = await prisma.andonDowntimeShift.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      andonEvent: {
+        include: { masterMasalahAndon: true },
+      },
+    },
+    orderBy: { waktuStart: "asc" },
+  });
+
+  // Deduplicate logs (same event, same start, same end)
+  // Use a map to filter out identical logs that might have been created due to rapid posts
+  const dedupedLogs = [];
+  const logMap = new Map();
+
+  logsRaw.forEach((log) => {
+    // Key based on event, start time, and end time (using ISO string for consistency)
+    const key = `${log.andonEventId}-${log.waktuStart.toISOString()}-${log.waktuEnd.toISOString()}`;
+    if (!logMap.has(key)) {
+      logMap.set(key, true);
+      dedupedLogs.push(log);
+    }
+  });
+
+  const andonBreakdown = dedupedLogs.map((log) => ({
+    problemName: log.andonEvent?.masterMasalahAndon?.namaMasalah || "Unknown",
+    category: log.andonEvent?.masterMasalahAndon?.kategori || "-",
+    duration: log.durasiMenit || 0,
+    status: log.andonEvent?.status || "RESOLVED",
+    startTime: log.waktuStart,
+    endTime: log.waktuEnd,
+  }));
+
+  // Summary Waktu (Update breakdown and planDowntime based on logs)
+  const plannedDowntime = andonBreakdown
+    .filter((l) => l.category === "PLAN_DOWNTIME")
+    .reduce((acc, curr) => acc + curr.duration, 0);
+
+  const unplannedDowntime = andonBreakdown
+    .filter((l) => l.category !== "PLAN_DOWNTIME")
+    .reduce((acc, curr) => acc + curr.duration, 0);
+
   const summaryWaktu = {
     runtime: lrp.loadingTime || 0,
-    breakdown: 0,
-    planDowntime: 0,
+    breakdown: Math.round(unplannedDowntime),
+    planDowntime: Math.round(plannedDowntime),
   };
 
   return {
-    header: lrp,
+    header: {
+      ...lrp,
+      targetQty: lrp.rencanaProduksi?.target?.totalTarget || 0,
+      produk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
+      jenisPekerjaan: lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
+    },
+    operatorBreakdown,
+    andonBreakdown,
     logs: [],
     summaryWaktu,
   };
@@ -407,7 +494,9 @@ const exportData = async (filter) => {
           mesin: true,
           shift: true,
           operator: true,
-          rencanaProduksi: { include: { jenisPekerjaan: true } },
+          rencanaProduksi: {
+            include: { jenisPekerjaan: true, produk: true, target: true },
+          },
         },
         orderBy: { tanggal: "desc" },
       }),
@@ -712,20 +801,16 @@ const getTrendPress = async (filter) => {
   let start, end;
 
   // Determine range logic based on priority: Range > Single Side > Default Today
-  if (filter.startDate && filter.endDate) {
-    start = moment.utc(filter.startDate).startOf("day");
-    end = moment.utc(filter.endDate).endOf("day");
-  } else if (filter.startDate) {
-    start = moment.utc(filter.startDate).startOf("day");
-    end = moment.utc(filter.startDate).endOf("day");
-  } else if (filter.endDate) {
-    start = moment.utc(filter.endDate).startOf("day");
-    end = moment.utc(filter.endDate).endOf("day");
-  } else {
-    // Default today WIB (Asia/Jakarta)
-    start = moment().startOf("day");
-    end = moment().endOf("day");
-  }
+  const refDate = filter.startDate ? moment.utc(filter.startDate) : moment().utcOffset(7);
+  const year = refDate.year();
+  const month = refDate.month();
+
+  const firstDay = moment.utc([year, month, 1]).startOf("day");
+  const lastDay = moment.utc(firstDay).endOf("month");
+
+  // Always use full month range for trend
+  start = firstDay;
+  end = lastDay;
 
   // Clone filter to avoid side effects and force our calculated range
   const innerFilter = { ...filter };
@@ -735,7 +820,7 @@ const getTrendPress = async (filter) => {
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesin: { kategori: { nama: { in: ["PRIMARY", "SECONDARY"] } } },
+    mesin: { kategori: { nama: { in: ["PRESS", "SECONDARY"] } } },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),

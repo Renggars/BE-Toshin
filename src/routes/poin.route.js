@@ -20,7 +20,11 @@ router.post(
 router.post("/reset", auth("ADMIN", "SUPERVISOR"), poinController.resetPoints);
 
 // Get form data for dropdown (operators, discipline types, shifts)
-router.get("/form-data", auth("SUPERVISOR"), poinController.getFormData);
+router.get(
+  "/form-data",
+  auth("SUPERVISOR", "ADMIN"),
+  poinController.getFormData,
+);
 
 router.get("/dashboard/stats", allRoles, poinController.getPoinDashboardStats);
 router.get("/dashboard/weekly-stats", allRoles, poinController.getWeeklyStats);

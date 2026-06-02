@@ -129,7 +129,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
         },
       },
     },
-    mesin: true,
+    mesin: { include: { kategori: true } },
     produk: true,
     shift: true,
     target: {
@@ -222,7 +222,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     const shiftTime = new Date(jamTap);
     shiftTime.setHours(parseInt(h), parseInt(m), 0, 0);
 
-    jamMasukAktual = moment(jamTap).format("HH:mm");
+    jamMasukAktual = moment.utc(jamTap).format("HH:mm");
 
     if (jamTap > shiftTime) {
       statusAbsensi = "Terlambat";
@@ -285,7 +285,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     },
     absensi: {
       status: statusAbsensi,
-      jam_masuk_shift: rp.shift.jam_masuk,
+      jam_masuk_shift: rp.shift.jamMasuk,
       jam_masuk_aktual: jamMasukAktual,
       terlambat: isTerlambat,
       keterangan: isTerlambat ? `Telat ${selisihWaktu}` : "On Time",
@@ -297,6 +297,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       fk_id_jenis_pekerjaan:
         rp.jenisPekerjaanId || rp.target.jenisPekerjaanId,
       mesin: rp.mesin.namaMesin,
+      kategori_mesin: rp.mesin.kategori?.nama || '-',
       produk: rp.produk.namaProduk,
       jenis_pekerjaan: rp.target.jenisPekerjaan.namaPekerjaan,
       no_kanagata: rp.laporanRealisasiProduksi?.noKanagata,
@@ -819,7 +820,7 @@ const getUserRPHList = async (userId, tanggalStr) => {
   const endOfDay = moment(tanggalStr).endOf("day").toDate();
 
   const includeQuery = {
-    mesin: true,
+    mesin: { include: { kategori: true } },
     produk: true,
     jenisPekerjaan: true,
     target: {
@@ -870,6 +871,7 @@ const getUserRPHList = async (userId, tanggalStr) => {
     mesin: {
       id: r.mesin.id,
       nama: r.mesin.namaMesin,
+      kategori_mesin: r.mesin.kategori?.nama || '-',
     },
     produk: {
       id: r.produk.id,

@@ -436,6 +436,14 @@ model User {
   @@map("user")
 }
 
+model SystemSetting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String @db.Text
+
+  @@map("system_setting")
+}
+
 model MandorTask {
   id           Int                @id @default(autoincrement())
   supervisorId Int                @map("fk_id_supervisor")
