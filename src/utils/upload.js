@@ -10,6 +10,8 @@ const storage = multer.diskStorage({
       dir = "public/uploads/poin-images";
     } else if (req.baseUrl.includes("/mandor-tasks") || req.path.includes("/mandor-tasks")) {
       dir = "public/uploads/mandor-tasks";
+    } else if (req.baseUrl.includes("/settings") || req.path.includes("/settings")) {
+      dir = "public/uploads/system-settings";
     }
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

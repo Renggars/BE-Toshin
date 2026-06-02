@@ -247,6 +247,24 @@ const triggerAndon = async (payload) => {
     "Pindah Jenis Pekerjaan",
   ];
   const isRphSwitch = RPH_SWITCH_NAMES.includes(masalah.namaMasalah);
+  
+  // 1.5 NEW: Idempotency check (prevent double trigger within 3s)
+  const recentEvent = await prisma.andonEvent.findFirst({
+    where: {
+      mesinId,
+      masalahId,
+      waktuTrigger: {
+        gte: new Date(currentTime.getTime() - 3000), // 3s cooldown
+      },
+    },
+  });
+
+  if (recentEvent) {
+    throw new ApiError(
+      httpStatus.CONFLICT,
+      `Aktivitas "${masalah.namaMasalah}" sudah dikirim. Tunggu beberapa saat.`
+    );
+  }
 
   // 2. Check for existing active andon
   const activeEvent = await prisma.andonEvent.findFirst({
@@ -855,7 +873,16 @@ const resolveAndon = async (id, data) => {
       resolvedAt,
     );
     for (const p of splitPromises) {
-      await tx.andonDowntimeShift.create({ data: p.data });
+      // Guard against duplicates: unexpected race conditions or multiple calls
+      const existing = await tx.andonDowntimeShift.findFirst({
+        where: {
+          andonEventId: event.id,
+          shiftId: p.data.shiftId,
+        }
+      });
+      if (!existing) {
+        await tx.andonDowntimeShift.create({ data: p.data });
+      }
     }
 
     return [updated];
