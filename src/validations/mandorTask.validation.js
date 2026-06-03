@@ -6,19 +6,22 @@ const createTask = {
     judul: Joi.string().required(),
     deskripsi: Joi.string().required(),
     prioritas: Joi.string().valid("LOW", "MEDIUM", "HIGH").optional(),
-    catatan: Joi.string().optional().allow(null, ""),
-    foto: Joi.string().optional().allow(null, ""),
+    foto: Joi.string().allow(null, "").optional(),
   }),
 };
 
-const updateStatus = {
+const updateTask = {
   params: Joi.object().keys({
     id: Joi.number().required(),
   }),
   body: Joi.object().keys({
-    status: Joi.string().required().valid("TODO", "ON_PROGRESS", "DONE"),
-    catatan: Joi.string().optional().allow(null, ""),
-    foto: Joi.string().optional().allow(null, ""),
+    mandorId: Joi.number().integer().optional(),
+    judul: Joi.string().optional(),
+    deskripsi: Joi.string().optional(),
+    prioritas: Joi.string().valid("LOW", "MEDIUM", "HIGH").optional(),
+    status: Joi.string().valid("TODO", "ON_PROGRESS", "DONE").optional(),
+    catatan: Joi.string().allow(null, "").optional(),
+    foto: Joi.string().allow(null, "").optional(),
   }),
 };
 
@@ -30,6 +33,6 @@ const deleteTask = {
 
 export default {
   createTask,
-  updateStatus,
+  updateTask,
   deleteTask,
 };

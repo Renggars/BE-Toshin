@@ -14,16 +14,24 @@ import { nowWIB } from "../utils/dateWIB.js";
  * @returns {Promise<Document>}
  */
 const createDocument = async (body, file, uploadedById) => {
-  const { judul, deskripsi, kategori, mesinId, produkId, noSeri } = body;
+  const { judul, deskripsi, kategoriId, mesinId, produkId, noSeri } = body;
+
+  const kategoriDb = await prisma.kategoriDokumen.findUnique({
+    where: { id: Number(kategoriId) },
+  });
+  if (!kategoriDb) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Kategori dokumen tidak ditemukan");
+  }
+  const kategoriName = kategoriDb.nama;
 
   // Auto-generate judul final: KATEGORI-NOSERI-JUDUL_ASLI
-  const judulFinal = `${kategori}-${noSeri}-${judul}`;
+  const judulFinal = `${kategoriName}-${noSeri}-${judul}`;
 
-  return prisma.document.create({
+  const doc = await prisma.document.create({
     data: {
       judul: judulFinal,
       deskripsi: deskripsi || null,
-      kategori: kategori || null,
+      kategoriId: Number(kategoriId),
       namaFile: file.originalname,
       pathFile: file.path.replace(/\\/g, "/"), // Normalize Windows backslash
       ukuranByte: file.size,
@@ -39,18 +47,25 @@ const createDocument = async (body, file, uploadedById) => {
       uploadedBy: { select: { id: true, nama: true, role: true } },
       mesin: { select: { id: true, namaMesin: true } },
       produk: { select: { id: true, namaProduk: true } },
+      kategori: { select: { id: true, nama: true } },
     },
   });
+
+  return {
+    ...doc,
+    kategori: doc.kategori ? doc.kategori.nama : null,
+    kategoriId: doc.kategori ? doc.kategori.id : null,
+  };
 };
 
 /**
  * Get paginated & searchable document list
- * @param {Object} query - { search, kategori, page, limit, sortBy, sortOrder }
+ * @param {Object} query - { search, kategoriId, page, limit, sortBy, sortOrder }
  */
 const getDocuments = async (query) => {
   const {
     search = "",
-    kategori,
+    kategoriId,
     mesinId,
     produkId,
     noSeri,
@@ -67,7 +82,7 @@ const getDocuments = async (query) => {
     ...(search && {
       judul: { contains: search },
     }),
-    ...(kategori && { kategori }),
+    ...(kategoriId && { kategoriId: Number(kategoriId) }),
     ...(mesinId && { mesinId: Number(mesinId) }),
     ...(produkId && { produkId: Number(produkId) }),
     ...(noSeri && { noSeri }),
@@ -83,7 +98,6 @@ const getDocuments = async (query) => {
         id: true,
         judul: true,
         deskripsi: true,
-        kategori: true,
         namaFile: true,
         ukuranByte: true,
         noSeri: true,
@@ -92,13 +106,20 @@ const getDocuments = async (query) => {
         uploadedBy: { select: { id: true, nama: true, role: true } },
         mesin: { select: { id: true, namaMesin: true } },
         produk: { select: { id: true, namaProduk: true } },
+        kategori: { select: { id: true, nama: true } },
       },
     }),
     prisma.document.count({ where }),
   ]);
 
+  const mappedData = data.map((doc) => ({
+    ...doc,
+    kategori: doc.kategori ? doc.kategori.nama : null,
+    kategoriId: doc.kategori ? doc.kategori.id : null,
+  }));
+
   return {
-    data,
+    data: mappedData,
     meta: {
       totalItems,
       totalPages: Math.ceil(totalItems / take),
@@ -118,10 +139,16 @@ const getDocumentById = async (id) => {
       uploadedBy: { select: { id: true, nama: true, role: true } },
       mesin: { select: { id: true, namaMesin: true } },
       produk: { select: { id: true, namaProduk: true } },
+      kategori: { select: { id: true, nama: true } },
     },
   });
   if (!doc) throw new ApiError(httpStatus.NOT_FOUND, "Dokumen tidak ditemukan");
-  return doc;
+
+  return {
+    ...doc,
+    kategori: doc.kategori ? doc.kategori.nama : null,
+    kategoriId: doc.kategori ? doc.kategori.id : null,
+  };
 };
 
 /**
@@ -135,7 +162,6 @@ const updateDocument = async (id, body, file) => {
     if (file) fs.unlink(file.path, () => { });
     throw new ApiError(httpStatus.NOT_FOUND, "Dokumen tidak ditemukan");
   }
-
 
   const fileData = file
     ? {
@@ -151,7 +177,7 @@ const updateDocument = async (id, body, file) => {
     data: {
       ...(body.judul && { judul: body.judul }),
       ...(body.deskripsi !== undefined && { deskripsi: body.deskripsi || null }),
-      ...(body.kategori !== undefined && { kategori: body.kategori || null }),
+      ...(body.kategoriId !== undefined && { kategoriId: body.kategoriId ? Number(body.kategoriId) : null }),
       ...(body.mesinId !== undefined && { mesinId: body.mesinId ? Number(body.mesinId) : null }),
       ...(body.produkId !== undefined && { produkId: body.produkId ? Number(body.produkId) : null }),
       ...(body.noSeri !== undefined && { noSeri: body.noSeri || null }),
@@ -162,6 +188,7 @@ const updateDocument = async (id, body, file) => {
       uploadedBy: { select: { id: true, nama: true, role: true } },
       mesin: { select: { id: true, namaMesin: true } },
       produk: { select: { id: true, namaProduk: true } },
+      kategori: { select: { id: true, nama: true } },
     },
   });
 
@@ -170,8 +197,13 @@ const updateDocument = async (id, body, file) => {
     fs.unlink(existing.pathFile, () => { });
   }
 
-  return updated;
+  return {
+    ...updated,
+    kategori: updated.kategori ? updated.kategori.nama : null,
+    kategoriId: updated.kategori ? updated.kategori.id : null,
+  };
 };
+
 
 /**
  * Delete document record and its physical file
@@ -212,26 +244,11 @@ const getDocumentFilePath = async (id) => {
 
 // --- KategoriDokumen CRUD ---
 const getKategoriDokumens = async () => {
-  let result = await prisma.kategoriDokumen.findMany({
+  return prisma.kategoriDokumen.findMany({
     orderBy: { nama: "asc" }
   });
-
-  if (result.length === 0) {
-    const distinctKategori = await prisma.document.findMany({
-      select: { kategori: true },
-      distinct: ['kategori'],
-    });
-    const categories = distinctKategori.map(d => d.kategori).filter(Boolean);
-    await prisma.kategoriDokumen.createMany({
-      data: categories.map(nama => ({ nama })),
-      skipDuplicates: true,
-    });
-    result = await prisma.kategoriDokumen.findMany({
-      orderBy: { nama: "asc" }
-    });
-  }
-  return result;
 };
+
 
 const createKategoriDokumen = async (data) => {
   return prisma.kategoriDokumen.create({ data });

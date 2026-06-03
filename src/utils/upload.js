@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
       req.baseUrl.includes("/mandor-tasks") ||
       req.path.includes("/mandor-tasks")
     ) {
-      dir = "public/uploads/mandor-task-images";
+      dir = "public/uploads/mandor-tasks";
     }
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -34,7 +34,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // Batasi maksimal 2MB
+    fileSize: 5 * 1024 * 1024, // Batasi maksimal 5MB
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {

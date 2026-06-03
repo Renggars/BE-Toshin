@@ -4505,7 +4505,7 @@ paths:
 
   /mandor-tasks/{id}:
     patch:
-      summary: Update mandor task status
+      summary: Update mandor task (Status/Details)
       tags: [Mandor Task]
       security:
         - bearerAuth: []
@@ -4520,9 +4520,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [status]
               properties:
+                mandorId: { type: integer }
+                judul: { type: string }
+                deskripsi: { type: string }
+                prioritas: { type: string, enum: [LOW, MEDIUM, HIGH] }
                 status: { type: string, enum: [TODO, ON_PROGRESS, DONE] }
+                catatan: { type: string, description: "Catatan penyelesaian tugas dari mandor" }
       responses:
         "200":
           description: Success
