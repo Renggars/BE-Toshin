@@ -9,6 +9,7 @@ const getDashboardSummary = {
     jenisPekerjaanId: Joi.number().integer().min(1).allow(null, ""),
     produkId: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
+    noLot: Joi.string().allow(null, ""),
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).default(10),
   }),
@@ -29,6 +30,7 @@ const exportData = {
     jenisPekerjaanId: Joi.number().integer().min(1).allow(null, ""),
     produkId: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
+    noLot: Joi.string().allow(null, ""),
     format: Joi.string().valid("excel", "pdf").default("excel"),
   }),
 };

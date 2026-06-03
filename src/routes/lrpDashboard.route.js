@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Require SUPERVISOR or ADMIN role for dashboard access
 // You might also allow ENGINEERING/MAINTENANCE if needed, but per request: SUPERVISOR
-const dashboardAuth = auth("SUPERVISOR", "ADMIN", "ENGINEERING");
+const dashboardAuth = auth("SUPERVISOR", "MANDOR", "ADMIN", "ENGINEERING");
 
 // Consolidated summary endpoint
 router.get(

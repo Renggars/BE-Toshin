@@ -2,10 +2,11 @@ import prisma from "../../prisma/index.js";
 import { emitMandorTaskUpdate } from "../config/socket.js";
 
 const createTask = async (data) => {
+  const mandorId = parseInt(data.mandorId);
   const task = await prisma.mandorTask.create({
     data: {
       supervisorId: data.supervisorId,
-      mandorId: data.mandorId,
+      mandorId: mandorId,
       judul: data.judul,
       deskripsi: data.deskripsi,
       prioritas: data.prioritas || "LOW",
@@ -19,7 +20,7 @@ const createTask = async (data) => {
   });
 
   // Emit to Mandor
-  emitMandorTaskUpdate(data.mandorId, { type: "TASK_ASSIGNED", task });
+  emitMandorTaskUpdate(mandorId, { type: "TASK_ASSIGNED", task });
 
   return task;
 };
@@ -58,22 +59,24 @@ const getTasksForSupervisor = async (supervisorId) => {
   });
 };
 
-const updateTaskStatus = async (id, { status, catatan, foto }) => {
+const updateTask = async (id, updateData) => {
+  const { mandorId, ...rest } = updateData;
+  const data = {
+    ...rest,
+    ...(mandorId && { mandorId: parseInt(mandorId) }),
+  };
   const task = await prisma.mandorTask.update({
     where: { id },
-    data: {
-      status,
-      catatan: catatan !== undefined ? catatan : undefined,
-      foto: foto !== undefined ? foto : undefined,
-    },
+    data: data,
     include: {
-      mandor: { select: { nama: true } },
-      supervisor: { select: { id: true } },
+      mandor: { select: { id: true, nama: true } },
+      supervisor: { select: { id: true, nama: true } },
     },
   });
 
-  // Emit to Supervisor
-  emitMandorTaskUpdate(task.supervisorId, { type: "TASK_STATUS_UPDATED", task });
+  // Emit to Supervisor and Mandor
+  emitMandorTaskUpdate(task.supervisorId, { type: "TASK_UPDATED", task });
+  emitMandorTaskUpdate(task.mandorId, { type: "TASK_UPDATED", task });
 
   return task;
 };
@@ -92,6 +95,6 @@ export default {
   createTask,
   getTasksForMandor,
   getTasksForSupervisor,
-  updateTaskStatus,
+  updateTask,
   deleteTask,
 };

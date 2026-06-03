@@ -51,9 +51,9 @@ const buildFilterWhereClause = (filter) => {
 
   // 5. Pencarian (Optional)
   if (filter.noKanagata)
-    where.noKanagata = { contains: filter.noKanagata, mode: "insensitive" };
+    where.noKanagata = { contains: filter.noKanagata };
   if (filter.noLot)
-    where.noLot = { contains: filter.noLot, mode: "insensitive" };
+    where.noLot = { contains: filter.noLot };
 
   return where;
 };
@@ -200,6 +200,11 @@ const getTrendBulanan = async (filter) => {
       Prisma.sql`lrp.fk_id_shift = ${Number(filter.shiftId)}`,
     );
   }
+  if (filter.noLot) {
+    conditions.push(
+      Prisma.sql`lrp.no_lot LIKE ${`%${filter.noLot}%`}`,
+    );
+  }
 
   // --- Build JOIN clauses for relation-based filters ---
   // [Fix #3] Set-based addJoin() mencegah duplikat JOIN jika ada filter gabungan
@@ -310,7 +315,7 @@ const getLrpList = async (filter) => {
       mesin: true,
       shift: true,
       operator: true,
-      rencanaProduksi: { include: { jenisPekerjaan: true, produk: true } },
+      rencanaProduksi: { include: { jenisPekerjaan: true, produk: true, target: true } },
     },
     orderBy: { createdAt: "desc" },
     skip,
@@ -326,6 +331,7 @@ const getLrpList = async (filter) => {
       counterEnd != null
         ? `${Math.floor(counterEnd / 60)} h ${counterEnd % 60} m`
         : "-";
+    const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
     return {
       id: lrp.id,
       tanggal: lrp.tanggal,
@@ -344,6 +350,7 @@ const getLrpList = async (filter) => {
       counterEndFormatted: counterEndFormatted,
       jamKerja: `${hours}h ${minutes}m`,
       statusLrp: lrp.statusLrp,
+      targetQty: targetQty,
     };
   });
 
@@ -368,6 +375,13 @@ const getLrpDetail = async (id) => {
       mesin: true,
       shift: true,
       operator: true,
+      rencanaProduksi: {
+        include: {
+          produk: true,
+          jenisPekerjaan: true,
+          target: true,
+        },
+      },
     },
   });
 
@@ -375,16 +389,98 @@ const getLrpDetail = async (id) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Summary Waktu (Placeholder since logs are removed)
+  // Fetch downtime shifts associated with this RPH
+  const downtimeShifts = await prisma.andonDowntimeShift.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      andonEvent: {
+        include: {
+          masterMasalahAndon: true,
+        },
+      },
+    },
+  });
+
+  // Calculate total breakdown and plan downtime durations
+  let totalBreakdown = 0;
+  let totalPlan = 0;
+
+  downtimeShifts.forEach((ds) => {
+    const isPlan = ds.andonEvent.masterMasalahAndon?.kategori === "PLAN_DOWNTIME";
+    if (isPlan) {
+      totalPlan += ds.durasiMenit;
+    } else {
+      totalBreakdown += ds.durasiMenit;
+    }
+  });
+
+  // Map downtime shifts to andonBreakdown expected by the frontend
+  const andonBreakdown = downtimeShifts.map((ds) => ({
+    problemName: ds.andonEvent.masterMasalahAndon?.namaMasalah || "-",
+    category: ds.andonEvent.masterMasalahAndon?.kategori || "-",
+    duration: ds.durasiMenit,
+    status: ds.andonEvent.status,
+    startTime: ds.waktuStart.toISOString(),
+    endTime: ds.waktuEnd.toISOString(),
+  }));
+
+  // Fetch operator attendance for this RPH
+  const attendances = await prisma.attendance.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      operator: true,
+    },
+  });
+
+  // Build operator breakdown list
+  const operatorsMap = new Map();
+  operatorsMap.set(lrp.operatorId, {
+    id: lrp.operatorId,
+    operatorName: lrp.operator.nama,
+    qtyOk: lrp.qtyOk,
+    qtyNg: lrp.qtyNgProses + lrp.qtyNgPrev,
+    qtyRework: lrp.qtyRework,
+    qtyTotal: lrp.qtyTotalProd,
+  });
+
+  attendances.forEach((att) => {
+    if (!operatorsMap.has(att.userId)) {
+      operatorsMap.set(att.userId, {
+        id: att.userId,
+        operatorName: att.operator.nama,
+        qtyOk: 0,
+        qtyNg: 0,
+        qtyRework: 0,
+        qtyTotal: 0,
+      });
+    }
+  });
+
+  const operatorBreakdown = Array.from(operatorsMap.values());
+
+  // Calculate actual runtime and summary waktu
+  const runtime = Math.max(0, (lrp.loadingTime || 0) - totalBreakdown - totalPlan);
   const summaryWaktu = {
-    runtime: lrp.loadingTime || 0,
-    breakdown: 0,
-    planDowntime: 0,
+    runtime: Number(runtime.toFixed(2)),
+    breakdown: Number(totalBreakdown.toFixed(2)),
+    planDowntime: Number(totalPlan.toFixed(2)),
+  };
+
+  // Extract targetQty from RencanaProduksi
+  const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
+
+  // Add targetQty to the header response
+  const header = {
+    ...lrp,
+    targetQty,
+    target_qty: targetQty,
   };
 
   return {
-    header: lrp,
+    header,
     logs: [],
+    operatorBreakdown,
+    andonBreakdown,
     summaryWaktu,
   };
 };
@@ -521,9 +617,8 @@ const exportData = async (filter) => {
   // SHEET 2 — TREND HARIAN
   // ═══════════════════════════════════════════════════════════════════════════
   const ws2 = {};
-  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${
-    trendHarian.year
-  }`;
+  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${trendHarian.year
+    }`;
   ["A", "B", "C", "D", "E"].forEach((c) => {
     ws2[`${c}1`] = { v: c === "A" ? thTitle : "", s: hdr() };
   });
@@ -535,9 +630,8 @@ const exportData = async (filter) => {
   trendHarian.data.forEach((d, i) => {
     const row = i + 3;
     const isAlt = i % 2 === 0;
-    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${
-      trendHarian.year
-    }`;
+    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${trendHarian.year
+      }`;
     ws2[`A${row}`] = { v: ds, s: cellS(isAlt) };
     ws2[`B${row}`] = { v: d.ok, s: numS(C.okGreen, isAlt) };
     ws2[`C${row}`] = { v: d.ng, s: numS(C.ngRed, isAlt) };
@@ -732,21 +826,10 @@ const getTrendPress = async (filter) => {
   delete innerFilter.startDate;
   delete innerFilter.endDate;
 
-  // Ambil mesin ID yang sesuai kategori terlebih dahulu untuk menghindari limitasi groupBy pada prisma relation filter
-  const matchingMesin = await prisma.mesin.findMany({
-    where: {
-      kategori: {
-        nama: { in: ["PRIMARY", "SECONDARY"] },
-      },
-    },
-    select: { id: true },
-  });
-  const mesinIds = matchingMesin.map((m) => m.id);
-
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesinId: { in: mesinIds },
+    mesin: { kategori: { nama: { in: ["PRIMARY", "SECONDARY"] } } },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),

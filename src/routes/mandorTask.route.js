@@ -25,8 +25,8 @@ router
   .patch(
     auth("MANDOR", "SUPERVISOR", "ADMIN"),
     upload.single("foto"),
-    validate(mandorTaskValidation.updateStatus),
-    mandorTaskController.updateStatus,
+    validate(mandorTaskValidation.updateTask),
+    mandorTaskController.updateTask,
   )
   .delete(
     auth("SUPERVISOR", "ADMIN"),
