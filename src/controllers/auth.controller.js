@@ -76,7 +76,34 @@ const login = catchAsync(async (req, res) => {
   });
 });
 
+const refreshDashboard = catchAsync(async (req, res) => {
+  const user = req.user;
+  let dashboardData = null;
+
+  if (user.role === "PRODUKSI") {
+    try {
+      const today = moment().format("YYYY-MM-DD");
+      dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
+        user.id,
+        today,
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "test") {
+        console.error("Error fetching dashboard data:", error.message);
+      }
+    }
+  }
+
+  res.send({
+    message: "Dashboard refreshed",
+    data: {
+      dashboard: dashboardData,
+    },
+  });
+});
+
 export default {
   register,
   login,
+  refreshDashboard,
 };

@@ -1078,7 +1078,24 @@ const getPersonalHistory = async (userId) => {
     await getShiftInfo(now.toDate());
   const operationalDate = new Date(`${opDateStr}T00:00:00.000Z`);
 
-  // 2. Fetch User's Downtime Events (Today)
+  // 1.5 Fetch the user's latest RPH for today (Active or Closed)
+  const latestRph = await prisma.rencanaProduksi.findFirst({
+    where: {
+      userId: Number(userId),
+      tanggal: operationalDate,
+      status: { in: ["ACTIVE", "CLOSED"] }
+    },
+    orderBy: { id: "desc" }
+  });
+
+  const rphFilter = latestRph ? {
+    OR: [
+      { rphClosedId: latestRph.id },
+      { rphOpenedId: latestRph.id },
+    ]
+  } : {};
+
+  // 2. Fetch User's Downtime Events (Today, filtered by latest RPH)
   const events = await prisma.andonEvent.findMany({
     where: {
       AND: [
@@ -1089,6 +1106,7 @@ const getPersonalHistory = async (userId) => {
             { resolvedById: Number(userId) },
           ],
         },
+        ...(latestRph ? [rphFilter] : []),
       ],
     },
     include: {
