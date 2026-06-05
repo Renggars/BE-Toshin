@@ -28,6 +28,9 @@ const config = {
     url: process.env.REDIS_URL,
     enabled: process.env.REDIS_ENABLED === "true",
   },
+  hfPredictSpaceUrl: process.env.HF_PREDICT_SPACE_URL,
+  hfTrainSpaceUrl: process.env.HF_TRAIN_SPACE_URL,
+  hfPredictTimeoutMs: process.env.HF_PREDICT_TIMEOUT_MS,
 };
 
 export default config;

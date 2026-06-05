@@ -191,6 +191,7 @@ model Mesin {
   andonEvent                AndonEvent[]
   laporanRealisasiProduksi  LaporanRealisasiProduksi[]
   oee                       Oee[]
+  predictionFeatureCache   PredictionFeatureCache[]
   rencanaProduksi           RencanaProduksi[]
   documents                 Document[]
   kategori                  KategoriMesin?             @relation(fields: [kategoriId], references: [id])
@@ -258,6 +259,34 @@ model Oee {
   @@unique([mesinId, tanggal, shiftId])
   @@index([shiftId], map: "oee_fk_id_shift_fkey")
   @@map("oee")
+}
+
+// Cache fitur ML untuk prediksi produksi.
+// Di-update otomatis saat recalculateByMesin() berjalan,
+// sehingga endpoint prediksi tidak perlu query berat.
+model PredictionFeatureCache {
+  id                Int      @id @default(autoincrement())
+  mesinId           Int      @map("fk_id_mesin")
+  shiftId           Int      @map("fk_id_shift")
+  tanggal           DateTime @db.Date
+  totalOk           Int      @default(0) @map("total_ok")
+  totalOutput       Int      @default(0) @map("total_output")
+  availability      Float    @default(0)
+  performance       Float    @default(0)
+  quality           Float    @default(0)
+  plannedTime       Float    @default(0) @map("planned_time")
+  unplannedDowntime Float    @default(0) @map("unplanned_downtime")
+  idealCycleTime    Float    @default(0) @map("ideal_cycle_time")
+  loadingTime       Int      @default(0) @map("loading_time")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  mesin Mesin @relation(fields: [mesinId], references: [id])
+  shift Shift @relation(fields: [shiftId], references: [id])
+
+  @@unique([mesinId, tanggal, shiftId])
+  @@index([mesinId])
+  @@index([tanggal])
+  @@map("prediction_feature_cache")
 }
 
 model PoinDisiplin {
@@ -341,6 +370,7 @@ model Shift {
   andonEvent               AndonEvent[]
   laporanRealisasiProduksi LaporanRealisasiProduksi[]
   oee                      Oee[]
+  predictionFeatureCache   PredictionFeatureCache[]
   poinDisiplin             PoinDisiplin[]
   rencanaProduksi          RencanaProduksi[]
 

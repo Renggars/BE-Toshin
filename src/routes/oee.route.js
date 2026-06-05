@@ -36,4 +36,28 @@ router.get(
   oeeController.getMachineDetail,
 );
 
+// ML Training Endpoints
+router.get(
+  "/training-data",
+  auth("ADMIN", "SUPERVISOR"),
+  oeeController.getTrainingData,
+);
+router.get(
+  "/ml-features",
+  auth("ADMIN", "SUPERVISOR"),
+  oeeController.getMLFeatures,
+);
+
+// Prediction Endpoints (integrasi HF Space)
+router.get(
+  "/prediction",
+  auth("ADMIN", "SUPERVISOR", "PRODUKSI"),
+  oeeController.getPrediction,
+);
+router.get(
+  "/prediction/health",
+  auth("ADMIN", "SUPERVISOR"),
+  oeeController.getPredictionHealth,
+);
+
 export default router;

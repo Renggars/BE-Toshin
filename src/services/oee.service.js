@@ -151,6 +151,42 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       },
     });
 
+    // 5b. Upsert PredictionFeatureCache (untuk ML prediction endpoint)
+    await prisma.predictionFeatureCache.upsert({
+      where: {
+        mesinId_tanggal_shiftId: {
+          mesinId: mesinId,
+          tanggal: targetDate,
+          shiftId: shift.id,
+        },
+      },
+      update: {
+        totalOk: totalOk,
+        totalOutput: totalOutput,
+        availability: Number(availability.toFixed(1)),
+        performance: Number(performance.toFixed(1)),
+        quality: Number(quality.toFixed(1)),
+        plannedTime: shiftStandardLoading,
+        unplannedDowntime: unplannedDowntime,
+        idealCycleTime: idealCycleTime,
+        loadingTime: loadingTime,
+      },
+      create: {
+        mesinId: mesinId,
+        shiftId: shift.id,
+        tanggal: targetDate,
+        totalOk: totalOk,
+        totalOutput: totalOutput,
+        availability: Number(availability.toFixed(1)),
+        performance: Number(performance.toFixed(1)),
+        quality: Number(quality.toFixed(1)),
+        plannedTime: shiftStandardLoading,
+        unplannedDowntime: unplannedDowntime,
+        idealCycleTime: idealCycleTime,
+        loadingTime: loadingTime,
+      },
+    });
+
     // 6. Emit Socket Update
     emitOeeUpdate({
       mesinId,
@@ -480,6 +516,70 @@ const getMachineDetail = async (tanggal, plant) => {
   });
 };
 
+/**
+ * Training Data Endpoint
+ * Mengambil data historis dari tabel OEE untuk training ML model.
+ * On-demand, jarang dipakai (hanya saat training).
+ * Menggunakan raw SQL untuk performa optimal.
+ */
+const getTrainingData = async (days = 90, mesinId = null) => {
+  const startDate = moment().subtract(days, "days").startOf("day").toDate();
+
+  let whereClause = {
+    tanggal: { gte: startDate },
+    loadingTime: { gt: 0 }, // Hanya ambil data yang ada aktivitas
+  };
+
+  if (mesinId) {
+    whereClause.mesinId = Number(mesinId);
+  }
+
+  const oeeData = await prisma.oee.findMany({
+    where: whereClause,
+    include: {
+      mesin: { select: { id: true, namaMesin: true, line: true } },
+      shift: { select: { id: true, namaShift: true, tipeShift: true } },
+    },
+    orderBy: [{ tanggal: "asc" }, { mesinId: "asc" }, { shiftId: "asc" }],
+  });
+
+  // Format data untuk ML training
+  return oeeData.map((record) => ({
+    tanggal: moment(record.tanggal).format("YYYY-MM-DD"),
+    mesin_id: record.mesinId,
+    mesin_nama: record.mesin?.namaMesin,
+    mesin_line: record.mesin?.line,
+    shift_id: record.shiftId,
+    shift_nama: record.shift?.namaShift,
+    shift_tipe: record.shift?.tipeShift,
+    total_ok: record.totalOk,
+    total_output: record.totalOutput,
+    availability: record.availability,
+    performance: record.performance,
+    quality: record.quality,
+    oee_score: record.oeeScore,
+    loading_time: record.loadingTime,
+    downtime: record.downtime,
+    ideal_cycle_time: record.idealCycleTime,
+  }));
+};
+
+/**
+ * Get ML Features from Cache (untuk prediction endpoint)
+ * Membaca dari prediction_feature_cache table - sangat cepat (~2-5ms)
+ */
+const getMLFeatures = async (mesinId, days = 30) => {
+  const startDate = moment().subtract(days, "days").startOf("day").toDate();
+
+  return prisma.predictionFeatureCache.findMany({
+    where: {
+      mesinId: Number(mesinId),
+      tanggal: { gte: startDate },
+    },
+    orderBy: [{ tanggal: "asc" }, { shiftId: "asc" }],
+  });
+};
+
 export default {
   recalculateByMesin,
   getOEEByMesin,
@@ -489,4 +589,6 @@ export default {
   getOEETrend,
   getDowntimeHistory,
   getMachineDetail,
+  getTrainingData,
+  getMLFeatures,
 };
