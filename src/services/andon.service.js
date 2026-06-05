@@ -424,6 +424,7 @@ const triggerAndon = async (payload) => {
             kategori: masalah.kategori,
             status: "ACTIVE",
             waktuTrigger: currentTime,
+            rphId: openedRphId,
             rphClosedId: activeRphId,
             rphOpenedId: openedRphId,
           },
@@ -480,6 +481,7 @@ const triggerAndon = async (payload) => {
         kategori: masalah.kategori,
         status: "ACTIVE",
         waktuTrigger: currentTime,
+        rphId: currentActiveRph?.id || null,
         rphClosedId: currentActiveRph?.id || null,
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
@@ -595,11 +597,17 @@ const startRepairAndon = async (id, data) => {
 
     // Convert Call to Event in Transaction
     const newEvent = await prisma.$transaction(async (tx) => {
+      // Find the current active RPH for this machine
+      const activeRph = await tx.rencanaProduksi.findFirst({
+        where: { mesinId: call.mesinId, status: "ACTIVE" },
+      });
+
       const event = await tx.andonEvent.create({
         data: {
           mesinId: call.mesinId,
           operatorId: call.operatorId,
           shiftId: call.shiftId,
+          rphId: activeRph?.id || null,
           masalahId: masalahId,
           kategori: problem.kategori,
           waktuTrigger: call.waktuCall, // waktuTrigger = call.waktuCall
@@ -1113,19 +1121,32 @@ const getPersonalHistory = async (userId) => {
     await getShiftInfo(now.toDate());
   const operationalDate = new Date(`${opDateStr}T00:00:00.000Z`);
 
-  // 2. Fetch User's Downtime Events (Today)
-  const events = await prisma.andonEvent.findMany({
+  // 2. Fetch User's Current Active RPH
+  const activeRph = await prisma.rencanaProduksi.findFirst({
     where: {
-      AND: [
-        { tanggal: operationalDate },
-        {
-          OR: [
-            { operatorId: Number(userId) },
-            { resolvedById: Number(userId) },
-          ],
-        },
-      ],
+      userId: Number(userId),
+      status: "ACTIVE",
     },
+  });
+
+  // 3. Fetch User's Downtime Events for the CURRENT RPH
+  // If no active RPH, fallback to today's history
+  const historyWhere = activeRph 
+    ? { rphId: activeRph.id }
+    : {
+        AND: [
+          { tanggal: operationalDate },
+          {
+            OR: [
+              { operatorId: Number(userId) },
+              { resolvedById: Number(userId) },
+            ],
+          },
+        ],
+      };
+
+  const events = await prisma.andonEvent.findMany({
+    where: historyWhere,
     include: {
       shift: true,
       masterMasalahAndon: true,

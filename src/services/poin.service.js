@@ -813,6 +813,272 @@ const createPelanggaranByNfc = async (payload, staffId) => {
   return createPelanggaran(enrichedPayload, staffId);
 };
 
+const getHRDashboardStats = async (month, role = "PRODUKSI", plant) => {
+  const whereOperator = {
+    role: role,
+    ...(plant && { plant: String(plant) }),
+  };
+
+  // 1. Get Summary (Overall status counts)
+  const users = await prisma.user.findMany({
+    where: whereOperator,
+    select: {
+      id: true,
+      currentPoint: true,
+    },
+  });
+
+  const summary = {
+    totalEmployee: users.length,
+    aman: users.filter((u) => getStatusFromPoin(u.currentPoint) === "AMAN").length,
+    teguran: users.filter((u) => getStatusFromPoin(u.currentPoint) === "TEGURAN").length,
+    sp1: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP1").length,
+    sp2: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP2").length,
+    sp3: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP3").length,
+  };
+
+  const targetUserIds = users.map((u) => u.id);
+
+  // 2. Date conditions for historical stats
+  let dateFilter = {};
+  if (month) {
+    const startOfMonth = moment(month, "YYYY-MM").startOf("month").toDate();
+    const endOfMonth = moment(month, "YYYY-MM").endOf("month").toDate();
+    dateFilter = {
+      tanggal: {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      },
+    };
+  }
+
+  // 3. Parallel data fetching
+  const [shiftStatsRaw, topViolationsRaw, violationsByDivisiRaw, trendByWeekRaw, masterShift, masterTipe, masterDivisi] = await Promise.all([
+    // Shift stats
+    prisma.poinDisiplin.groupBy({
+      by: ["shiftId"],
+      _count: { id: true },
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+    }),
+    // Top violations
+    prisma.poinDisiplin.groupBy({
+      by: ["tipeDisiplinId"],
+      _count: { id: true },
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
+    }),
+    // Violations by Divisi
+    prisma.poinDisiplin.findMany({
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      include: {
+        operator: {
+          select: { divisiId: true },
+        },
+      },
+    }),
+    // Weekly trend within the month
+    prisma.poinDisiplin.findMany({
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      include: {
+        tipeDisiplin: { select: { kategori: true } },
+      },
+    }),
+    prisma.shift.findMany(),
+    prisma.tipeDisiplin.findMany(),
+    prisma.divisi.findMany(),
+  ]);
+
+  // Total summary additions
+  summary.totalPelanggaran = trendByWeekRaw.filter(v => v.tipeDisiplin.kategori === "PELANGGARAN").length;
+  summary.totalPenghargaan = trendByWeekRaw.filter(v => v.tipeDisiplin.kategori === "PENGHARGAAN").length;
+
+  // Process Shift Stats
+  const shiftStats = shiftStatsRaw.map((stat) => {
+    const shift = masterShift.find((s) => s.id === stat.shiftId);
+    return {
+      label: shift ? `${shift.namaShift} (${shift.tipeShift})` : "N/A",
+      value: stat._count.id,
+    };
+  });
+
+  // Process Top Violations
+  const topViolations = topViolationsRaw.map((v) => ({
+    label: masterTipe.find((t) => t.id === v.tipeDisiplinId)?.namaTipeDisiplin || "Lainnya",
+    value: v._count.id,
+  }));
+
+  // Process Divisi Stats
+  const divMap = {};
+  violationsByDivisiRaw.forEach((v) => {
+    const dId = v.operator?.divisiId;
+    if (dId) divMap[dId] = (divMap[dId] || 0) + 1;
+  });
+  const violationByDivisi = masterDivisi.map((d) => ({
+    label: d.namaDivisi,
+    value: divMap[d.id] || 0,
+  })).filter(v => v.value > 0);
+
+  // Process Weekly Trend
+  const weeksMap = {};
+  trendByWeekRaw.forEach((v) => {
+    const weekNum = moment(v.tanggal).week();
+    if (!weeksMap[weekNum]) {
+      weeksMap[weekNum] = { label: `Mgg ${weekNum}`, pelanggaran: 0, penghargaan: 0 };
+    }
+    if (v.tipeDisiplin.kategori === "PELANGGARAN") weeksMap[weekNum].pelanggaran++;
+    else weeksMap[weekNum].penghargaan++;
+  });
+  const trendByWeek = Object.values(weeksMap).sort((a, b) => a.label.localeCompare(b.label));
+
+  return { summary, shiftStats, topViolations, violationByDivisi, trendByWeek };
+};
+
+const getHRRankings = async (month, role = "PRODUKSI", plant, type = "worst", page = 1, limit = 10) => {
+  const skip = (page - 1) * limit;
+  const whereClause = {
+    role: role,
+    ...(plant && { plant: String(plant) }),
+  };
+
+  const orderBy = type === "worst" ? { currentPoint: "asc" } : { currentPoint: "desc" };
+
+  // Note: Month filter for currentPoint is tricky because currentPoint is a snapshot.
+  // We can instead filter users who had violations/rewards in that month if necessary, 
+  // but usually rankings show CURRENT status filtered by employee metadata.
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where: whereClause,
+      orderBy: orderBy,
+      skip,
+      take: limit,
+      include: {
+        divisi: { select: { namaDivisi: true } },
+        _count: {
+          select: {
+            poinDisiplinOperator: {
+              where: month ? {
+                tanggal: {
+                  gte: moment(month, "YYYY-MM").startOf("month").toDate(),
+                  lte: moment(month, "YYYY-MM").endOf("month").toDate(),
+                },
+              } : {},
+            },
+          },
+        },
+      },
+    }),
+    prisma.user.count({ where: whereClause }),
+  ]);
+
+  const data = users.map((u) => ({
+    nama: u.nama,
+    noReg: u.noReg,
+    divisi: u.divisi?.namaDivisi || "-",
+    plant: u.plant,
+    poin: u.currentPoint,
+    totalPelanggaran: u._count.poinDisiplinOperator,
+    status: getStatusFromPoin(u.currentPoint),
+  }));
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const getHRHistory = async (filter, options) => {
+  const page = options.page || 1;
+  const limit = options.limit || 10;
+  const skip = (page - 1) * limit;
+
+  const whereClause = {};
+
+  // User filters
+  const userFilters = {};
+  if (filter.role) userFilters.role = filter.role;
+  if (filter.plant) userFilters.plant = String(filter.plant);
+  if (filter.divisiId) userFilters.divisiId = Number(filter.divisiId);
+
+  if (Object.keys(userFilters).length > 0) {
+    whereClause.operator = userFilters;
+  }
+
+  // Date filters
+  if (filter.month) {
+    whereClause.tanggal = {
+      gte: moment(filter.month, "YYYY-MM").startOf("month").toDate(),
+      lte: moment(filter.month, "YYYY-MM").endOf("month").toDate(),
+    };
+  } else if (filter.startDate || filter.endDate) {
+    whereClause.tanggal = {
+      ...(filter.startDate && { gte: new Date(filter.startDate) }),
+      ...(filter.endDate && { lte: new Date(filter.endDate) }),
+    };
+  }
+
+  const [dataRaw, total] = await Promise.all([
+    prisma.poinDisiplin.findMany({
+      where: whereClause,
+      include: {
+        operator: {
+          include: { divisi: true },
+        },
+        shift: true,
+        tipeDisiplin: true,
+      },
+      orderBy: { tanggal: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.poinDisiplin.count({ where: whereClause }),
+  ]);
+
+  const data = dataRaw.map((item) => ({
+    id: item.id,
+    tanggal: item.tanggal,
+    noReg: item.operator.noReg,
+    nama: item.operator.nama,
+    divisi: item.operator.divisi?.namaDivisi || "-",
+    plant: item.operator.plant,
+    role: item.operator.role,
+    shift: item.shift?.namaShift || "-",
+    tipe: item.tipeDisiplin.namaTipeDisiplin,
+    kategori: item.tipeDisiplin.kategori,
+    poinBerubah: item.poinBerubah,
+    statusLevel: item.statusLevel,
+    keterangan: item.keterangan,
+  }));
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
 const resetAllUsersPoints = async () => {
   const sekarang = new Date();
 
@@ -873,4 +1139,7 @@ export default {
   resetAllUsersPoints,
   getUserByNfc,
   createPelanggaranByNfc,
+  getHRDashboardStats,
+  getHRRankings,
+  getHRHistory,
 };

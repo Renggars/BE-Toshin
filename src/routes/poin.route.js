@@ -1,5 +1,6 @@
 import express from "express";
 import poinController from "../controllers/poin.controller.js";
+import exportController from "../controllers/export.controller.js";
 import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import poinValidation from "../validations/poin.validation.js";
@@ -8,6 +9,7 @@ import upload from "../utils/upload.js";
 const router = express.Router();
 
 const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+const hrRoles = auth("HR");
 
 // Untuk Supervisor (Input Pelanggaran via NFC atau Manual)
 router.post(
@@ -52,5 +54,12 @@ router.get(
   auth("SUPERVISOR"),
   poinController.getUserByNfc,
 );
+
+// ─── HR ENDPOINTS ──────────────────────────────────────────────────────────────
+router.get("/hr/stats", hrRoles, poinController.getHRStats);
+router.get("/hr/rankings", hrRoles, poinController.getHRRankings);
+router.get("/hr/history", hrRoles, poinController.getHRHistory);
+router.get("/hr/export-excel", hrRoles, exportController.exportHRPoinExcel);
+router.get("/hr/export-excel/rankings", hrRoles, exportController.exportHRRankingsExcel);
 
 export default router;

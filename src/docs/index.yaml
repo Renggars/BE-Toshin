@@ -270,6 +270,11 @@ tags:
     description: Task management for Mandor by Supervisor
   - name: Announcement
     description: Real-time announcements and broadcast for Operators
+  - name: HR Analytics
+    description: |
+      Dashboard Analitik Poin Disiplin khusus untuk role **HR**.
+      - Hanya bisa diakses oleh role `HR`.
+      - Mencakup statistik bulanan, ranking karyawan (paginated), riwayat extended, dan export CSV.
 
 paths:
   /health:
@@ -4679,3 +4684,290 @@ paths:
       responses:
         "200":
           description: Success
+
+  # ─── HR ANALYTICS ────────────────────────────────────────────────────────────
+
+  /poin/hr/stats:
+    get:
+      summary: "[HR] Summary & Statistik Poin"
+      description: >
+        Mengembalikan ringkasan status karyawan (Aman, Teguran, SP1, SP2, SP3),
+        statistik per shift, top pelanggaran, pelanggaran per divisi, dan tren mingguan.
+        Dapat difilter berdasarkan bulan, role karyawan, dan plant.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan dalam format YYYY-MM.
+        - in: query
+          name: role
+          schema: { type: string, example: "PRODUKSI" }
+          description: "Filter role karyawan (default: PRODUKSI)."
+        - in: query
+          name: plant
+          schema: { type: string, example: "1" }
+          description: Filter plant (opsional).
+      responses:
+        "200":
+          description: Data statistik HR berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        properties:
+                          totalEmployee: { type: integer, example: 120 }
+                          aman: { type: integer, example: 95 }
+                          teguran: { type: integer, example: 15 }
+                          sp1: { type: integer, example: 7 }
+                          sp2: { type: integer, example: 2 }
+                          sp3: { type: integer, example: 1 }
+                          totalPelanggaran: { type: integer, example: 48 }
+                          totalPenghargaan: { type: integer, example: 12 }
+                      shiftStats:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Shift 1 (PAGI)" }
+                            value: { type: integer, example: 20 }
+                      topViolations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            value: { type: integer }
+                      violationByDivisi:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            value: { type: integer }
+                      trendByWeek:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Mgg 23" }
+                            pelanggaran: { type: integer }
+                            penghargaan: { type: integer }
+        "401":
+          description: Tidak terautentikasi.
+        "403":
+          description: Akses ditolak. Bukan HR atau Admin.
+
+  /poin/hr/rankings:
+    get:
+      summary: "[HR] Ranking Karyawan (Worst/Best) dengan Pagination"
+      description: >
+        Mengembalikan daftar karyawan diurutkan berdasarkan poin (terburuk atau terbaik)
+        dengan dukungan pagination. Filter tersedia berdasarkan bulan, role, dan plant.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan (YYYY-MM).
+        - in: query
+          name: role
+          schema: { type: string, example: "PRODUKSI" }
+          description: "Filter role karyawan (default: PRODUKSI)."
+        - in: query
+          name: plant
+          schema: { type: string }
+          description: Filter plant (opsional).
+        - in: query
+          name: type
+          schema: { type: string, enum: [worst, best], default: worst }
+          description: "'worst' = poin terendah, 'best' = poin tertinggi."
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Data ranking karyawan berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        nama: { type: string }
+                        noReg: { type: string }
+                        divisi: { type: string }
+                        plant: { type: string }
+                        poin: { type: integer }
+                        status: { type: string, example: "SP1" }
+                        totalPelanggaran: { type: integer }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+
+  /poin/hr/history:
+    get:
+      summary: "[HR] Riwayat Pelanggaran Lengkap (Extended Filter)"
+      description: >
+        Mengambil riwayat pelanggaran/penghargaan dengan filter yang lebih lengkap
+        dibanding endpoint supervisor. Response mencakup noReg, divisi, dan role karyawan.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter satu bulan penuh (YYYY-MM). Prioritas atas startDate/endDate.
+        - in: query
+          name: startDate
+          schema: { type: string, example: "2026-06-01" }
+          description: Tanggal awal custom range.
+        - in: query
+          name: endDate
+          schema: { type: string, example: "2026-06-30" }
+          description: Tanggal akhir custom range.
+        - in: query
+          name: role
+          schema: { type: string }
+          description: Filter role karyawan.
+        - in: query
+          name: plant
+          schema: { type: string }
+        - in: query
+          name: divisiId
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Riwayat pelanggaran berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        tanggal: { type: string, format: date-time }
+                        noReg: { type: string }
+                        nama: { type: string }
+                        divisi: { type: string }
+                        plant: { type: string }
+                        role: { type: string }
+                        shift: { type: string }
+                        tipe: { type: string }
+                        kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+                        poinBerubah: { type: integer }
+                        statusLevel: { type: string }
+                        keterangan: { type: string }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+
+  /poin/hr/export-excel:
+    get:
+      summary: "[HR] Export Riwayat Pelanggaran ke Excel"
+      description: >
+        Mengunduh file Excel (.xlsx) berisi riwayat pelanggaran/penghargaan lengkap
+        dengan format yang rapi (header berwarna, baris selang-seling, teks status berwarna).
+        Mendukung filter yang sama dengan `/poin/hr/history`.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+        - in: query
+          name: startDate
+          schema: { type: string, example: "2026-06-01" }
+        - in: query
+          name: endDate
+          schema: { type: string, example: "2026-06-30" }
+        - in: query
+          name: role
+          schema: { type: string }
+        - in: query
+          name: plant
+          schema: { type: string }
+      responses:
+        "200":
+          description: File Excel berhasil di-generate.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
+  /poin/hr/export-excel/rankings:
+    get:
+      summary: "[HR] Export Ranking Karyawan ke Excel"
+      description: >
+        Mengunduh file Excel (.xlsx) berisi ranking karyawan berdasarkan poin.
+        Gunakan parameter `type` untuk memilih: `worst` (poin terendah) atau `best` (poin tertinggi).
+        Header sheet menyesuaikan warna: merah untuk worst, hijau untuk best.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [worst, best], default: worst }
+          description: "Pilih tipe ranking yang ingin di-export: 'worst' atau 'best'."
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan (YYYY-MM).
+        - in: query
+          name: role
+          schema: { type: string, example: "PRODUKSI" }
+        - in: query
+          name: plant
+          schema: { type: string }
+      responses:
+        "200":
+          description: File Excel ranking berhasil di-generate.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+

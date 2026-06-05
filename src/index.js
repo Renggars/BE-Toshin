@@ -35,8 +35,10 @@ try {
   }
 
   server = app.listen(config.port, "0.0.0.0", () => {
-    logger.info(`Server is running on http://0.0.0.0:${config.port}`);
-    console.log(`Docs available at http://0.0.0.0:${config.port}/api-docs`);
+    // logger.info(`Server is running on http://0.0.0.0:${config.port}`);
+    // console.log(`Docs available at http://0.0.0.0:${config.port}/api-docs`);
+    logger.info(`Server is running on http://localhost:${config.port}`);
+    console.log(`Docs available at http://localhost:${config.port}/api-docs`);
 
     // Initialize Socket.io
     initSocket(server);
