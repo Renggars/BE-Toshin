@@ -202,6 +202,7 @@ const queryLrps = async (filter, options) => {
   const where = {};
   if (filter.tanggal) where.tanggal = new Date(filter.tanggal);
   if (filter.shiftId) where.shiftId = parseInt(filter.shiftId);
+  if (filter.rphId) where.rphId = parseInt(filter.rphId);
   if (filter.noKanagata) where.noKanagata = { contains: filter.noKanagata };
 
   const lrps = await prisma.laporanRealisasiProduksi.findMany({

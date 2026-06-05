@@ -6,25 +6,25 @@ import userController from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-router.route("/").get(auth("SUPERVISOR", "ADMIN"), userController.getUsers);
+router.route("/").get(auth("HR"), userController.getUsers);
 
 
 router
   .route("/:userId")
   .get(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("HR"),
     validate(userValidation.getUser),
     userController.getUser,
   )
   .put(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("HR"),
     validate(userValidation.updateUser),
     userController.updateUser,
   );
 
 router.put(
   "/:userId/deactivate",
-  auth("SUPERVISOR", "ADMIN"),
+  auth("HR"),
   validate(userValidation.deactivateUser),
   userController.deactivateUser,
 );

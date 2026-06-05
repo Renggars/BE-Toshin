@@ -70,21 +70,28 @@ export const initSocket = (httpServer) => {
     logger.info(`New client connected: ${socket.id}`);
 
     // Track Incoming Messages
-    socket.onAny((event) => {
-      socketMessagesInTotal.inc({ event });
-    });
+    if (typeof socket.onAny === "function") {
+      socket.onAny((event) => {
+        socketMessagesInTotal.inc({ event });
+      });
+    }
 
     // Track Outgoing Messages (Per-socket fallback)
-    socket.onAnyOut((event) => {
-      // Only increment if server-level tracking was not available
-      if (typeof io.onAnyOut !== 'function') {
-        socketMessagesOutTotal.inc({ event });
-        businessBroadcastTotal.inc({ event });
-      }
-    });
+    if (typeof socket.onAnyOut === "function") {
+      socket.onAnyOut((event) => {
+        // Only increment if server-level tracking was not available
+        if (typeof io.onAnyOut !== "function") {
+          socketMessagesOutTotal.inc({ event });
+          businessBroadcastTotal.inc({ event });
+        }
+      });
+    }
 
     // Emit notifikasi baru ke client spesifik
     socket.on("join", ({ userId, role }) => {
+      // Guard: Cek jika sudah pernah join untuk menghindari redundansi log & metrik
+      if (socket.hasJoined) return;
+
       socket.join(`user:${userId}`);
       if (role) {
         socket.join(`role:${role}`);
@@ -97,6 +104,8 @@ export const initSocket = (httpServer) => {
       } else {
         logger.info(`Socket ${socket.id} joined room user: ${userId}`);
       }
+      
+      socket.hasJoined = true;
     });
 
     socket.on("disconnect", () => {

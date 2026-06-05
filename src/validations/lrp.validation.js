@@ -25,6 +25,7 @@ const getLrps = {
   query: Joi.object().keys({
     tanggal:    Joi.date(),
     shiftId:    Joi.number(),
+    rphId:      Joi.number().integer(),
     noKanagata: Joi.string(),
     sortBy:     Joi.string(),
     limit:      Joi.number().integer(),

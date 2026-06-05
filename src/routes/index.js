@@ -19,7 +19,6 @@ import documentRoute from "./document.route.js";
 import appVersionRoute from "./appVersion.route.js";
 import mandorTaskRoute from "./mandorTask.route.js";
 import announcementRoute from "./announcement.route.js";
-import settingRoute from "./setting.route.js";
 import brandingRoute from "./branding.route.js";
 
 const router = express.Router();
@@ -104,10 +103,6 @@ const defaultRoutes = [
   {
     path: "/announcements",
     route: announcementRoute,
-  },
-  {
-    path: "/settings",
-    route: settingRoute,
   },
   {
     path: "/branding",

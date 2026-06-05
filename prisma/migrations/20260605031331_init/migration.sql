@@ -60,6 +60,7 @@ CREATE TABLE `andon_event` (
     `respon_status` ENUM('ON_TIME', 'OVER_TIME') NULL,
     `tanggal` DATE NOT NULL,
     `waktu_repair` DATETIME(3) NULL,
+    `fk_id_rph` INTEGER NULL,
     `fk_id_rph_closed` INTEGER NULL,
     `fk_id_rph_opened` INTEGER NULL,
     `is_late` BOOLEAN NOT NULL DEFAULT false,
@@ -275,6 +276,7 @@ CREATE TABLE `rencana_produksi` (
     `end_time` DATETIME(3) NULL,
     `start_time` DATETIME(3) NULL,
     `status` ENUM('PLANNED', 'ACTIVE', 'CLOSED') NOT NULL DEFAULT 'PLANNED',
+    `target_override` INTEGER NULL,
 
     INDEX `rencana_produksi_fk_id_jenis_pekerjaan_fkey`(`fk_id_jenis_pekerjaan`),
     INDEX `rencana_produksi_fk_id_mesin_fkey`(`fk_id_mesin`),
@@ -460,6 +462,9 @@ ALTER TABLE `andon_event` ADD CONSTRAINT `andon_event_fk_id_shift_fkey` FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE `andon_event` ADD CONSTRAINT `andon_event_resolved_by_fkey` FOREIGN KEY (`resolved_by`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `andon_event` ADD CONSTRAINT `andon_event_fk_id_rph_fkey` FOREIGN KEY (`fk_id_rph`) REFERENCES `rencana_produksi`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `attendance` ADD CONSTRAINT `attendance_fk_id_rencana_produksi_fkey` FOREIGN KEY (`fk_id_rencana_produksi`) REFERENCES `rencana_produksi`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

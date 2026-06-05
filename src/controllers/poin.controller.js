@@ -97,6 +97,36 @@ const resetPoints = catchAsync(async (req, res) => {
   res.send({ status: true, message: "Poin semua user berhasil direset ke 100" });
 });
 
+const getHRStats = catchAsync(async (req, res) => {
+  const { month, role, plant } = req.query;
+  const stats = await poinService.getHRDashboardStats(month, role, plant);
+  res.send({ status: true, data: stats });
+});
+
+const getHRRankings = catchAsync(async (req, res) => {
+  const { month, role, plant, type, page, limit } = req.query;
+  const result = await poinService.getHRRankings(month, role, plant, type, parseInt(page) || 1, parseInt(limit) || 10);
+  res.send({ status: true, ...result });
+});
+
+const getHRHistory = catchAsync(async (req, res) => {
+  const filter = {
+    month: req.query.month,
+    role: req.query.role,
+    plant: req.query.plant,
+    divisiId: req.query.divisiId,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  };
+  const options = {
+    page: parseInt(req.query.page) || 1,
+    limit: parseInt(req.query.limit) || 10,
+  };
+
+  const result = await poinService.getHRHistory(filter, options);
+  res.send({ status: true, ...result });
+});
+
 export default {
   getFormData,
   getMyPoin,
@@ -109,4 +139,7 @@ export default {
   getMonthlyStats,
   getUserByNfc,
   resetPoints,
+  getHRStats,
+  getHRRankings,
+  getHRHistory,
 };

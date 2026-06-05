@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
 
 // Konfigurasi Email Testing
 export const EMAIL_AM_PER_PLANT = {
-  1: ["putrajon403@gmail.com", "puutradev02@gmail.com", "renggars30@gmail.com"],
+  1: ["putrajon403@gmail.com"],
   2: ["puutradev02@gmail.com"],
   3: ["renggars30@gmail.com"],
 };
