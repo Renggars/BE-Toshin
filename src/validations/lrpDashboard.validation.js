@@ -12,6 +12,7 @@ const getDashboardSummary = {
     productId: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
     statusLrp: Joi.string().valid("SUBMITTED", "VERIFIED").allow(null, ""),
+    noLot: Joi.string().allow(null, ""),
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).default(10),
   }),
@@ -35,6 +36,7 @@ const exportData = {
     productId: Joi.number().integer().min(1).allow(null, ""),
     plant: Joi.string().allow(null, ""),
     statusLrp: Joi.string().valid("SUBMITTED", "VERIFIED").allow(null, ""),
+    noLot: Joi.string().allow(null, ""),
     format: Joi.string().valid("excel", "pdf").default("excel"),
   }),
 };

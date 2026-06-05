@@ -6,7 +6,7 @@ services:
     mem_limit: 1024m
     init: true
     ports:
-      - "${PORT:-4001}:4001"
+      - "${PORT:-4001}:${PORT:-4001}"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4001

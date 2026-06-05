@@ -11,7 +11,8 @@ const createTask = async (data) => {
       deskripsi: data.deskripsi,
       prioritas: data.prioritas || "LOW",
       status: "TODO",
-      foto: data.foto || null,
+      catatan: data.catatan,
+      foto: data.foto,
     },
     include: {
       supervisor: { select: { nama: true } },
