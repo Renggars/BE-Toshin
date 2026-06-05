@@ -9,9 +9,9 @@ services:
       - "${PORT:-4001}:4001"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - PORT=${PORT:-4001}
+      - PORT=4001
       - TCP_PORT=${TCP_PORT:-4210}
-      - DATABASE_URL=${DATABASE_URL:-mysql://root:rootpassword123@mysql:3306/toshin}
+      - DATABASE_URL=mysql://root:${DB_ROOT_PASSWORD:-rootpassword123}@mysql:3306/${DB_NAME:-toshin}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-yourpassword123}@redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-yourpassword123}
       - REDIS_ENABLED=${REDIS_ENABLED:-true}
@@ -152,6 +152,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
     ports:
       - "3000:3000"
     depends_on:

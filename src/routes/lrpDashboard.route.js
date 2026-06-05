@@ -3,7 +3,6 @@ import validate from "../middlewares/validate.js";
 import { auth } from "../middlewares/auth.js";
 import lrpDashboardValidation from "../validations/lrpDashboard.validation.js";
 import lrpDashboardController from "../controllers/lrpDashboard.controller.js";
-import exportController from "../controllers/export.controller.js";
 
 const router = express.Router();
 
@@ -24,20 +23,6 @@ router.get(
   dashboardAuth,
   validate(lrpDashboardValidation.exportData),
   lrpDashboardController.exportExcel,
-);
-
-// Async Export Endpoints
-router.post(
-  "/export/request",
-  dashboardAuth,
-  validate(lrpDashboardValidation.exportData),
-  exportController.requestExport,
-);
-
-router.get(
-  "/export/status/:jobId",
-  dashboardAuth,
-  exportController.getExportStatus,
 );
 
 router.get(

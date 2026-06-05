@@ -1,0 +1,159 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    },
+    {
+      "name": "DS_LOKI",
+      "label": "Loki",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "loki",
+      "pluginName": "Loki"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        { "expr": "prisma_client_pool_active_connections", "legendFormat": "Active", "refId": "A" },
+        { "expr": "prisma_client_pool_idle_connections", "legendFormat": "Idle", "refId": "B" },
+        { "expr": "prisma_client_pool_wait_count", "legendFormat": "Waiting", "refId": "C" }
+      ],
+      "title": "Prisma Connection Pool Status",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [{ "expr": "sum(rate(prisma_client_queries_total[5m]))", "refId": "A" }],
+      "title": "Database Transactions (Queries/sec)",
+      "type": "stat",
+      "options": { "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
+      "id": 3,
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum(rate(prisma_client_queries_duration_ms_bucket[5m])) by (le)) / 1000", "legendFormat": "P99 Latency", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(prisma_client_queries_duration_ms_bucket[5m])) by (le)) / 1000", "legendFormat": "P95 Latency", "refId": "B" },
+        { "expr": "histogram_quantile(0.50, sum(rate(prisma_client_queries_duration_ms_bucket[5m])) by (le)) / 1000", "legendFormat": "P50 Latency", "refId": "C" }
+      ],
+      "title": "Query Duration Quantiles (seconds)",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 13 },
+      "id": 4,
+      "targets": [{ "expr": "prisma_client_queries_wait_time_ms_total / prisma_client_queries_total", "legendFormat": "Avg Wait Time", "refId": "A" }],
+      "title": "Avg Connection Wait Time (ms)",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 13 },
+      "id": 5,
+      "targets": [{ "expr": "mysql_global_status_innodb_deadlocks", "refId": "A" }],
+      "title": "InnoDB Deadlocks (Requires mysql-exporter)",
+      "type": "stat",
+      "options": { "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "id": 10,
+      "options": {
+        "dedupStrategy": "exact",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": false,
+        "fontSize": "small",
+        "showControls": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "syntaxHighlighting": true,
+        "timestampResolution": "ms",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+          "direction": "backward",
+          "expr": "{job=\"toshin-app\"} |= `` | json",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs",
+      "type": "logs"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 42,
+  "tags": ["database", "prisma", "mysql", "sql"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Prometheus", "value": "prometheus" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data Source",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "hide": 0,
+        "includeAll": false,
+        "label": "Loki",
+        "multi": false,
+        "name": "DS_LOKI",
+        "options": [],
+        "query": "loki",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Toshin Backend Database Performance (Prisma)",
+  "uid": "database-performance"
+}
+

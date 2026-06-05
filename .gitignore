@@ -2,6 +2,8 @@ node_modules
 .env
 coverage
 
+.github
+
 # Ignore all files inside uploads (but keep folder structure via .gitkeep)
 public/uploads/*
 !public/uploads/.gitkeep

@@ -8,6 +8,7 @@ import tokenService from "../services/token.service.js";
 import ApiError from "../utils/ApiError.js";
 import rencanaProduksiService from "../services/rencanaProduksi.service.js";
 import moment from "moment";
+import { businessLoginTotal } from "../config/businessMetrics.js";
 
 const register = catchAsync(async (req, res) => {
   // Cek apakah noReg sudah terdaftar
@@ -30,18 +31,24 @@ const register = catchAsync(async (req, res) => {
 const login = catchAsync(async (req, res) => {
   let user;
 
-  // Deteksi metode login: NFC atau NoReg
-  if (req.body.uidNfc) {
-    // Login dengan NFC
-    user = await authService.loginWithNfc(req.body.uidNfc, req);
-  } else if (req.body.noReg && req.body.password) {
-    // Login dengan NoReg & Password
-    user = await authService.loginWithNoReg(req.body.noReg, req.body.password, req);
-  } else {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "Harus menyertakan uidNfc atau (noReg dan password)",
-    );
+  try {
+    // Deteksi metode login: NFC atau NoReg
+    if (req.body.uidNfc) {
+      // Login dengan NFC
+      user = await authService.loginWithNfc(req.body.uidNfc, req);
+    } else if (req.body.noReg && req.body.password) {
+      // Login dengan NoReg & Password
+      user = await authService.loginWithNoReg(req.body.noReg, req.body.password, req);
+    } else {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Harus menyertakan uidNfc atau (noReg dan password)",
+      );
+    }
+    businessLoginTotal.inc({ status: "success" });
+  } catch (error) {
+    businessLoginTotal.inc({ status: "failed" });
+    throw error;
   }
 
   // Generate JWT tokens

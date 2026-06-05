@@ -2,7 +2,7 @@
  * k6 Global Config
  * Ganti BASE_URL dengan URL backend kamu (lokal / ngrok / server).
  */
-export const BASE_URL = __ENV.BASE_URL || "http://localhost:4002";
+export const BASE_URL = __ENV.BASE_URL || "http://localhost:4003";
 
 // Threshold default yang dipakai semua test
 export const DEFAULT_THRESHOLDS = {

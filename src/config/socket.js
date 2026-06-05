@@ -1,8 +1,44 @@
 import { Server } from "socket.io";
 import { instrument } from "@socket.io/admin-ui";
+import client from "prom-client";
 import logger from "./logger.js";
+import { businessBroadcastTotal } from "./businessMetrics.js";
 
 let io = null;
+
+// Metrics
+const socketActiveConnections = new client.Gauge({
+  name: "socket_io_connections_active",
+  help: "Number of currently active Socket.io connections",
+});
+
+const socketConnectsTotal = new client.Counter({
+  name: "socket_io_connects_total",
+  help: "Total number of Socket.io connections established",
+});
+
+const socketDisconnectsTotal = new client.Counter({
+  name: "socket_io_disconnects_total",
+  help: "Total number of Socket.io disconnections",
+});
+
+const socketMessagesInTotal = new client.Counter({
+  name: "socket_io_messages_in_total",
+  help: "Total number of incoming socket messages",
+  labelNames: ["event"],
+});
+
+const socketMessagesOutTotal = new client.Counter({
+  name: "socket_io_messages_out_total",
+  help: "Total number of outgoing socket messages",
+  labelNames: ["event"],
+});
+
+const socketOnlineUsersByRole = new client.Gauge({
+  name: "socket_io_online_users_by_role",
+  help: "Number of online users grouped by role",
+  labelNames: ["role"],
+});
 
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
@@ -13,6 +49,15 @@ export const initSocket = (httpServer) => {
     },
   });
 
+  // Track Outgoing Messages (Server-level)
+  // If your version doesn't support Server.onAnyOut, we fallback to per-socket
+  if (typeof io.onAnyOut === 'function') {
+    io.onAnyOut((event) => {
+      socketMessagesOutTotal.inc({ event });
+      businessBroadcastTotal.inc({ event });
+    });
+  }
+
   // Enable Socket.io Admin UI
   instrument(io, {
     auth: false, // Set true and add password for production
@@ -20,13 +65,32 @@ export const initSocket = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
+    socketActiveConnections.inc();
+    socketConnectsTotal.inc();
     logger.info(`New client connected: ${socket.id}`);
+
+    // Track Incoming Messages
+    socket.onAny((event) => {
+      socketMessagesInTotal.inc({ event });
+    });
+
+    // Track Outgoing Messages (Per-socket fallback)
+    socket.onAnyOut((event) => {
+      // Only increment if server-level tracking was not available
+      if (typeof io.onAnyOut !== 'function') {
+        socketMessagesOutTotal.inc({ event });
+        businessBroadcastTotal.inc({ event });
+      }
+    });
 
     // Emit notifikasi baru ke client spesifik
     socket.on("join", ({ userId, role }) => {
       socket.join(`user:${userId}`);
       if (role) {
         socket.join(`role:${role}`);
+        socket.role = role; // Store role for disconnect tracking
+        socketOnlineUsersByRole.inc({ role });
+
         logger.info(
           `Socket ${socket.id} joined rooms user: ${userId}, role: ${role}`,
         );
@@ -36,6 +100,13 @@ export const initSocket = (httpServer) => {
     });
 
     socket.on("disconnect", () => {
+      socketActiveConnections.dec();
+      socketDisconnectsTotal.inc();
+
+      if (socket.role) {
+        socketOnlineUsersByRole.dec({ role: socket.role });
+      }
+
       logger.info(`Client disconnected: ${socket.id}`);
     });
   });

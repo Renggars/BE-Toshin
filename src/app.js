@@ -14,6 +14,7 @@ import setupSwagger from "./docs/swaggerConfig.js";
 import { sanitize } from "./middlewares/sanitizeXss.js";
 import path from "path";
 import logger from "./config/logger.js";
+import { metricsMiddleware } from "./middlewares/prometheus.js";
 
 const app = express();
 
@@ -29,6 +30,9 @@ if (config.env !== "test") {
 } else {
   logger.info("Morgan logging skipped (TEST environment)");
 }
+
+// 1.5. METRICS MIDDLEWARE (Must be before routes)
+app.use(metricsMiddleware);
 
 // 2. SETUP CORS (Menggunakan library agar lebih stabil)
 app.use(
