@@ -307,6 +307,7 @@ model RencanaProduksi {
   endTime                  DateTime?                  @map("end_time")
   startTime                DateTime?                  @map("start_time")
   status                   RencanaProduksiStatus      @default(PLANNED)
+  targetOverride           Int?                       @map("target_override")
   andonDowntimeShift       AndonDowntimeShift[]
   attendance               Attendance[]
   laporanRealisasiProduksi LaporanRealisasiProduksi?

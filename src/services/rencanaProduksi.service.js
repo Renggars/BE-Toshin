@@ -20,6 +20,7 @@ const createRencanaProduksi = async (payload) => {
     jenisPekerjaanId,
     tanggal,
     keterangan,
+    targetOverride,
   } = payload;
 
   // 1. Validasi foreign key (Mencoba ambil target dulu untuk auto-derive jenis_pekerjaan jika tidak ada)
@@ -66,6 +67,9 @@ const createRencanaProduksi = async (payload) => {
       jenisPekerjaanId: effectiveJenisPekerjaanId,
       tanggal: new Date(tanggal),
       keterangan,
+      targetOverride: (targetOverride !== undefined && targetOverride !== null && targetOverride !== "")
+        ? (isNaN(parseInt(targetOverride)) ? null : parseInt(targetOverride))
+        : null,
     },
     include: {
       operator: { include: { divisi: true } },
@@ -237,7 +241,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   }
 
   const targetKalkulasi = calculateProductionTarget(
-    rp.target.totalTarget,
+    rp.targetOverride ?? rp.target.totalTarget,
     rp.shift.tipeShift,
   );
 
@@ -321,7 +325,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       status: r.status,
       produk: r.produk.namaProduk,
       mesin: r.mesin.namaMesin,
-      target: r.target.totalTarget,
+      target: r.targetOverride ?? r.target.totalTarget,
     })),
     context: {
       andon_status: andonStatus,
@@ -362,6 +366,7 @@ const getDashboardSummary = async (filterTanggal) => {
     },
     select: {
       shiftId: true,
+      targetOverride: true,
       target: {
         select: {
           totalTarget: true,
@@ -390,7 +395,7 @@ const getDashboardSummary = async (filterTanggal) => {
   // Tapi mari kita gunakan pendekatan yang lebih "clean".
 
   const totalTarget = rphToday.reduce(
-    (acc, curr) => acc + (curr.target?.totalTarget || 0),
+    (acc, curr) => acc + (curr.targetOverride ?? curr.target?.totalTarget ?? 0),
     0,
   );
 
@@ -452,7 +457,7 @@ const getDashboardSummary = async (filterTanggal) => {
   const rphByShift = {};
   rphToday.forEach((r) => {
     rphByShift[r.shiftId] =
-      (rphByShift[r.shiftId] || 0) + (r.target?.totalTarget || 0);
+      (rphByShift[r.shiftId] || 0) + (r.targetOverride ?? r.target?.totalTarget ?? 0);
   });
 
   // Group LRP by Shift (Tercapai) - ambil dari lrpStatsGroup yang sudah di-query sebelumnya
@@ -495,6 +500,7 @@ const getDashboardSummary = async (filterTanggal) => {
     },
     select: {
       tanggal: true,
+      targetOverride: true,
       target: {
         select: {
           totalTarget: true,
@@ -531,11 +537,10 @@ const getDashboardSummary = async (filterTanggal) => {
     };
   }
 
-  // Aggregate target dari RPH
   weeklyData.forEach((rph) => {
     const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
     if (trendByDate[dateKey]) {
-      trendByDate[dateKey].target += rph.target?.totalTarget || 0;
+      trendByDate[dateKey].target += rph.targetOverride ?? rph.target?.totalTarget ?? 0;
     }
   });
 
@@ -579,6 +584,7 @@ const getWeeklyTrend = async () => {
     },
     select: {
       tanggal: true,
+      targetOverride: true,
       target: {
         select: { totalTarget: true },
       },
@@ -612,7 +618,7 @@ const getWeeklyTrend = async () => {
   weeklyRph.forEach((r) => {
     const dateKey = moment(r.tanggal).format("YYYY-MM-DD");
     if (trendMap[dateKey]) {
-      trendMap[dateKey].totalTarget += r.target?.totalTarget || 0;
+      trendMap[dateKey].totalTarget += r.targetOverride ?? r.target?.totalTarget ?? 0;
     }
   });
 
@@ -677,10 +683,9 @@ const getHistoryRPH = async (filterTanggal, userId) => {
     take: userId ? 1 : undefined,
   });
 
-  // Map data ke format yang diinginkan
   const result = data.map((curr) => {
     const targetKalkulasi = calculateProductionTarget(
-      curr.target?.totalTarget || 0,
+      curr.targetOverride ?? curr.target?.totalTarget ?? 0,
       curr.shift?.tipeShift || "Normal",
     );
 
@@ -696,6 +701,7 @@ const getHistoryRPH = async (filterTanggal, userId) => {
       kategori_shift: curr.shift?.tipeShift || "-",
       target: targetKalkulasi.totalTarget,
       target_id: curr.target?.id,
+      target_override: curr.targetOverride,
       jenis_pekerjaan_id: curr.jenisPekerjaanId || curr.target?.jenisPekerjaanId,
       jenis_pekerjaan: curr.jenisPekerjaan?.namaPekerjaan || "-",
       keterangan: curr.keterangan || "",
@@ -760,6 +766,9 @@ const updateRencanaProduksi = async (rphId, payload) => {
       jenisPekerjaanId: payload.jenisPekerjaanId || undefined,
       keterangan: payload.keterangan || undefined,
       tanggal: payload.tanggal ? new Date(payload.tanggal) : undefined,
+      targetOverride: payload.targetOverride !== undefined
+        ? (payload.targetOverride === null || payload.targetOverride === "" || isNaN(parseInt(payload.targetOverride)) ? null : parseInt(payload.targetOverride))
+        : undefined,
     },
     include: {
       operator: { include: { divisi: true } },

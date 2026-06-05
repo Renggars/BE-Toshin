@@ -8,7 +8,13 @@ const storage = multer.diskStorage({
     let dir = "public/uploads/user-profiles";
     if (req.baseUrl.includes("/poin") || req.path.includes("/poin")) {
       dir = "public/uploads/poin-images";
-    } else if (req.baseUrl.includes("/mandor-tasks") || req.path.includes("/mandor-tasks")) {
+    } else if (req.baseUrl.includes("/branding") || req.path.includes("/branding")) {
+      dir = "public/uploads/branding-images";
+    }
+    if (
+      req.baseUrl.includes("/mandor-tasks") ||
+      req.path.includes("/mandor-tasks")
+    ) {
       dir = "public/uploads/mandor-tasks";
     } else if (req.baseUrl.includes("/settings") || req.path.includes("/settings")) {
       dir = "public/uploads/system-settings";

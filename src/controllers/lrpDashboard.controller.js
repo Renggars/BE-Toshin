@@ -14,6 +14,7 @@ const getDashboardSummary = catchAsync(async (req, res) => {
     "jenisPekerjaanId",
     "produkId",
     "plant",
+    "noLot",
     "page",
     "limit",
     "statusLrp",
@@ -70,6 +71,7 @@ const exportExcel = catchAsync(async (req, res) => {
     "produkId",
     "plant",
     "statusLrp",
+    "noLot",
   ]);
 
   const buffer = await lrpDashboardService.exportData(filter);

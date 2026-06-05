@@ -2,7 +2,7 @@ import express from "express";
 import validate from "../middlewares/validate.js";
 import authValidation from "../validations/auth.validation.js";
 import authController from "../controllers/auth.controller.js";
-// import { auth } from "../middlewares/auth.js";
+import { auth } from "../middlewares/auth.js";
 
 const router = express.Router();
 
@@ -14,5 +14,7 @@ router.post(
 );
 
 router.post("/login", validate(authValidation.login), authController.login);
+
+router.get("/refresh-dashboard", auth(), authController.refreshDashboard);
 
 export default router;

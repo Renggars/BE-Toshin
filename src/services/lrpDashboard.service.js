@@ -52,9 +52,9 @@ const buildFilterWhereClause = (filter) => {
 
   // 5. Pencarian (Optional)
   if (filter.noKanagata)
-    where.noKanagata = { contains: filter.noKanagata, mode: "insensitive" };
+    where.noKanagata = { contains: filter.noKanagata };
   if (filter.noLot)
-    where.noLot = { contains: filter.noLot, mode: "insensitive" };
+    where.noLot = { contains: filter.noLot };
 
   // 6. Filter Status LRP
   if (filter.statusLrp && filter.statusLrp !== "ALL") {
@@ -207,6 +207,11 @@ const getTrendBulanan = async (filter) => {
       Prisma.sql`lrp.fk_id_shift = ${Number(filter.shiftId)}`,
     );
   }
+  if (filter.noLot) {
+    conditions.push(
+      Prisma.sql`lrp.no_lot LIKE ${`%${filter.noLot}%`}`,
+    );
+  }
 
   // --- Build JOIN clauses for relation-based filters ---
   // [Fix #3] Set-based addJoin() mencegah duplikat JOIN jika ada filter gabungan
@@ -335,6 +340,7 @@ const getLrpList = async (filter) => {
       counterEnd != null
         ? counterEnd.toString()
         : "-";
+    const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
     return {
       id: lrp.id,
       tanggal: lrp.tanggal,
@@ -354,6 +360,7 @@ const getLrpList = async (filter) => {
       counterEndFormatted: counterEndFormatted,
       jamKerja: `${hours}h ${minutes}m`,
       statusLrp: lrp.statusLrp,
+      targetQty: targetQty,
     };
   });
 
@@ -392,7 +399,7 @@ const getLrpDetail = async (id) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Fetch all LRPs for the same machine, shift, and date as an operator breakdown
+  // Fetch all LRPs for the same machine, shift, and date as an operator breakdown (from HEAD)
   const breakdownRaw = await prisma.laporanRealisasiProduksi.findMany({
     where: {
       mesinId: lrp.mesinId,
@@ -404,16 +411,44 @@ const getLrpDetail = async (id) => {
     },
   });
 
-  const operatorBreakdown = breakdownRaw.map((item) => ({
-    id: item.id,
-    operatorName: item.operator?.nama || "-",
-    qtyOk: item.qtyOk,
-    qtyNg: (item.qtyNgPrev || 0) + (item.qtyNgProses || 0),
-    qtyRework: item.qtyRework,
-    qtyTotal: item.qtyTotalProd,
-  }));
+  // Combine with attendance-based logic (from rev3)
+  const attendances = await prisma.attendance.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      operator: true,
+    },
+  });
 
-  // Fetch actual activity logs (breakdown) linked to this RPH
+  const operatorsMap = new Map();
+  // Initialize with LRP operators
+  breakdownRaw.forEach((item) => {
+    operatorsMap.set(item.operatorId, {
+      id: item.operatorId,
+      operatorName: item.operator?.nama || "-",
+      qtyOk: item.qtyOk,
+      qtyNg: (item.qtyNgPrev || 0) + (item.qtyNgProses || 0),
+      qtyRework: item.qtyRework,
+      qtyTotal: item.qtyTotalProd,
+    });
+  });
+
+  // Add from attendance if not present
+  attendances.forEach((att) => {
+    if (!operatorsMap.has(att.userId)) {
+      operatorsMap.set(att.userId, {
+        id: att.userId,
+        operatorName: att.operator.nama,
+        qtyOk: 0,
+        qtyNg: 0,
+        qtyRework: 0,
+        qtyTotal: 0,
+      });
+    }
+  });
+
+  const operatorBreakdown = Array.from(operatorsMap.values());
+
+  // Fetch actual activity logs (breakdown) linked to this RPH (HEAD logic)
   const logsRaw = await prisma.andonDowntimeShift.findMany({
     where: { rphId: lrp.rphId },
     include: {
@@ -424,13 +459,11 @@ const getLrpDetail = async (id) => {
     orderBy: { waktuStart: "asc" },
   });
 
-  // Deduplicate logs (same event, same start, same end)
-  // Use a map to filter out identical logs that might have been created due to rapid posts
+  // Deduplicate logs (HEAD logic)
   const dedupedLogs = [];
   const logMap = new Map();
 
   logsRaw.forEach((log) => {
-    // Key based on event, start time, and end time (using ISO string for consistency)
     const key = `${log.andonEventId}-${log.waktuStart.toISOString()}-${log.waktuEnd.toISOString()}`;
     if (!logMap.has(key)) {
       logMap.set(key, true);
@@ -447,7 +480,7 @@ const getLrpDetail = async (id) => {
     endTime: log.waktuEnd,
   }));
 
-  // Summary Waktu (Update breakdown and planDowntime based on logs)
+  // Summary Waktu (Combination)
   const plannedDowntime = andonBreakdown
     .filter((l) => l.category === "PLAN_DOWNTIME")
     .reduce((acc, curr) => acc + curr.duration, 0);
@@ -456,22 +489,31 @@ const getLrpDetail = async (id) => {
     .filter((l) => l.category !== "PLAN_DOWNTIME")
     .reduce((acc, curr) => acc + curr.duration, 0);
 
+  // Use net runtime if planned/unplanned downtime is subtracted (rev3 logic style)
+  const totalDowntime = plannedDowntime + unplannedDowntime;
+  const runtime = Math.max(0, (lrp.loadingTime || 0) - totalDowntime);
+
   const summaryWaktu = {
-    runtime: lrp.loadingTime || 0,
-    breakdown: Math.round(unplannedDowntime),
-    planDowntime: Math.round(plannedDowntime),
+    runtime: Number(runtime.toFixed(2)),
+    breakdown: Number(unplannedDowntime.toFixed(2)),
+    planDowntime: Number(plannedDowntime.toFixed(2)),
+  };
+
+  // Header Preparation (rev3 fields included)
+  const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
+  const header = {
+    ...lrp,
+    targetQty,
+    target_qty: targetQty,
+    produk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
+    jenisPekerjaan: lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
   };
 
   return {
-    header: {
-      ...lrp,
-      targetQty: lrp.rencanaProduksi?.target?.totalTarget || 0,
-      produk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
-      jenisPekerjaan: lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
-    },
+    header,
+    logs: [],
     operatorBreakdown,
     andonBreakdown,
-    logs: [],
     summaryWaktu,
   };
 };
@@ -610,9 +652,8 @@ const exportData = async (filter) => {
   // SHEET 2 — TREND HARIAN
   // ═══════════════════════════════════════════════════════════════════════════
   const ws2 = {};
-  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${
-    trendHarian.year
-  }`;
+  const thTitle = `TREND PRODUKSI HARIAN - ${trendHarian.month.toUpperCase()} ${trendHarian.year
+    }`;
   ["A", "B", "C", "D", "E"].forEach((c) => {
     ws2[`${c}1`] = { v: c === "A" ? thTitle : "", s: hdr() };
   });
@@ -624,9 +665,8 @@ const exportData = async (filter) => {
   trendHarian.data.forEach((d, i) => {
     const row = i + 3;
     const isAlt = i % 2 === 0;
-    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${
-      trendHarian.year
-    }`;
+    const ds = `${String(d.day).padStart(2, "0")} ${trendHarian.month} ${trendHarian.year
+      }`;
     ws2[`A${row}`] = { v: ds, s: cellS(isAlt) };
     ws2[`B${row}`] = { v: d.ok, s: numS(C.okGreen, isAlt) };
     ws2[`C${row}`] = { v: d.ng, s: numS(C.ngRed, isAlt) };
