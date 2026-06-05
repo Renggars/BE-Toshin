@@ -13,6 +13,11 @@ import {
   emitAndonMetricChanged,
 } from "../config/socket.js";
 
+import {
+  businessTaskCreatedTotal,
+  businessTaskResolvedTotal,
+} from "../config/businessMetrics.js";
+
 import logger from "../config/logger.js";
 
 import notificationService from "./notification.service.js";
@@ -406,6 +411,7 @@ const triggerAndon = async (payload) => {
       });
       openedRphId = nextPlannedRph.id;
 
+      businessTaskCreatedTotal.inc({ type: "andon_event" });
       return {
         newEvent: await tx.andonEvent.create({
           data: {
@@ -478,6 +484,7 @@ const triggerAndon = async (payload) => {
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
     });
+    businessTaskCreatedTotal.inc({ type: "andon_event" });
   }
 
   // ✅ NEW: Emit specific WebSocket events following contract
@@ -867,6 +874,7 @@ const resolveAndon = async (id, data) => {
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
     });
+    businessTaskResolvedTotal.inc({ type: "andon_event" });
 
     const splitPromises = await generateSplitDowntimePromises(
       event,

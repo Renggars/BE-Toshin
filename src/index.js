@@ -10,10 +10,6 @@ import tcpService from "./services/tcp.service.js";
 import { initSocket } from "./config/socket.js";
 import redis from "./utils/redis.js";
 import { initOeeWorker, closeOeeWorker } from "./workers/oee.worker.js";
-import {
-  initExportWorker,
-  closeExportWorker,
-} from "./workers/export.worker.js";
 
 let server;
 
@@ -30,7 +26,6 @@ try {
 
         // Start BullMQ OEE Worker setelah Redis siap
         initOeeWorker();
-        initExportWorker();
       })
       .catch((err) => {
         logger.error("Redis connection failed", err);
@@ -39,9 +34,9 @@ try {
     logger.info("Redis is disabled, skipping connection and workers.");
   }
 
-  server = app.listen(config.port, () => {
-    logger.info(`Server is running on http://localhost:${config.port}`);
-    console.log(`Docs available at http://localhost:${config.port}/api-docs`);
+  server = app.listen(config.port, "0.0.0.0", () => {
+    logger.info(`Server is running on http://0.0.0.0:${config.port}`);
+    console.log(`Docs available at http://0.0.0.0:${config.port}/api-docs`);
 
     // Initialize Socket.io
     initSocket(server);
@@ -81,7 +76,6 @@ process.on("SIGTERM", () => {
   }
   // Graceful shutdown: tunggu job BullMQ yang sedang berjalan selesai
   closeOeeWorker();
-  closeExportWorker();
 });
 
 export default app;

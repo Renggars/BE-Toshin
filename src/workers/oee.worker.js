@@ -14,7 +14,12 @@ import { Worker } from "bullmq";
 import config from "../config/config.js";
 import oeeService from "../services/oee.service.js";
 import logger from "../config/logger.js";
-import { redisConnection } from "../queues/oeeQueue.js";
+import {
+  redisConnection,
+  oeeJobSuccessTotal,
+  oeeJobFailedTotal,
+  oeeJobDurationSeconds,
+} from "../queues/oeeQueue.js";
 
 let oeeWorker = null;
 
@@ -27,12 +32,20 @@ export const initOeeWorker = () => {
     "oee-recalc",
     async (job) => {
       const { mesinId, tanggal } = job.data;
+      const end = oeeJobDurationSeconds.startTimer();
 
       logger.info(
         `[OEE Worker] Processing job ${job.id} — mesin: ${mesinId}, tanggal: ${tanggal}`,
       );
 
-      await oeeService.recalculateByMesin(mesinId, new Date(tanggal));
+      try {
+        await oeeService.recalculateByMesin(mesinId, new Date(tanggal));
+        end(); // Record duration
+        oeeJobSuccessTotal.inc(); // Track success
+      } catch (err) {
+        end(); // Record duration even if failed
+        throw err; // Re-throw to be caught by BullMQ 'failed' event
+      }
 
       logger.info(
         `[OEE Worker] Job ${job.id} selesai — mesin: ${mesinId}, tanggal: ${tanggal}`,
@@ -51,6 +64,7 @@ export const initOeeWorker = () => {
   });
 
   oeeWorker.on("failed", (job, err) => {
+    oeeJobFailedTotal.inc(); // Track failures
     logger.error(
       `[OEE Worker] Job gagal: ${job?.id} (attempt ${job?.attemptsMade}) — ${err.message}`,
     );

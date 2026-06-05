@@ -4,8 +4,12 @@
  */
 
 // Daftar UID NFC yang valid dari database (berdasarkan hasil seed default)
+// export const TEST_USERS = [
+//   "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"
+// ];
+
 export const TEST_USERS = [
-  "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"
+  "5111", "6111", "7111"
 ];
 
 /**

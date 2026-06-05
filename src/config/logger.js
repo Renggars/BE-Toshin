@@ -1,4 +1,5 @@
 import winston from "winston";
+import LokiTransport from "winston-loki";
 import config from "./config.js";
 
 const enumerateErrorFormat = winston.format((info) => {
@@ -19,6 +20,13 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.Console({
       stderrLevels: ["error"],
+    }),
+    new LokiTransport({
+      host: "http://localhost:3100",
+      labels: { job: "toshin-app" },
+      json: true,
+      replaceTimestamp: true,
+      onConnectionError: (err) => console.error("Loki connection failed", err),
     }),
   ],
 });
