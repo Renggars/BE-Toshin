@@ -19,6 +19,7 @@ const calculateLoadingTime = (shift) => {
 
 import { emitOeeUpdate } from "../config/socket.js";
 import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
+import { intelligenceService } from "./intelligence.service.js";
 
 const recalculateByMesin = async (mesinId, date = new Date()) => {
   const shifts = await prisma.shift.findMany();
@@ -194,6 +195,43 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       tanggal: dateStr,
       oee: oeeRecord,
     });
+
+    // 7. Intelligence Hook: Push Data & Update Scores
+    try {
+      // Ekstrak 7 fitur untuk /predict (XGBoost/MLP buffer)
+      // Fitur: [avail, perf, qual, downtime, hour, day, is_holiday]
+      // Asumsi jam mulai shift: Shift 1 = 06:00, Shift 2 = 14:00, Shift 3 = 22:00
+      const hourMap = { 1: 6, 2: 14, 3: 22 };
+      const shiftHour = hourMap[shift.id] || 6;
+      const dayOfWeek = targetDate.getDay();
+      const isHoliday = 0; // Default: bukan hari libur
+
+      const features = [
+        Number(availability.toFixed(1)),
+        Number(performance.toFixed(1)),
+        Number(quality.toFixed(1)),
+        totalDowntime,
+        shiftHour,
+        dayOfWeek,
+        isHoliday
+      ];
+
+      // Fire and forget (jangan blocking loop OEE)
+      intelligenceService.requestPrediction(mesinId, shift.id, features, totalOk, totalOutput, targetDate).catch((err) => 
+        console.error(`[AI Predict] Error for mesinId ${mesinId}:`, err.message)
+      );
+
+      intelligenceService.updateHealthScoreForMesin(mesinId, {
+        availability: Number(availability.toFixed(1)),
+        performance: Number(performance.toFixed(1)),
+        quality: Number(quality.toFixed(1))
+      }).catch((err) => 
+        console.error(`[AI Health] Error for mesinId ${mesinId}:`, err.message)
+      );
+      
+    } catch (err) {
+      console.error("[AI Hook] Failed to execute intelligence hook:", err);
+    }
   }
 };
 

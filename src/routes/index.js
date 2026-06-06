@@ -20,7 +20,7 @@ import appVersionRoute from "./appVersion.route.js";
 import mandorTaskRoute from "./mandorTask.route.js";
 import announcementRoute from "./announcement.route.js";
 import brandingRoute from "./branding.route.js";
-
+import intelligenceRoute from "./intelligence.route.js";
 const router = express.Router();
 
 const defaultRoutes = [
@@ -107,6 +107,10 @@ const defaultRoutes = [
   {
     path: "/branding",
     route: brandingRoute,
+  },
+  {
+    path: "/intelligence",
+    route: intelligenceRoute,
   },
 ];
 

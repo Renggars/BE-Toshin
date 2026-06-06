@@ -194,6 +194,9 @@ model Mesin {
   predictionFeatureCache   PredictionFeatureCache[]
   rencanaProduksi           RencanaProduksi[]
   documents                 Document[]
+  machineClustering         MachineClustering[]
+  machineHealthScore        MachineHealthScore[]
+  productionPrediction      ProductionPrediction[]
   kategori                  KategoriMesin?             @relation(fields: [kategoriId], references: [id])
 
   @@map("mesin")
@@ -373,6 +376,7 @@ model Shift {
   predictionFeatureCache   PredictionFeatureCache[]
   poinDisiplin             PoinDisiplin[]
   rencanaProduksi          RencanaProduksi[]
+  productionPrediction     ProductionPrediction[]
 
   @@map("shift")
 }
@@ -518,6 +522,7 @@ enum UserRole {
   WAREHOUSE
   PURCHASING
   HC
+  HR
   ACCOUNTING
   FINANCE
   SUPERVISOR
@@ -550,6 +555,7 @@ enum NotificationTipe {
   ANDON_CALL
   ANDON_RESOLVED
   ANNOUNCEMENT
+  HEALTH_ALERT
 
   @@map("notification_tipe")
 }
@@ -616,3 +622,67 @@ enum MandorTaskPriority {
 
   @@map("mandor_task_priority")
 }
+
+// 1. MachineClustering — Hasil KMeans clustering per mesin per hari
+model MachineClustering {
+  id              Int      @id @default(autoincrement())
+  mesinId         Int      @map("fk_id_mesin")
+  clusterDate     DateTime @db.Date @map("cluster_date")
+  clusterNumber   Int      @map("cluster_number")
+  clusterLabel    String   @map("cluster_label")
+  avgAvailability Float    @map("avg_availability")
+  avgPerformance  Float    @map("avg_performance")
+  avgQuality      Float    @map("avg_quality")
+  avgOee          Float    @map("avg_oee")
+  createdAt       DateTime @default(now()) @map("created_at")
+  mesin           Mesin    @relation(fields: [mesinId], references: [id])
+
+  @@unique([mesinId, clusterDate])
+  @@index([clusterDate])
+  @@index([mesinId])
+  @@map("machine_clustering")
+}
+
+// 2. MachineHealthScore — Fuzzy logic health score per mesin per hari
+model MachineHealthScore {
+  id           Int      @id @default(autoincrement())
+  mesinId      Int      @map("fk_id_mesin")
+  tanggal      DateTime @db.Date
+  score        Float
+  status       String   // "Critical", "Warning", "Excellent"
+  availability Float
+  performance  Float
+  quality      Float
+  fuzzyReason  String?  @db.Text @map("fuzzy_reason")
+  createdAt    DateTime @default(now()) @map("created_at")
+  mesin        Mesin    @relation(fields: [mesinId], references: [id])
+
+  @@unique([mesinId, tanggal])
+  @@index([tanggal])
+  @@index([mesinId])
+  @@index([status])
+  @@map("machine_health_score")
+}
+
+// 3. ProductionPrediction — Cached prediction results
+model ProductionPrediction {
+  id                 Int      @id @default(autoincrement())
+  mesinId            Int      @map("fk_id_mesin")
+  shiftId            Int      @map("fk_id_shift")
+  predictionDate     DateTime @db.Date @map("prediction_date")
+  predictedGoodPcs   Int      @map("predicted_good_pcs")
+  predictedTotalProd Int      @map("predicted_total_prod")
+  predictionAccuracy Float?   @map("prediction_accuracy")
+  lastAvailability   Float    @map("last_availability")
+  lastPerformance    Float    @map("last_performance")
+  lastQuality        Float    @map("last_quality")
+  lastDowntime       Float    @map("last_downtime")
+  createdAt          DateTime @default(now()) @map("created_at")
+  mesin              Mesin    @relation(fields: [mesinId], references: [id])
+  shift              Shift    @relation(fields: [shiftId], references: [id])
+
+  @@index([predictionDate])
+  @@index([mesinId])
+  @@map("production_prediction")
+}
+
