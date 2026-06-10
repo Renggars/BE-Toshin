@@ -42,16 +42,19 @@
       ],
       "title": "Redis Memory Usage",
       "type": "stat",
-      "options": { "colorMode": "value", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "decbytes" } }
+      "fieldConfig": { "defaults": { "unit": "decbytes", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 524288000 }] } } }
     },
+
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 5, "w": 12, "x": 12, "y": 0 },
       "id": 2,
       "targets": [
-        { "expr": "sum(rate(redis_keyspace_hits_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_misses_total[5m])))", "legendFormat": "Hit Ratio", "refId": "A" },
-        { "expr": "sum(rate(redis_keyspace_misses_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_misses_total[5m])))", "legendFormat": "Miss Ratio", "refId": "B" }
+        { "expr": "sum(increase(redis_keyspace_hits_total[5m])) / (sum(increase(redis_keyspace_hits_total[5m])) + sum(increase(redis_keyspace_misses_total[5m]))) or vector(0)", "legendFormat": "Hit Ratio", "refId": "A" },
+        { "expr": "sum(increase(redis_keyspace_misses_total[5m])) / (sum(increase(redis_keyspace_hits_total[5m])) + sum(increase(redis_keyspace_misses_total[5m]))) or vector(0)", "legendFormat": "Miss Ratio", "refId": "B" }
+
+
+
       ],
       "title": "Cache Efficiency (Hit vs Miss)",
       "type": "stat",
@@ -64,7 +67,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 5 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 5 },
       "id": 3,
       "targets": [{ "expr": "redis_connected_clients", "refId": "A" }],
       "title": "Connected Clients",
@@ -72,21 +75,14 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 5 },
-      "id": 4,
-      "targets": [{ "expr": "redis_pubsub_channels", "refId": "A" }],
-      "title": "Pub/Sub Channels",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 5 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 5 },
       "id": 5,
       "targets": [{ "expr": "sum(rate(redis_commands_total[5m]))", "refId": "A" }],
       "title": "Commands per Second",
       "type": "stat",
       "fieldConfig": { "defaults": { "unit": "reqps" } }
     },
+
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },

@@ -10,7 +10,7 @@ const register = {
     divisiId: Joi.number().integer().required(),
     role: Joi.string()
       .valid(
-        "PRODUKSI",
+        "OPERATOR",
         "QUALITY",
         "MAINTENANCE",
         "DIE_MAINT",
@@ -29,8 +29,12 @@ const register = {
         "SUPERVISOR",
         "MANDOR",
         "ADMIN",
+        "HR",
       )
       .required(),
+    tipeOperator: Joi.string()
+      .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
+      .when("role", { is: "OPERATOR", then: Joi.optional(), otherwise: Joi.forbidden() }),
     fotoProfile: Joi.string().uri().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
@@ -62,7 +66,7 @@ const updateUser = {
       divisiId: Joi.number().integer().optional(),
       role: Joi.string()
         .valid(
-          "PRODUKSI",
+          "OPERATOR",
           "QUALITY",
           "MAINTENANCE",
           "DIE_MAINT",
@@ -81,7 +85,11 @@ const updateUser = {
           "SUPERVISOR",
           "MANDOR",
           "ADMIN",
+          "HR",
         )
+        .optional(),
+      tipeOperator: Joi.string()
+        .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
         .optional(),
       fotoProfile: Joi.string().uri().allow(null, ""),
       plant: Joi.string().valid("1", "2", "3").optional(),

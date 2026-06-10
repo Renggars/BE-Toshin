@@ -48,7 +48,8 @@
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "id": 2,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100", "refId": "A" }],
+      "targets": [{ "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_requests_total[5m])) * 100 or vector(0)", "refId": "A" }],
+
       "title": "Error%",
       "type": "stat"
     },
@@ -58,7 +59,8 @@
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "id": 3,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) or vector(0)", "refId": "A" }],
+
       "title": "P95 Latency",
       "type": "stat"
     },
@@ -94,14 +96,22 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 50 }] } } },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 100 }] } } },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 4 },
       "id": 7,
       "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "expr": "sum(rabbitmq_queue_messages_ready)", "refId": "A" }],
-      "title": "Rabbit",
+      "targets": [
+        { "expr": "oee_queue_waiting", "legendFormat": "Waiting", "refId": "A" },
+        { "expr": "oee_queue_active", "legendFormat": "Active", "refId": "B" },
+        { "expr": "oee_job_success_total", "legendFormat": "Completed", "refId": "C" },
+        { "expr": "oee_job_failed_total", "legendFormat": "Failed", "refId": "D" }
+      ],
+      "title": "Jobs (BullMQ)",
       "type": "stat"
     },
+
+
+
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "unit": "decbytes", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } },
@@ -119,9 +129,10 @@
       "targets": [{ "expr": "time() - process_start_time_seconds", "refId": "A" }],
       "title": "Uptime",
       "type": "stat",
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "fieldConfig": { "defaults": { "unit": "s" } }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } }
     },
+
     {
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },

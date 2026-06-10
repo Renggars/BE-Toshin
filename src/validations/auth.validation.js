@@ -9,7 +9,7 @@ const register = {
     divisiId: Joi.number().integer().required(),
     role: Joi.string()
       .valid(
-        "PRODUKSI",
+        "OPERATOR",
         "QUALITY",
         "MAINTENANCE",
         "DIE_MAINT",

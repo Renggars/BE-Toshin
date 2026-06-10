@@ -22,7 +22,7 @@ const logger = winston.createLogger({
       stderrLevels: ["error"],
     }),
     new LokiTransport({
-      host: "http://localhost:3100",
+      host: config.loki.host,
       labels: { job: "toshin-app" },
       json: true,
       replaceTimestamp: true,

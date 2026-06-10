@@ -7,6 +7,8 @@ import { v4 as uuidv4 } from "uuid";
 import notificationService from "./notification.service.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
+import { businessBroadcastTotal } from "../config/businessMetrics.js";
+
 
 const sendAnnouncement = async (data) => {
   const announcement = await prisma.operatorAnnouncement.create({
@@ -26,7 +28,11 @@ const sendAnnouncement = async (data) => {
     announcement,
   });
 
+  // Track metric
+  businessBroadcastTotal.inc({ event: "broadcast" });
+
   // Also create a standard notification so it appears in the operator's notification history
+
   await notificationService.createNotification({
     userId: data.operatorId,
     tipe: "ANNOUNCEMENT",
@@ -38,11 +44,11 @@ const sendAnnouncement = async (data) => {
 };
 
 const sendBroadcastAnnouncement = async (data) => {
-  // Cari operator (dengan role PRODUKSI) yang memiliki RPH berstatus ACTIVE saat ini
+  // Cari operator (dengan role OPERATOR) yang memiliki RPH berstatus ACTIVE saat ini
   const activeRphs = await prisma.rencanaProduksi.findMany({
     where: {
       status: "ACTIVE",
-      operator: { role: "PRODUKSI" },
+      operator: { role: "OPERATOR" },
     },
     select: { userId: true },
   });
@@ -88,7 +94,11 @@ const sendBroadcastAnnouncement = async (data) => {
     });
   });
 
+  // Track metric (single increment for the whole broadcast operation)
+  businessBroadcastTotal.inc({ event: "broadcast" });
+
   // Buat notifikasi standar hanya untuk operator yang aktif
+
   await notificationService.createBulkNotifications(
     activeOperatorIds,
     "ANNOUNCEMENT",

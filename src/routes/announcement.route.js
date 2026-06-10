@@ -14,7 +14,7 @@ router
     announcementController.sendAnnouncement,
   )
   .get(
-    auth("PRODUKSI", "MANDOR", "ADMIN"),
+    auth("OPERATOR", "MANDOR", "ADMIN"),
     announcementController.getMyAnnouncements,
   );
 
@@ -60,7 +60,7 @@ router
 router
   .route("/:id/read")
   .patch(
-    auth("PRODUKSI", "ADMIN"),
+    auth("OPERATOR", "ADMIN"),
     validate(announcementValidation.markRead),
     announcementController.markRead,
   );

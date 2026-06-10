@@ -186,8 +186,8 @@ describe("LRP Controller - Comprehensive Unit Tests", () => {
       );
     });
 
-    test("✅ should return 201 on successful LRP creation (PRODUKSI role)", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 201 on successful LRP creation (OPERATOR role)", async () => {
+      setRole("OPERATOR");
       lrpService.createLrp.mockResolvedValue(mockLrp);
 
       const res = await request(app).post("/lrp").send(validCreatePayload);
@@ -566,7 +566,7 @@ describe("LRP Controller - Comprehensive Unit Tests", () => {
     });
 
     test("✅ all authenticated roles should be able to GET /lrp", async () => {
-      const roles = ["ADMIN", "PRODUKSI", "SUPERVISOR", "MAINTENANCE", "QUALITY", "DIE_MAINT"];
+      const roles = ["ADMIN", "OPERATOR", "SUPERVISOR", "MAINTENANCE", "QUALITY", "DIE_MAINT"];
       lrpService.queryLrps.mockResolvedValue(mockPaginatedResult);
 
       for (const role of roles) {
@@ -649,7 +649,7 @@ describe("LRP Controller - Comprehensive Unit Tests", () => {
 
     test("✅ should work for any authenticated role", async () => {
       lrpService.getLrpById.mockResolvedValue(mockLrp);
-      const roles = ["ADMIN", "PRODUKSI", "SUPERVISOR", "MAINTENANCE", "QUALITY"];
+      const roles = ["ADMIN", "OPERATOR", "SUPERVISOR", "MAINTENANCE", "QUALITY"];
 
       for (const role of roles) {
         setRole(role);
@@ -769,8 +769,8 @@ describe("LRP Controller - Comprehensive Unit Tests", () => {
       expect(lrpService.updateLrpById).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI (not authorized)", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR (not authorized)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).patch("/lrp/1").send(validUpdatePayload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
       expect(lrpService.updateLrpById).not.toHaveBeenCalled();
@@ -897,8 +897,8 @@ describe("LRP Controller - Comprehensive Unit Tests", () => {
       expect(lrpService.deleteLrpById).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI (not authorized to delete)", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR (not authorized to delete)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).delete("/lrp/1");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
       expect(lrpService.deleteLrpById).not.toHaveBeenCalled();

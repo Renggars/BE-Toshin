@@ -31,15 +31,16 @@ const createUser = async (userBody) => {
       password: hashedPassword,
       uidNfc: userBody.uidNfc || null,
       role: userBody.role,
+      tipeOperator: userBody.tipeOperator || null,
       divisiId: userBody.divisiId,
       fotoProfile: userBody.fotoProfile || null,
       plant: userBody.plant,
       line: userBody.line,
       status: "active",
       noReg: userBody.noReg,
-      // Set cycle start jika role-nya PRODUKSI
+      // Set cycle start jika role-nya OPERATOR
       pointCycleStart:
-        userBody.role === "PRODUKSI" ? (() => { const d = nowWIB(); d.setDate(1); return d; })() : null,
+        userBody.role === "OPERATOR" ? (() => { const d = nowWIB(); d.setDate(1); return d; })() : null,
     },
     include: {
       divisi: true,
@@ -77,6 +78,7 @@ const queryUsers = async (filter) => {
       fotoProfile: true,
       nama: true,
       role: true,
+      tipeOperator: true,
       divisi: {
         select: {
           id: true,
@@ -112,6 +114,7 @@ const getUserByNoReg = async (noReg) => {
       password: true,
       fotoProfile: true,
       role: true,
+      tipeOperator: true,
       plant: true,
       currentPoint: true,
       status: true,
@@ -141,6 +144,7 @@ const getUserByNfc = async (uidNfc) => {
       nama: true,
       fotoProfile: true,
       role: true,
+      tipeOperator: true,
       status: true,
       plant: true,
       currentPoint: true,
@@ -191,6 +195,7 @@ const getCurrentUserData = async (userId) => {
       uidNfc: true,
       fotoProfile: true,
       role: true,
+      tipeOperator: true,
       plant: true,
       currentPoint: true,
       status: true,

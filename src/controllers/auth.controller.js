@@ -56,7 +56,7 @@ const login = catchAsync(async (req, res) => {
 
   let dashboardData = null;
 
-  if (user.role === "PRODUKSI") {
+  if (user.role === "OPERATOR") {
     try {
       const today = moment().format("YYYY-MM-DD");
       dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
@@ -87,7 +87,7 @@ const refreshDashboard = catchAsync(async (req, res) => {
   const user = req.user;
   let dashboardData = null;
 
-  if (user.role === "PRODUKSI") {
+  if (user.role === "OPERATOR") {
     try {
       const today = moment().format("YYYY-MM-DD");
       dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(

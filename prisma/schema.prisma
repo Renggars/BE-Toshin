@@ -408,7 +408,7 @@ model Document {
 
 model User {
   id                       Int                        @id @default(autoincrement())
-  role                     UserRole                   @default(PRODUKSI)
+  role                     UserRole                   @default(OPERATOR)
   currentPoint             Int                        @default(100) @map("current_point")
   divisiId                 Int                        @map("fk_id_divisi")
   fotoProfile              String?                    @map("foto_profile")
@@ -420,6 +420,7 @@ model User {
   password                 String
   plant                    String
   line                     String
+  tipeOperator             TipeOperator?
   noReg                    String                     @unique @map("no_reg")
   andonCall                AndonCall[]
   andonEventOperator       AndonEvent[]               @relation("andon_event_fk_id_operatorTouser")
@@ -486,7 +487,7 @@ model OperatorAnnouncement {
 }
 
 enum UserRole {
-  PRODUKSI
+  OPERATOR
   QUALITY
   MAINTENANCE
   DIE_MAINT
@@ -508,6 +509,13 @@ enum UserRole {
   HR
 
   @@map("user_role")
+}
+
+enum TipeOperator {
+  OPERATOR_LAPANGAN
+  OPERATOR_OFFICE
+
+  @@map("tipe_operator")
 }
 
 enum MasterMasalahAndonKategori {

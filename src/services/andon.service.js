@@ -565,7 +565,7 @@ const startRepairAndon = async (id, data) => {
       MAINTENANCE: "MAINTENANCE",
       QUALITY: "QUALITY",
       DIE_MAINT: "DIE_MAINT",
-      PRODUKSI: "PRODUKSI",
+      PRODUKSI: "OPERATOR",
     };
 
     const requiredRole = roleMapping[call.targetDivisi];
@@ -687,8 +687,8 @@ const startRepairAndon = async (id, data) => {
     MAINTENANCE: "MAINTENANCE",
     QUALITY: "QUALITY",
     DIE_MAINT: "DIE_MAINT",
-    PRODUKSI: "PRODUKSI",
-    PLAN_DOWNTIME: "PRODUKSI",
+    PRODUKSI: "OPERATOR",
+    PLAN_DOWNTIME: "OPERATOR",
   };
 
   const requiredRole = roleMapping[event.masterMasalahAndon?.kategori || "PRODUKSI"];
@@ -795,10 +795,10 @@ const resolveAndon = async (id, data) => {
       MAINTENANCE: "MAINTENANCE",
       QUALITY: "QUALITY",
       DIE_MAINT: "DIE_MAINT",
-      PRODUKSI: "PRODUKSI",
+      PRODUKSI: "OPERATOR",
     };
 
-    const requiredRole = roleMapping[event.masterMasalahAndon?.kategori || "PRODUKSI"];
+    const requiredRole = roleMapping[event.masterMasalahAndon?.kategori || "OPERATOR"];
 
     if (
       resolverUser.role !== requiredRole &&

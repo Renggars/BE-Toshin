@@ -3,12 +3,13 @@
 import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
-import moment from "moment";
 import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
 import { oeeQueue } from "../queues/oeeQueue.js";
 import { nowWIB } from "../utils/dateWIB.js";
 import oeeService from "./oee.service.js";
 import { emitOperatorProgressUpdate } from "../config/socket.js";
+import moment from "moment";
+
 
 /**
  * Helper: enqueue OEE recalculation job dengan dedup + delay.
@@ -366,8 +367,8 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
 const getOperatorProgress = async (filter) => {
   const { plant, line, tanggal } = filter;
   const targetDate = tanggal
-    ? moment.utc(tanggal).startOf("day").toDate()
-    : moment().startOf("day").toDate();
+  ? moment.utc(tanggal).startOf("day").toDate()
+  : new Date(moment().tz("Asia/Jakarta").format("YYYY-MM-DD") + "T00:00:00.000Z");
 
   const activeRph = await prisma.rencanaProduksi.findMany({
     where: {

@@ -6,7 +6,7 @@ import userController from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-router.route("/").get(auth("HR"), userController.getUsers);
+router.route("/").get(auth("HR", "ADMIN", "SUPERVISOR"), userController.getUsers);
 
 
 router
