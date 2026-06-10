@@ -224,7 +224,8 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
 
     const [h, m] = jamMasukShift.split(":");
     const shiftTime = new Date(jamTap);
-    shiftTime.setHours(parseInt(h), parseInt(m), 0, 0);
+    shiftTime.setUTCHours(parseInt(h), parseInt(m), 0, 0);
+
 
     jamMasukAktual = moment.utc(jamTap).format("HH:mm");
 
@@ -245,7 +246,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     rp.shift.tipeShift,
   );
 
-  // ✅ Context Detection: Active Andon RPH Switch
+  // Context Detection: Active Andon RPH Switch
   const RPH_SWITCH_NAMES = [
     "Pindah Mesin",
     "Pindah Produk",
@@ -426,7 +427,7 @@ const getDashboardSummary = async (filterTanggal) => {
 
   // 4. Hitung Statistik Operator (Widget Tengah Atas)
   const totalOperator = await prisma.user.count({
-    where: { role: "PRODUKSI" },
+    where: { role: "OPERATOR" },
   });
 
   // Perbaikan error 'distinct': Gunakan groupBy untuk menghitung operator unik yang tap absensi
@@ -647,7 +648,7 @@ const searchOperator = async (query) => {
   return prisma.user.findFirst({
     where: {
       OR: [{ nama: { contains: query } }, { uidNfc: query }],
-      role: "PRODUKSI",
+      role: "OPERATOR",
     },
     select: {
       id: true,

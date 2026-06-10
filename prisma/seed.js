@@ -40,7 +40,7 @@ async function main() {
 
   // 2. Seed Users
   // Kolom di data_operator.xlsx (header baris 0):
-  // [0]=nama, [1]=password, [2]=jenis operator/divisi, [3]=Plant, [4]=Line, [5]=Foto, [6]=fk_id_divisi, [7]=NO. REG
+  // [0]=nama, [1]=password, [2]=role, [3]=Plant, [4]=Line, [5]=Tipe_Operator, [6]=Foto, [7]=fk_id_divisi, [8]=NO. REG
   console.log("Seeding Users...");
   const rawOperatorData = xlsx.utils.sheet_to_json(
     operatorWB.Sheets["Operator"],
@@ -51,11 +51,13 @@ async function main() {
   const hashedPassword123 = await bcrypt.hash("123", salt);
 
   const validRoles = [
-    "PRODUKSI", "QUALITY", "MAINTENANCE", "DIE_MAINT", "ENGINEERING",
+    "OPERATOR", "QUALITY", "MAINTENANCE", "DIE_MAINT", "ENGINEERING",
     "MARKETING", "COMMERCIAL", "PPIC", "HCPGA", "WRH_CIBITUNG",
     "GA", "WAREHOUSE", "PURCHASING", "HC", "ACCOUNTING", "FINANCE",
-    "ADMIN", "SUPERVISOR",
+    "ADMIN", "SUPERVISOR", "MANDOR", "HR",
   ];
+
+  const validTipeOperator = ["OPERATOR_LAPANGAN", "OPERATOR_OFFICE"];
 
   let noRegCounter = 90000; // counter fallback jika noReg kosong
   let uidNfcCounter = 1;
@@ -67,22 +69,30 @@ async function main() {
     const nama = row[0]?.toString().trim();
     if (!nama || nama.toLowerCase() === "nama") continue;
 
-    // col[2] = jenis operator / divisi -> role
-    const rawRole = row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "PRODUKSI";
-    const role = validRoles.includes(rawRole) ? rawRole : "PRODUKSI";
+    // col[2] = role
+    const rawRole = row[2]?.toString().trim().toUpperCase().replace(/\s+/g, "_") || "OPERATOR";
+    const role = validRoles.includes(rawRole) ? rawRole : "OPERATOR";
 
     // col[3] = Plant, col[4] = Line
     const plant = row[3]?.toString().trim() || "3";
     const line = row[4]?.toString().trim() || "-";
 
-    // col[5] = Foto
-    const fotoProfile = row[5]?.toString().trim() || null;
+    // col[5] = Tipe_Operator
+    // Tambahkan sementara di dalam loop
+    const rawTipeOperator = row[5]?.toString().trim().toUpperCase().replace(/\s+/g, "_");
+    const tipeOperator =
+      role === "OPERATOR" && validTipeOperator.includes(rawTipeOperator)
+        ? rawTipeOperator
+        : null;
 
-    // col[6] = fk_id_divisi
-    const divisiId = parseInt(row[6]) || 1;
+    // col[6] = Foto
+    const fotoProfile = row[6]?.toString().trim() || null;
 
-    // col[7] = NO. REG, fallback ke counter
-    let noReg = row[7]?.toString().trim();
+    // col[7] = fk_id_divisi
+    const divisiId = parseInt(row[7]) || 1;
+
+    // col[8] = NO. REG, fallback ke counter
+    let noReg = row[8]?.toString().trim();
     if (!noReg || noReg === "") {
       noReg = `ID${noRegCounter++}`;
     }
@@ -97,6 +107,7 @@ async function main() {
           nama,
           password: hashedPassword123,
           role,
+          tipeOperator,
           plant,
           line,
           fotoProfile: fotoProfile || null,
@@ -109,6 +120,7 @@ async function main() {
           password: hashedPassword123,
           uidNfc,
           role,
+          tipeOperator,
           plant,
           line,
           fotoProfile: fotoProfile || null,

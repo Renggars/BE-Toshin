@@ -48,7 +48,11 @@ components:
           nullable: true
         role:
           type: string
-          enum: [PRODUKSI, SUPERVISOR, ENGINEERING, MAINTENANCE]
+          enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
+        tipeOperator:
+          type: string
+          enum: [OPERATOR_LAPANGAN, OPERATOR_OFFICE]
+          nullable: true
         plant:
           type: string
 
@@ -346,7 +350,7 @@ paths:
                   type: string
                   enum:
                     [
-                      PRODUKSI,
+                      OPERATOR,
                       QUALITY,
                       MAINTENANCE,
                       DIE_MAINT,
@@ -365,7 +369,11 @@ paths:
                       SUPERVISOR,
                       ADMIN,
                     ]
-                  example: "PRODUKSI"
+                  example: "OPERATOR"
+                tipeOperator:
+                  type: string
+                  enum: [OPERATOR_LAPANGAN, OPERATOR_OFFICE]
+                  description: "Wajib diisi jika role OPERATOR"
                 fotoProfile:
                   type: string
                   format: uri
@@ -408,7 +416,7 @@ paths:
         Login with either NFC card or email/password combination.
         - NFC Login: Provide uidNfc only
         - NoReg Login: Provide noReg and password
-        - Returns user data, JWT tokens, and dashboard data (for PRODUKSI role)
+        - Returns user data, JWT tokens, and dashboard data (for OPERATOR role)
       tags: [Auth]
       security: []
       requestBody:
@@ -471,7 +479,7 @@ paths:
                       dashboard:
                         type: object
                         nullable: true
-                        description: "Dashboard data for PRODUKSI role only"
+                        description: "Dashboard data for OPERATOR role only"
         "401":
           description: Unauthorized - Invalid credentials
           content:
@@ -1842,7 +1850,7 @@ paths:
         - Minimal salah satu dari `uidNfc` atau `operatorId` harus ada
         - Jika `uidNfc` dikirim, sistem akan:
           - Mencari operator berdasarkan UID NFC
-          - Validasi role harus `PRODUKSI`
+          - Validasi role harus `OPERATOR`
           - Validasi status harus `active`
           - Cek apakah sedang suspend
 
@@ -2627,7 +2635,7 @@ paths:
   # ─── UPSERT (Pertama Kali / Update Progress) ──────────────────────────────
   /lrp/rph/{rphId}:
     patch:
-      summary: "[STEP 1 & 2] Upsert LRP — Input / Update Progres (PRODUKSI / ADMIN)"
+      summary: "[STEP 1 & 2] Upsert LRP — Input / Update Progres (OPERATOR / ADMIN)"
       description: |
         Endpoint utama untuk input dan update data produksi. Bersifat **upsert**:
         - **Jika LRP belum ada** untuk RPH ini → **buat LRP baru** dengan `statusLrp: DRAFT`
@@ -2894,7 +2902,7 @@ paths:
   # ─── SUBMIT FINAL ──────────────────────────────────────────────────────────
   /lrp/{lrpId}/submit:
     post:
-      summary: "[STEP 3] Simpan Final LRP — Selesai Shift (PRODUKSI / ADMIN)"
+      summary: "[STEP 3] Simpan Final LRP — Selesai Shift (OPERATOR / ADMIN)"
       description: |
         Finalkan LRP di akhir shift. Ini adalah aksi **"Selesai Shift"** dari sisi operator.
 
@@ -4705,8 +4713,17 @@ paths:
           description: Filter bulan dalam format YYYY-MM.
         - in: query
           name: role
-          schema: { type: string, example: "PRODUKSI" }
-          description: "Filter role karyawan (default: PRODUKSI)."
+          schema: { type: string, example: "OPERATOR" }
+          description: "Filter role karyawan (default: OPERATOR)."
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            example: "OPERATOR_OFFICE"
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
         - in: query
           name: plant
           schema: { type: string, example: "1" }
@@ -4785,8 +4802,16 @@ paths:
           description: Filter bulan (YYYY-MM).
         - in: query
           name: role
-          schema: { type: string, example: "PRODUKSI" }
-          description: "Filter role karyawan (default: PRODUKSI)."
+          schema: { type: string, example: "OPERATOR" }
+          description: "Filter role karyawan (default: OPERATOR)."
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
         - in: query
           name: plant
           schema: { type: string }
@@ -4858,6 +4883,14 @@ paths:
           schema: { type: string }
           description: Filter role karyawan.
         - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
+        - in: query
           name: plant
           schema: { type: string }
         - in: query
@@ -4904,6 +4937,88 @@ paths:
                       total: { type: integer }
                       totalPages: { type: integer }
 
+  /poin/hr/history/{id}:
+    patch:
+      summary: "[HR / Supervisor] Edit Data Riwayat Poin"
+      description: >
+        Memperbarui data riwayat pelanggaran/penghargaan berdasarkan ID.
+        Minimal satu field harus dikirim di body request.
+        Saat `poinBerubah` berubah, `currentPoint` operator akan dihitung ulang secara otomatis
+        beserta `statusLevel`-nya. Jika status memburuk ke SP1/SP2, masa suspend operator
+        dapat diperpanjang 6 bulan. Hanya bisa diakses oleh role **HR** dan **SUPERVISOR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+          description: ID riwayat poin disiplin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                tipeDisiplinId:
+                  type: integer
+                  description: >
+                    Ubah tipe pelanggaran/penghargaan. Nilai `poinBerubah` akan dihitung ulang
+                    otomatis dari master tipe disiplin.
+                shiftId:
+                  type: integer
+                  description: Ubah shift terkait riwayat poin.
+                keterangan:
+                  type: string
+                  description: Ubah keterangan/catatan.
+                tanggal:
+                  type: string
+                  format: date-time
+                  description: Ubah tanggal kejadian.
+                poinBerubah:
+                  type: integer
+                  description: >
+                    Override nilai perubahan poin secara manual (mis. koreksi HR).
+                    Jika dikirim bersamaan dengan `tipeDisiplinId`, nilai ini yang diprioritaskan.
+      responses:
+        "200":
+          description: Data poin berhasil diperbarui.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  message: { type: string, example: "Data poin berhasil diperbarui" }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      tanggal: { type: string, format: date-time }
+                      noReg: { type: string }
+                      nama: { type: string }
+                      divisi: { type: string }
+                      plant: { type: string }
+                      role: { type: string }
+                      shift: { type: string }
+                      tipe: { type: string }
+                      kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+                      poinBerubah: { type: integer }
+                      statusLevel: { type: string, example: "TEGURAN" }
+                      keterangan: { type: string }
+                      operatorCurrentPoint: { type: integer, example: 90 }
+        "400":
+          description: Body request kosong atau tidak valid.
+        "401":
+          description: Tidak terautentikasi.
+        "403":
+          description: Akses ditolak. Bukan HR atau Supervisor.
+        "404":
+          description: Data poin, tipe disiplin, atau shift tidak ditemukan.
+
   /poin/hr/export-excel:
     get:
       summary: "[HR] Export Riwayat Pelanggaran ke Excel"
@@ -4928,6 +5043,13 @@ paths:
         - in: query
           name: role
           schema: { type: string }
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
         - in: query
           name: plant
           schema: { type: string }
@@ -4960,7 +5082,14 @@ paths:
           description: Filter bulan (YYYY-MM).
         - in: query
           name: role
-          schema: { type: string, example: "PRODUKSI" }
+          schema: { type: string, example: "OPERATOR" }
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
         - in: query
           name: plant
           schema: { type: string }

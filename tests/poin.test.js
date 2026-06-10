@@ -110,9 +110,9 @@ describe("Poin Controller Unit Tests", () => {
       expect(res.body.message).toBe("Operator sedang dalam masa suspend");
     });
 
-    test("should return 403 Forbidden if user is PRODUKSI (RBAC)", async () => {
-      // Set roles to PRODUKSI to test RBAC
-      global.__POIN_MOCKS__.mockUser.role = "PRODUKSI";
+    test("should return 403 Forbidden if user is OPERATOR (RBAC)", async () => {
+      // Set roles to OPERATOR to test RBAC
+      global.__POIN_MOCKS__.mockUser.role = "OPERATOR";
       const res = await request(app).post("/poin/").send(payload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
       expect(res.body.message).toMatch(/Forbidden/);

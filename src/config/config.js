@@ -28,6 +28,9 @@ const config = {
     url: process.env.REDIS_URL,
     enabled: process.env.REDIS_ENABLED === "true",
   },
+  loki: {
+    host: process.env.LOKI_HOST || "http://localhost:3100",
+  },
 };
 
 export default config;

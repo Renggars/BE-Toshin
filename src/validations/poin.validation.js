@@ -53,8 +53,24 @@ const getHistory = {
   }),
 };
 
+const updatePoinDisiplin = {
+  params: Joi.object().keys({
+    id: Joi.number().integer().required(),
+  }),
+  body: Joi.object()
+    .keys({
+      tipeDisiplinId: Joi.number().integer(),
+      shiftId: Joi.number().integer(),
+      keterangan: Joi.string().allow("", null),
+      tanggal: Joi.date().iso(),
+      poinBerubah: Joi.number().integer(),
+    })
+    .min(1),
+};
+
 export default {
   createPelanggaran,
   createPelanggaranByNfc,
   getHistory,
+  updatePoinDisiplin,
 };

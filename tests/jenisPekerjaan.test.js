@@ -82,7 +82,7 @@ describe("Jenis Pekerjaan Controller Unit Tests", () => {
     });
 
     test("should return 403 for unauthorized role", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const res = await request(app).get(BASE);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -186,8 +186,8 @@ describe("Jenis Pekerjaan Controller Unit Tests", () => {
       expect(res.body.message).toContain("linked to Target");
     });
 
-    test("should return 403 for PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 for OPERATOR role", async () => {
+      setRole("OPERATOR");
       const res = await request(app).delete(`${BASE}/1`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

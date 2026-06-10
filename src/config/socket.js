@@ -326,7 +326,7 @@ export const emitOperatorAnnouncement = (userId, announcement) => {
 
 /**
  * Broadcast event real-time ke semua user dengan role tertentu
- * @param {string} role - Role penerima (misal: PRODUKSI)
+ * @param {string} role - Role penerima (misal: OPERATOR)
  * @param {string} event - Nama event
  * @param {Object} data - Data yang dikirim
  */

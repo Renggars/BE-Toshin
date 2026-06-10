@@ -44,7 +44,8 @@ const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
   let totalMinus = 0;
 
   for (const item of history) {
-    const tanggal = new Date(item.tanggal).toLocaleDateString("id-ID");
+    const tanggal = moment.utc(item.tanggal).format("DD/MM/YYYY");
+
     const pelanggaran = item.tipeDisiplin.namaTipeDisiplin;
     const potong = Math.abs(item.poinBerubah);
 
@@ -66,9 +67,9 @@ const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
  */
 const getFormData = async () => {
   const [operators, tipeDisiplin, shifts] = await Promise.all([
-    // Get all users with PRODUKSI role
+    // Get all users with OPERATOR role
     prisma.user.findMany({
-      where: { role: "PRODUKSI" },
+      where: { role: "OPERATOR" },
       select: {
         id: true,
         nama: true,
@@ -151,7 +152,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
   }
 
-  if (operator.role !== "PRODUKSI") {
+  if (operator.role !== "OPERATOR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Target bukan operator produksi",
@@ -304,7 +305,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
 
 const getPoinDashboardStats = async (plant, tanggal) => {
   const whereOperator = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -338,10 +339,11 @@ const getPoinDashboardStats = async (plant, tanggal) => {
   let dateFilter = {};
   if (tanggal) {
     const startDate = new Date(tanggal);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
 
     const endDate = new Date(tanggal);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
+
 
     dateFilter = {
       tanggal: {
@@ -402,7 +404,7 @@ const getPoinDashboardStats = async (plant, tanggal) => {
 
 const getPoinRankings = async (plant) => {
   const whereClause = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -454,7 +456,7 @@ const getPoinHistory = async (filter, options) => {
   const skip = (page - 1) * limit;
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -483,10 +485,11 @@ const getPoinHistory = async (filter, options) => {
 
   if (filter.tanggal) {
     const startDate = new Date(filter.tanggal);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
 
     const endDate = new Date(filter.tanggal);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
+
 
     whereClause.tanggal = {
       gte: startDate,
@@ -557,13 +560,14 @@ const getWeeklyStats = async (plant) => {
   const displayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
   const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  today.setUTCHours(23, 59, 59, 999);
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 6);
-  sevenDaysAgo.setHours(0, 0, 0, 0);
+  sevenDaysAgo.setUTCHours(0, 0, 0, 0);
+
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -657,7 +661,7 @@ const getMonthlyStats = async (plant) => {
   const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -752,7 +756,7 @@ const getUserByNfc = async (uidNfc) => {
     );
   }
 
-  if (user.role !== "PRODUKSI") {
+  if (user.role !== "OPERATOR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Hanya Operator yang dapat dikenakan poin disiplin",
@@ -785,7 +789,7 @@ const createPelanggaranByNfc = async (payload, staffId) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
   }
 
-  if (operator.role !== "PRODUKSI") {
+  if (operator.role !== "OPERATOR") {
     throw new ApiError(httpStatus.BAD_REQUEST, "Target bukan operator");
   }
 
@@ -813,10 +817,11 @@ const createPelanggaranByNfc = async (payload, staffId) => {
   return createPelanggaran(enrichedPayload, staffId);
 };
 
-const getHRDashboardStats = async (month, role = "PRODUKSI", plant) => {
+const getHRDashboardStats = async (month, role = "OPERATOR", plant,  tipeOperator,) => {
   const whereOperator = {
     role: role,
     ...(plant && { plant: String(plant) }),
+    ...(tipeOperator && { tipeOperator: tipeOperator }),
   };
 
   // 1. Get Summary (Overall status counts)
@@ -946,11 +951,12 @@ const getHRDashboardStats = async (month, role = "PRODUKSI", plant) => {
   return { summary, shiftStats, topViolations, violationByDivisi, trendByWeek };
 };
 
-const getHRRankings = async (month, role = "PRODUKSI", plant, type = "worst", page = 1, limit = 10) => {
+const getHRRankings = async (month, role, tipeOperator, plant, type = "worst", page = 1, limit = 10) => {
   const skip = (page - 1) * limit;
   const whereClause = {
-    role: role,
+    ...(role && { role: role }),
     ...(plant && { plant: String(plant) }),
+    ...(tipeOperator && { tipeOperator: tipeOperator }),
   };
 
   const orderBy = type === "worst" ? { currentPoint: "asc" } : { currentPoint: "desc" };
@@ -988,6 +994,7 @@ const getHRRankings = async (month, role = "PRODUKSI", plant, type = "worst", pa
     nama: u.nama,
     noReg: u.noReg,
     divisi: u.divisi?.namaDivisi || "-",
+    tipeOperator: u.tipeOperator || "-",
     plant: u.plant,
     poin: u.currentPoint,
     totalPelanggaran: u._count.poinDisiplinOperator,
@@ -1017,6 +1024,7 @@ const getHRHistory = async (filter, options) => {
   if (filter.role) userFilters.role = filter.role;
   if (filter.plant) userFilters.plant = String(filter.plant);
   if (filter.divisiId) userFilters.divisiId = Number(filter.divisiId);
+  if (filter.tipeOperator) userFilters.tipeOperator = filter.tipeOperator; 
 
   if (Object.keys(userFilters).length > 0) {
     whereClause.operator = userFilters;
@@ -1060,6 +1068,7 @@ const getHRHistory = async (filter, options) => {
     divisi: item.operator.divisi?.namaDivisi || "-",
     plant: item.operator.plant,
     role: item.operator.role,
+    tipeOperator: item.operator.tipeOperator || "-",
     shift: item.shift?.namaShift || "-",
     tipe: item.tipeDisiplin.namaTipeDisiplin,
     kategori: item.tipeDisiplin.kategori,
@@ -1079,12 +1088,130 @@ const getHRHistory = async (filter, options) => {
   };
 };
 
+const updatePoinDisiplin = async (id, payload, staffId) => {
+  const existing = await prisma.poinDisiplin.findUnique({
+    where: { id },
+    include: {
+      operator: true,
+      tipeDisiplin: true,
+    },
+  });
+
+  if (!existing) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Data poin tidak ditemukan");
+  }
+
+  const updateData = {};
+  let newPoinBerubah = existing.poinBerubah;
+
+  if (payload.tipeDisiplinId !== undefined) {
+    const tipe = await prisma.tipeDisiplin.findUnique({
+      where: { id: payload.tipeDisiplinId },
+    });
+
+    if (!tipe) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Tipe pelanggaran tidak ditemukan",
+      );
+    }
+
+    const isReward = tipe.kategori?.toLowerCase().includes("penghargaan");
+    newPoinBerubah = isReward ? Math.abs(tipe.poin) : -Math.abs(tipe.poin);
+    updateData.tipeDisiplinId = payload.tipeDisiplinId;
+  }
+
+  if (payload.poinBerubah !== undefined) {
+    newPoinBerubah = payload.poinBerubah;
+  }
+
+  if (payload.shiftId !== undefined) {
+    const shift = await prisma.shift.findUnique({
+      where: { id: payload.shiftId },
+    });
+
+    if (!shift) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Shift tidak ditemukan");
+    }
+
+    updateData.shiftId = payload.shiftId;
+  }
+
+  if (payload.keterangan !== undefined) {
+    updateData.keterangan =
+      payload.keterangan && payload.keterangan.trim() !== ""
+        ? payload.keterangan
+        : "-";
+  }
+
+  if (payload.tanggal !== undefined) {
+    updateData.tanggal = new Date(payload.tanggal);
+  }
+
+  const poinDelta = newPoinBerubah - existing.poinBerubah;
+  const operator = existing.operator;
+  const statusLama = getStatusFromPoin(operator.currentPoint);
+  const poinSetelahUpdate = operator.currentPoint + poinDelta;
+  const statusBaru = getStatusFromPoin(poinSetelahUpdate);
+
+  updateData.poinBerubah = newPoinBerubah;
+  updateData.statusLevel = statusBaru;
+  updateData.staffId = staffId;
+
+  let suspendedUntil = operator.suspendedUntil;
+  if (statusBaru === "SP1" || statusBaru === "SP2") {
+    if (STATUS_LEVEL_MAP[statusBaru] < STATUS_LEVEL_MAP[statusLama]) {
+      suspendedUntil = new Date();
+      suspendedUntil.setMonth(suspendedUntil.getMonth() + 6);
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: operator.id },
+      data: {
+        currentPoint: poinSetelahUpdate,
+        suspendedUntil,
+      },
+    });
+
+    return tx.poinDisiplin.update({
+      where: { id },
+      data: updateData,
+      include: {
+        operator: {
+          include: { divisi: true },
+        },
+        shift: true,
+        tipeDisiplin: true,
+      },
+    });
+  });
+
+  return {
+    id: result.id,
+    tanggal: result.tanggal,
+    noReg: result.operator.noReg,
+    nama: result.operator.nama,
+    divisi: result.operator.divisi?.namaDivisi || "-",
+    plant: result.operator.plant,
+    role: result.operator.role,
+    shift: result.shift?.namaShift || "-",
+    tipe: result.tipeDisiplin.namaTipeDisiplin,
+    kategori: result.tipeDisiplin.kategori,
+    poinBerubah: result.poinBerubah,
+    statusLevel: result.statusLevel,
+    keterangan: result.keterangan,
+    operatorCurrentPoint: poinSetelahUpdate,
+  };
+};
+
 const resetAllUsersPoints = async () => {
   const sekarang = new Date();
 
-  // Ambil semua user PRODUKSI
+  // Ambil semua user OPERATOR
   const users = await prisma.user.findMany({
-    where: { role: "PRODUKSI" },
+    where: { role: "OPERATOR" },
   });
 
   // Proses satu per satu untuk mengecek status sanksi dan poin saat ini
@@ -1142,4 +1269,5 @@ export default {
   getHRDashboardStats,
   getHRRankings,
   getHRHistory,
+  updatePoinDisiplin,
 };

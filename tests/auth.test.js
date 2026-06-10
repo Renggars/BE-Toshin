@@ -49,7 +49,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
       noReg: "REG12345",
       password: "123",
       fk_id_divisi: 1,
-      role: "PRODUKSI",
+      role: "OPERATOR",
       plant: "1",
       line: "Line 1"
     };
@@ -108,8 +108,8 @@ describe("Auth Controller Ultimate Unit Tests", () => {
       expect(res.body.data.tokens).toBeDefined();
     });
 
-    test("should login successfully with NFC and fetch dashboard for PRODUKSI", async () => {
-      authService.loginWithNfc.mockResolvedValue({ id: 2, role: "PRODUKSI" });
+    test("should login successfully with NFC and fetch dashboard for OPERATOR", async () => {
+      authService.loginWithNfc.mockResolvedValue({ id: 2, role: "OPERATOR" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
       rencanaProduksiService.getRencanaProduksiHarian.mockResolvedValue({ plan: "Active" });
 
@@ -118,7 +118,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
       expect(res.body.data.dashboard).toEqual({ plan: "Active" });
     });
 
-    test("should return dashboard: null for non-PRODUKSI roles", async () => {
+    test("should return dashboard: null for non-OPERATOR roles", async () => {
       authService.loginWithNoReg.mockResolvedValue({ id: 1, role: "MAINTENANCE" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
 
@@ -129,7 +129,7 @@ describe("Auth Controller Ultimate Unit Tests", () => {
     });
 
     test("should be resilient and return login success even if dashboard service fails", async () => {
-      authService.loginWithNoReg.mockResolvedValue({ id: 2, role: "PRODUKSI" });
+      authService.loginWithNoReg.mockResolvedValue({ id: 2, role: "OPERATOR" });
       tokenService.generateAuthTokens.mockResolvedValue({ access: { token: "abc" } });
       rencanaProduksiService.getRencanaProduksiHarian.mockRejectedValue(new Error("Service Unavailable"));
 

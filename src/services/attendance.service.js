@@ -1,5 +1,7 @@
 import httpStatus from "http-status";
+import moment from "moment";
 import prisma from "../../prisma/index.js";
+
 import ApiError from "../utils/ApiError.js";
 import poinService from "./poin.service.js";
 import { nowWIB } from "../utils/dateWIB.js";
@@ -118,10 +120,11 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
 };
 
 const clockIn = async (user, req) => {
-  if (user.role !== "PRODUKSI") return;
+  if (user.role !== "OPERATOR") return;
 
   const now = nowWIB();
-  const dateStr = now.toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
 
   // 1. Cari RPH hari ini
   const rph = await prisma.rencanaProduksi.findFirst({
@@ -144,7 +147,8 @@ const clockIn = async (user, req) => {
 
     // Set jam masuk shift berdasarkan tanggal hari ini
     const shiftStartTime = new Date(now);
-    shiftStartTime.setHours(parseInt(h), parseInt(m), 0, 0);
+    shiftStartTime.setUTCHours(parseInt(h), parseInt(m), 0, 0);
+
 
     // LOGIKA FITUR: Maksimal absen 2 jam sebelum jam shift
     const earliestAllowed = new Date(
@@ -157,10 +161,8 @@ const clockIn = async (user, req) => {
     if (now < earliestAllowed && !isBypass) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        `Terlalu awal. Absen dibuka mulai jam ${earliestAllowed.toLocaleTimeString(
-          "id-ID",
-          { hour: "2-digit", minute: "2-digit" },
-        )}`,
+        `Terlalu awal. Absen dibuka mulai jam ${moment.utc(earliestAllowed).format("HH:mm")}`,
+
       );
     }
 
@@ -197,13 +199,8 @@ const clockIn = async (user, req) => {
                 operatorId: user.id,
                 tipeDisiplinId: tipeDisiplin.id,
                 shiftId: rph.shiftId,
-                keterangan: `Sistem: Terlambat login pada ${now.toLocaleTimeString(
-                  "id-ID",
-                  {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  },
-                )} (Shift: ${rph.shift.jamMasuk})`,
+                keterangan: `Sistem: Terlambat login pada jam ${moment.utc(now).format("HH:mm")} (Shift: ${rph.shift.namaShift} tipe ${rph.shift.tipeShift} - ${rph.shift.jamMasuk})`,
+
               },
               adminStaff.id,
             );

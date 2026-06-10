@@ -94,7 +94,7 @@ describe("User Controller - Comprehensive Unit Tests", () => {
     });
 
     test("❌ should return 403 if role is not ADMIN/SUPERVISOR", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const res = await request(app).get("/user");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

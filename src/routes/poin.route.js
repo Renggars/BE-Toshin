@@ -8,8 +8,9 @@ import upload from "../utils/upload.js";
 
 const router = express.Router();
 
-const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+const allRoles = auth("ADMIN", "SUPERVISOR", "OPERATOR", "HR");
 const hrRoles = auth("HR");
+const hrSupervisorRoles = auth("HR", "SUPERVISOR");
 
 // Untuk Supervisor (Input Pelanggaran via NFC atau Manual)
 router.post(
@@ -59,6 +60,12 @@ router.get(
 router.get("/hr/stats", hrRoles, poinController.getHRStats);
 router.get("/hr/rankings", hrRoles, poinController.getHRRankings);
 router.get("/hr/history", hrRoles, poinController.getHRHistory);
+router.patch(
+  "/hr/history/:id",
+  hrSupervisorRoles,
+  validate(poinValidation.updatePoinDisiplin),
+  poinController.updatePoinDisiplin,
+);
 router.get("/hr/export-excel", hrRoles, exportController.exportHRPoinExcel);
 router.get("/hr/export-excel/rankings", hrRoles, exportController.exportHRRankingsExcel);
 

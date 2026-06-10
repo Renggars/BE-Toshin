@@ -7,9 +7,9 @@ import { auth } from "../middlewares/auth.js";
 const router = express.Router();
 
 // Role yang diizinkan melihat (Read Only)
-const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+const allRoles = auth("ADMIN", "SUPERVISOR", "OPERATOR", "HR", "MANDOR");
 // Role yang diizinkan mengubah (Write/Edit)
-const managerRoles = auth("SUPERVISOR", "ADMIN");
+const managerRoles = auth("SUPERVISOR", "ADMIN", "HR", "MANDOR");
 
 // --- Tipe Disiplin ---
 router.get("/tipe-disiplin", allRoles, masterController.getTipeDisiplin);

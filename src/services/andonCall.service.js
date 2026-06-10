@@ -110,7 +110,7 @@ const createCall = async (payload) => {
   const targetDivisiRecord = await prisma.divisi.findFirst({
     where: {
       namaDivisi: {
-        contains: targetDivisi.replace("_", " "), // Still helpful if db names have spaces but enum doesn't
+        contains: targetDivisi, // Still helpful if db names have spaces but enum doesn't
       },
     },
   });

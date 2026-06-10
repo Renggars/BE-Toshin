@@ -8,33 +8,33 @@ const router = express.Router();
 
 router.post(
   "/trigger",
-  auth("PRODUKSI"),
+  auth("OPERATOR"),
   validate(andonValidation.trigger),
   andonController.triggerAndon,
 );
 
 router.post(
   "/call",
-  auth("PRODUKSI"),
+  auth("OPERATOR"),
   validate(andonValidation.call),
   andonController.callAndon,
 );
 
 router.patch(
   "/:id/start-repair",
-  auth("MAINTENANCE", "DIE_MAINT", "SUPERVISOR", "QUALITY", "PRODUKSI"),
+  auth("MAINTENANCE", "DIE_MAINT", "SUPERVISOR", "QUALITY", "OPERATOR"),
   andonController.startRepairAndon,
 );
 
 router.patch(
   "/:id/resolve",
-  auth("DIE_MAINT", "MAINTENANCE", "SUPERVISOR", "PRODUKSI", "QUALITY"),
+  auth("DIE_MAINT", "MAINTENANCE", "SUPERVISOR", "OPERATOR", "QUALITY"),
   andonController.resolveAndon,
 );
 
 router.get(
   "/active",
-  auth("ADMIN", "SUPERVISOR", "MAINTENANCE", "QUALITY", "DIE_MAINT"),
+  auth("ADMIN", "SUPERVISOR", "MAINTENANCE", "QUALITY", "DIE_MAINT", "OPERATOR"),
   validate(andonValidation.getActive),
   andonController.getActive,
 );
@@ -44,7 +44,7 @@ router.get(
   auth(
     "ADMIN",
     "SUPERVISOR",
-    "PRODUKSI",
+    "OPERATOR",
     "QUALITY",
     "DIE_MAINT",
     "MAINTENANCE",
@@ -58,7 +58,7 @@ router.get(
   auth(
     "ADMIN",
     "SUPERVISOR",
-    "PRODUKSI",
+    "OPERATOR",
     "QUALITY",
     "DIE_MAINT",
     "MAINTENANCE",
@@ -72,7 +72,7 @@ router.get(
   auth(
     "ADMIN",
     "SUPERVISOR",
-    "PRODUKSI",
+    "OPERATOR",
     "QUALITY",
     "DIE_MAINT",
     "MAINTENANCE",
@@ -85,7 +85,7 @@ router.get(
   auth(
     "ADMIN",
     "SUPERVISOR",
-    "PRODUKSI",
+    "OPERATOR",
     "QUALITY",
     "DIE_MAINT",
     "MAINTENANCE",
@@ -96,7 +96,7 @@ router.get(
 router.get(
   "/history",
   auth(
-    "PRODUKSI",
+    "OPERATOR",
     "SUPERVISOR",
     "ADMIN",
     "QUALITY",

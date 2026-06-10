@@ -133,8 +133,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.data).toEqual({});
       });
 
-      test("should allow PRODUKSI role (allRoles)", async () => {
-        setRole("PRODUKSI");
+      test("should allow OPERATOR role (allRoles)", async () => {
+        setRole("OPERATOR");
         masterService.getMesin.mockResolvedValue(mesinList);
         const res = await request(app).get(`${BASE}/mesin`);
         expect(res.status).toBe(httpStatus.OK);
@@ -180,8 +180,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 if role is PRODUKSI (managerRoles only)", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR (managerRoles only)", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/mesin`).send(validPayload);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -216,8 +216,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).put(`${BASE}/mesin/1`).send({ namaMesin: "X" });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -243,8 +243,8 @@ describe("Master Controller Unit Tests", () => {
         expect(masterService.deleteMesin).toHaveBeenCalledWith(5);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/mesin/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -279,8 +279,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.data).toEqual([]);
       });
 
-      test("should allow PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should allow OPERATOR role", async () => {
+        setRole("OPERATOR");
         masterService.getProduk.mockResolvedValue(produkList);
         const res = await request(app).get(`${BASE}/produk`);
         expect(res.status).toBe(httpStatus.OK);
@@ -319,8 +319,8 @@ describe("Master Controller Unit Tests", () => {
         expect([httpStatus.CREATED, httpStatus.OK, httpStatus.BAD_REQUEST]).toContain(res.status);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/produk`).send({ namaProduk: "X" });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -350,8 +350,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).patch(`${BASE}/produk/1`).send({ namaProduk: "X" });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -371,8 +371,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success delete produk");
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/produk/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -401,8 +401,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.data).toEqual(shiftList);
       });
 
-      test("should allow PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should allow OPERATOR role", async () => {
+        setRole("OPERATOR");
         masterService.getShift.mockResolvedValue(shiftList);
         const res = await request(app).get(`${BASE}/shift`);
         expect(res.status).toBe(httpStatus.OK);
@@ -451,8 +451,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/shift`).send(validShiftPayload);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -487,8 +487,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).patch(`${BASE}/shift/1`).send({ namaShift: "X" });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -508,8 +508,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success delete shift");
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/shift/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -560,8 +560,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.data).toEqual([]);
       });
 
-      test("should allow PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should allow OPERATOR role", async () => {
+        setRole("OPERATOR");
         masterService.getTarget.mockResolvedValue(targetList);
         const res = await request(app).get(`${BASE}/target`);
         expect(res.status).toBe(httpStatus.OK);
@@ -610,8 +610,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/target`).send(validTargetPayload);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -646,8 +646,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).put(`${BASE}/target/1`).send({ totalTarget: 100 });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -676,8 +676,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.OK);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/target/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -708,8 +708,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success get master masalah andon");
       });
 
-      test("should return 200 even for PRODUKSI role (public endpoint)", async () => {
-        setRole("PRODUKSI");
+      test("should return 200 even for OPERATOR role (public endpoint)", async () => {
+        setRole("OPERATOR");
         masterService.getMasalahAndon.mockResolvedValue(masalahList);
         const res = await request(app).get(`${BASE}/masalah-andon`);
         expect(res.status).toBe(httpStatus.OK);
@@ -766,8 +766,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 if role is PRODUKSI", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 if role is OPERATOR", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/masalah-andon`).send(validPayload);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -802,8 +802,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).patch(`${BASE}/masalah-andon/1`).send({ namaMasalah: "X" });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -823,8 +823,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success delete masalah andon");
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/masalah-andon/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -854,8 +854,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success get tipe disiplin");
       });
 
-      test("should allow PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should allow OPERATOR role", async () => {
+        setRole("OPERATOR");
         masterService.getTipeDisiplin.mockResolvedValue(tipeList);
         const res = await request(app).get(`${BASE}/tipe-disiplin`);
         expect(res.status).toBe(httpStatus.OK);
@@ -910,8 +910,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).post(`${BASE}/tipe-disiplin`).send(validPayload);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -951,8 +951,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.status).toBe(httpStatus.BAD_REQUEST);
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).patch(`${BASE}/tipe-disiplin/1`).send({ poin: -5 });
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -972,8 +972,8 @@ describe("Master Controller Unit Tests", () => {
         expect(res.body.message).toBe("Success delete tipe disiplin");
       });
 
-      test("should return 403 for PRODUKSI role", async () => {
-        setRole("PRODUKSI");
+      test("should return 403 for OPERATOR role", async () => {
+        setRole("OPERATOR");
         const res = await request(app).delete(`${BASE}/tipe-disiplin/1`);
         expect(res.status).toBe(httpStatus.FORBIDDEN);
       });
@@ -1015,8 +1015,8 @@ describe("Master Controller Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("should return 403 for PRODUKSI role (managerRoles only)", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 for OPERATOR role (managerRoles only)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get(`${BASE}/all`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

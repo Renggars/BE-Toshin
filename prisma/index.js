@@ -1,8 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient({
-  // Enable metrics to be gathered by the engine
-  // This requires the 'metrics' preview feature or standard in newer versions
+  log: [
+    { emit: "event", level: "query" },
+    { emit: "stdout", level: "error" },
+    { emit: "stdout", level: "warn" },
+  ],
 });
 
 export default prisma;

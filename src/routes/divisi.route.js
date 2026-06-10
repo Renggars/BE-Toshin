@@ -8,9 +8,9 @@ const router = express.Router();
 
 router
   .route("/")
-  .get(auth("SUPERVISOR", "ADMIN"), divisiController.getDivisiList)
+  .get(auth("SUPERVISOR", "ADMIN", "HR"), divisiController.getDivisiList)
   .post(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "HR"),
     validate(divisiValidation.createDivisi),
     divisiController.createDivisi,
   );
@@ -18,17 +18,17 @@ router
 router
   .route("/:divisiId")
   .get(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "HR"),
     validate(divisiValidation.getDivisi),
     divisiController.getDivisi,
   )
   .put(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "HR"),
     validate(divisiValidation.updateDivisi),
     divisiController.updateDivisi,
   )
   .delete(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "HR"),
     validate(divisiValidation.deleteDivisi),
     divisiController.deleteDivisi,
   );

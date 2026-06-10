@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post(
     "/trigger", 
-    auth("PRODUKSI", "SUPERVISOR", "ADMIN", "MAINTENANCE"),
+    auth("OPERATOR", "SUPERVISOR", "ADMIN", "MAINTENANCE"),
     validate(hardwareValidation.triggerHardware),
     hardwareController.triggerHardware
 );

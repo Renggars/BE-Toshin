@@ -81,8 +81,8 @@ describe("Divisi Controller Unit Tests", () => {
       expect(res.body.message).toBe("Success get divisi list");
     });
 
-    test("should return 403 if role is not allowed (e.g., PRODUKSI)", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 if role is not allowed (e.g., OPERATOR)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get(BASE);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

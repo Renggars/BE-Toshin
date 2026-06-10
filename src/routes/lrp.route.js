@@ -17,7 +17,7 @@ const router = express.Router();
 router
   .route("/rph/:rphId")
   .patch(
-    auth("PRODUKSI", "ADMIN"),
+    auth("OPERATOR", "ADMIN"),
     validate(lrpValidation.upsertLrp),
     lrpController.upsertLrp,
   );
@@ -31,7 +31,7 @@ router
 router
   .route("/:lrpId/submit")
   .post(
-    auth("PRODUKSI", "ADMIN"),
+    auth("OPERATOR", "ADMIN"),
     validate(lrpValidation.submitLrp),
     lrpController.submitLrp,
   );

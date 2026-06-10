@@ -73,6 +73,7 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
   const filter = {
     month: req.query.month,
     role: req.query.role,
+    tipeOperator: req.query.tipeOperator,
     plant: req.query.plant,
     divisiId: req.query.divisiId,
     startDate: req.query.startDate,
@@ -84,7 +85,7 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
 
   // Sheet setup
   const ws = {};
-  const cols = [5, 14, 12, 22, 18, 8, 14, 14, 26, 15, 14, 12, 35];
+  const cols = [5, 14, 12, 22, 18, 8, 14, 18,  14, 26, 15, 14, 12, 35];
 
   // Title rows
   const periodLabel = filter.month
@@ -94,12 +95,12 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
     : "Seluruh Waktu";
 
   ws["A1"] = { v: "LAPORAN RIWAYAT PELANGGARAN SISTEM POIN DISIPLIN", s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } };
-  ws["A2"] = { v: `Periode: ${periodLabel} | Role: ${filter.role || "Semua"} | Plant: ${filter.plant || "Semua"}`, s: { alignment: { horizontal: "center" } } };
+  ws["A2"] = { v: `Periode: ${periodLabel} | Role: ${filter.role || "Semua"} | Tipe Operator: ${filter.tipeOperator || "Semua"} | Plant: ${filter.plant || "Semua"}`, s: { alignment: { horizontal: "center" } } };
   ws["A3"] = { v: `Digenerate: ${moment().format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
   ws["A4"] = { v: "" };
 
   // Headers (row 5)
-  const headers = ["No", "Tanggal", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Role", "Shift", "Tipe", "Kategori", "Poin", "Status", "Keterangan"];
+  const headers = ["No", "Tanggal", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Role", "Tipe Operator", "Shift", "Tipe Disiplin", "Kategori", "Poin", "Status", "Keterangan"];
   headers.forEach((h, i) => {
     ws[XlsxStyle.utils.encode_cell({ r: 4, c: i })] = makeHeaderCell(h);
   });
@@ -122,6 +123,7 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
       makeCell(item.divisi, style),
       makeCell(item.plant, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
       makeCell(item.role, style),
+      makeCell(item.tipeOperator || "-", style),
       makeCell(item.shift, style),
       makeCell(item.tipe, style),
       makeCell(item.kategori, style),
@@ -137,13 +139,13 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
 
   // Merge title rows
   ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 12 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 12 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 13 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: 13 } },
   ];
 
-  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5 + data.length, c: 12 } });
+  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5 + data.length, c: 13 } });
   ws["!cols"] = cols.map((w) => ({ wch: w }));
   ws["!rows"] = [{ hpx: 30 }, { hpx: 18 }, { hpx: 18 }, { hpx: 8 }, { hpx: 22 }];
 
@@ -156,9 +158,9 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
 // ─── Export Ranking Karyawan ───────────────────────────────────────────────────
 
 const exportHRRankingsExcel = catchAsync(async (req, res) => {
-  const { month, role, plant, type = "worst" } = req.query;
+  const { month, role, tipeOperator, plant, type = "worst" } = req.query;
 
-  const result = await poinService.getHRRankings(month, role, plant, type, 1, 1000);
+  const result = await poinService.getHRRankings(month, role || null, tipeOperator, plant, type, 1, 1000);
   const periodLabel = month ? moment(month, "YYYY-MM").format("MMMM YYYY") : "Seluruh Waktu";
   const isWorst = type !== "best";
 
@@ -167,28 +169,27 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
     : "BEST EMPLOYEES - Poin Tertinggi (Berprestasi)";
   const sectionColor = isWorst ? "C0392B" : "1E8449";
 
-  const rankCols = [5, 12, 22, 18, 8, 12, 12, 22];
-  const rankHeaders = ["No", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Poin", "Status", "Total Pelanggaran"];
+  const rankCols = [5, 12, 22, 18, 8, 18, 12, 12, 22]; // ← +1 kolom Tipe Operator
+  const rankHeaders = ["No", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Tipe Operator", "Poin", "Status", "Total Pelanggaran"]; // ← tambah
 
   const ws = {};
 
-  // Title rows
   ws["A1"] = { v: `LAPORAN RANKING KARYAWAN - ${isWorst ? "WORST EMPLOYEES" : "BEST EMPLOYEES"}`, s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } };
-  ws["A2"] = { v: `Periode: ${periodLabel} | Role: ${role || "PRODUKSI"} | Plant: ${plant || "Semua"}`, s: { alignment: { horizontal: "center" } } };
+  ws["A2"] = {
+    v: `Periode: ${periodLabel} | Role: ${role || "Semua"} | Plant: ${plant || "Semua"} | Tipe Operator: ${tipeOperator || "Semua"}`,
+    s: { alignment: { horizontal: "center" } }
+  };
   ws["A3"] = { v: `Digenerate: ${moment().format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
 
-  // Section title row
   ws[XlsxStyle.utils.encode_cell({ r: 4, c: 0 })] = {
     v: sectionTitle,
     s: { ...SECTION_TITLE_STYLE, fill: { fgColor: { rgb: sectionColor } } },
   };
 
-  // Headers
   rankHeaders.forEach((h, i) => {
     ws[XlsxStyle.utils.encode_cell({ r: 5, c: i })] = makeHeaderCell(h);
   });
 
-  // Data rows
   result.data.forEach((u, idx) => {
     const style = idx % 2 === 0 ? CELL_STYLE_EVEN : CELL_STYLE_ODD;
     const statusStyle = { ...style, font: { bold: true, color: { rgb: STATUS_COLOR[u.status] || "000000" } } };
@@ -199,6 +200,7 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
       makeCell(u.nama, style),
       makeCell(u.divisi, style),
       makeCell(u.plant, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+      makeCell(u.tipeOperator || "-", style), // ← tambah
       makeCell(u.poin, { ...style, alignment: { horizontal: "center", vertical: "center" }, font: { bold: true } }),
       makeCell(u.status, statusStyle),
       makeCell(u.totalPelanggaran, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
@@ -211,14 +213,15 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
 
   const lastRow = 6 + result.data.length;
 
+  // ← semua merge dan ref sekarang sampai kolom 8 (index 0-8)
   ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
-    { s: { r: 4, c: 0 }, e: { r: 4, c: 7 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+    { s: { r: 4, c: 0 }, e: { r: 4, c: 8 } },
   ];
 
-  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: 7 } });
+  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: 8 } });
   ws["!cols"] = rankCols.map((w) => ({ wch: w }));
   ws["!rows"] = [{ hpx: 30 }, { hpx: 18 }, { hpx: 18 }, {}, { hpx: 22 }, { hpx: 22 }];
 
@@ -228,7 +231,6 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
   const typeLabel = isWorst ? "worst" : "best";
   sendWorkbook(res, wb, `laporan_ranking_${typeLabel}_${moment().format("YYYYMMDD_HHmm")}.xlsx`);
 });
-
 export default {
   exportHRPoinExcel,
   exportHRRankingsExcel,
