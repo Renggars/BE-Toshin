@@ -788,10 +788,12 @@ const deleteRencanaProduksi = async (rphId) => {
   const rph = await prisma.rencanaProduksi.findUnique({
     where: { id: rphId },
     include: {
+      laporanRealisasiProduksi: {
+        select: { id: true },
+      },
       _count: {
         select: {
           attendance: true,
-          laporanRealisasiProduksi: true,
         },
       },
     },
@@ -804,7 +806,7 @@ const deleteRencanaProduksi = async (rphId) => {
     );
   }
 
-  if (rph._count.laporanRealisasiProduksi > 0) {
+  if (rph.laporanRealisasiProduksi) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Gagal menghapus! RPH ini sudah memiliki Laporan Realisasi Produksi (LRP). Hapus LRP terlebih dahulu jika ingin menghapus RPH ini.",

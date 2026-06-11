@@ -2,6 +2,7 @@ import catchAsync from "../utils/catchAsync.js";
 import poinService from "../services/poin.service.js";
 import moment from "moment";
 import XlsxStyle from "xlsx-js-style";
+import { toWIB } from "../utils/dateWIB.js";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
 
   ws["A1"] = { v: "LAPORAN RIWAYAT PELANGGARAN SISTEM POIN DISIPLIN", s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } };
   ws["A2"] = { v: `Periode: ${periodLabel} | Role: ${filter.role || "Semua"} | Tipe Operator: ${filter.tipeOperator || "Semua"} | Plant: ${filter.plant || "Semua"}`, s: { alignment: { horizontal: "center" } } };
-  ws["A3"] = { v: `Digenerate: ${moment().format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
+  ws["A3"] = { v: `Digenerate: ${toWIB(new Date()).format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
   ws["A4"] = { v: "" };
 
   // Headers (row 5)
@@ -152,7 +153,7 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
   const wb = XlsxStyle.utils.book_new();
   XlsxStyle.utils.book_append_sheet(wb, ws, "Riwayat Pelanggaran");
 
-  sendWorkbook(res, wb, `laporan_poin_${moment().format("YYYYMMDD_HHmm")}.xlsx`);
+  sendWorkbook(res, wb, `laporan_poin_${toWIB(new Date()).format("YYYYMMDD_HHmm")}.xlsx`);
 });
 
 // ─── Export Ranking Karyawan ───────────────────────────────────────────────────
@@ -179,7 +180,7 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
     v: `Periode: ${periodLabel} | Role: ${role || "Semua"} | Plant: ${plant || "Semua"} | Tipe Operator: ${tipeOperator || "Semua"}`,
     s: { alignment: { horizontal: "center" } }
   };
-  ws["A3"] = { v: `Digenerate: ${moment().format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
+  ws["A3"] = { v: `Digenerate: ${toWIB(new Date()).format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
 
   ws[XlsxStyle.utils.encode_cell({ r: 4, c: 0 })] = {
     v: sectionTitle,
@@ -229,7 +230,7 @@ const exportHRRankingsExcel = catchAsync(async (req, res) => {
   XlsxStyle.utils.book_append_sheet(wb, ws, isWorst ? "Worst Employees" : "Best Employees");
 
   const typeLabel = isWorst ? "worst" : "best";
-  sendWorkbook(res, wb, `laporan_ranking_${typeLabel}_${moment().format("YYYYMMDD_HHmm")}.xlsx`);
+  sendWorkbook(res, wb, `laporan_ranking_${typeLabel}_${toWIB(new Date()).format("YYYYMMDD_HHmm")}.xlsx`);
 });
 export default {
   exportHRPoinExcel,

@@ -12,5 +12,6 @@ router.post(
   upload.single("background"),
   brandingController.uploadBackground,
 );
+router.delete("/background", auth("ADMIN"), brandingController.deleteBackground);
 
 export default router;

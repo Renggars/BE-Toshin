@@ -35,9 +35,10 @@ if (config.env !== "test") {
 app.use(metricsMiddleware);
 
 // 2. SETUP CORS (Menggunakan library agar lebih stabil)
+/*
 app.use(
   cors({
-    origin: "*", // Mengizinkan semua origin
+    origin: true, // Reflect request origin (required for credentials: true)
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
@@ -48,6 +49,7 @@ app.use(
     credentials: true,
   }),
 );
+*/
 
 // 3. SET SECURITY HEADERS
 app.use(

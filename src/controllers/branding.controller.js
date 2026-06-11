@@ -74,8 +74,42 @@ const uploadBackground = catchAsync(async (req, res) => {
   });
 });
 
+const deleteBackground = catchAsync(async (req, res) => {
+  const setting = await prisma.systemSetting.findUnique({
+    where: { key: SETTING_KEY },
+  });
+
+  if (!setting) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Background image tidak ditemukan");
+  }
+
+  const imagePath = setting.value;
+
+  // Hapus dari database
+  await prisma.systemSetting.delete({
+    where: { key: SETTING_KEY },
+  });
+
+  // Hapus file dari filesystem
+  if (imagePath && imagePath.startsWith("/uploads/")) {
+    const filePath = path.join(process.cwd(), "public", imagePath);
+    try {
+      await fs.unlink(filePath);
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        logger.error(`Gagal menghapus file (${filePath}): ` + err.message);
+      }
+    }
+  }
+
+  res.status(httpStatus.OK).send({
+    message: "Background image berhasil dihapus",
+  });
+});
+
 export default {
   getBackground,
   uploadBackground,
+  deleteBackground,
 };
 
