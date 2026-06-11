@@ -279,6 +279,8 @@ tags:
       Dashboard Analitik Poin Disiplin khusus untuk role **HR**.
       - Hanya bisa diakses oleh role `HR`.
       - Mencakup statistik bulanan, ranking karyawan (paginated), riwayat extended, dan export CSV.
+  - name: Branding
+    description: Endpoints for branding customization (Background images, etc.)
 
 paths:
   /health:
@@ -5027,7 +5029,7 @@ paths:
         dengan format yang rapi (header berwarna, baris selang-seling, teks status berwarna).
         Mendukung filter yang sama dengan `/poin/hr/history`.
         Hanya bisa diakses oleh role **HR**.
-      tags: [HR Analytics]
+      tags: ["HR Analytics"]
       security:
         - bearerAuth: []
       parameters:
@@ -5047,7 +5049,7 @@ paths:
           name: tipeOperator
           schema:
             type: string
-            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+            enum: ["OPERATOR_OFFICE", "OPERATOR_LAPANGAN"]
           description: >
             Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
         - in: query
@@ -5068,13 +5070,13 @@ paths:
         Gunakan parameter `type` untuk memilih: `worst` (poin terendah) atau `best` (poin tertinggi).
         Header sheet menyesuaikan warna: merah untuk worst, hijau untuk best.
         Hanya bisa diakses oleh role **HR**.
-      tags: [HR Analytics]
+      tags: ["HR Analytics"]
       security:
         - bearerAuth: []
       parameters:
         - in: query
           name: type
-          schema: { type: string, enum: [worst, best], default: worst }
+          schema: { type: string, enum: ["worst", "best"], default: "worst" }
           description: "Pilih tipe ranking yang ingin di-export: 'worst' atau 'best'."
         - in: query
           name: month
@@ -5087,7 +5089,7 @@ paths:
           name: tipeOperator
           schema:
             type: string
-            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+            enum: ["OPERATOR_OFFICE", "OPERATOR_LAPANGAN"]
           description: >
             Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
         - in: query
@@ -5099,4 +5101,69 @@ paths:
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema: { type: string, format: binary }
+
+  /branding/background:
+    get:
+      summary: Get Branding Background
+      description: Retrieve the current branding background image URL.
+      tags: [Branding]
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backgroundImageUrl:
+                    type: string
+                    example: "http://localhost:4001/uploads/branding-images/bg.jpg"
+    post:
+      summary: Upload Branding Background
+      description: Upload a new background image. Only for ADMIN.
+      tags: [Branding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                background:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Background image berhasil diperbarui"
+                  backgroundImageUrl:
+                    type: string
+                    example: "http://localhost:4001/uploads/branding-images/bg-new.jpg"
+    delete:
+      summary: Delete Branding Background
+      description: Remove the current branding background image and delete physical file. Only for ADMIN.
+      tags: [Branding]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Background image berhasil dihapus" }
+        "404":
+          description: Not Found - Background image does not exist.
 

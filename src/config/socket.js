@@ -42,6 +42,8 @@ const socketOnlineUsersByRole = new client.Gauge({
 
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
+    pingTimeout: 60000,
+    pingInterval: 25000,
     cors: {
       origin: ["https://admin.socket.io", "*"],
       credentials: true,
