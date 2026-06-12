@@ -697,7 +697,7 @@ const getHistoryRPH = async (filterTanggal, userId) => {
       detail: `${curr.mesin?.namaMesin || "-"} • ${curr.produk?.namaProduk || "-"}`,
       mesin_id: curr.mesin?.id,
       produk_id: curr.produk?.id,
-      shift: curr.shift ? `${curr.shift.tipeShift}(${curr.shift.jamMasuk}-${curr.shift.jamKeluar})` : "-",
+      shift: curr.shift ? `${curr.shift.namaShift}(${curr.shift.jamMasuk}-${curr.shift.jamKeluar})` : "-",
       shift_id: curr.shift?.id,
       kategori_shift: curr.shift?.tipeShift || "-",
       target: targetKalkulasi.totalTarget,

@@ -355,3 +355,21 @@ export const emitOperatorProgressUpdate = (data) => {
   }
 };
 
+/**
+ * Emit event real-time ketika ada update kehadiran operator (Attendance)
+ * @param {Object} data - Attendance data
+ * @param {number} data.rphId - ID Rencana Produksi
+ * @param {number} data.userId - ID user yang absen
+ * @param {string} [data.status] - Status kehadiran (HADIR/TERLAMBAT)
+ * @param {string} [data.action] - Action manual (HADIR/TERLAMBAT/TIDAK_HADIR)
+ */
+export const emitAttendanceUpdate = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("attendance-updated", data);
+    logger.info(`WebSocket: attendance-updated emitted for RPH ${data.rphId}`);
+  } catch (error) {
+    logger.error("Failed to emit attendance-updated event", error);
+  }
+};
+

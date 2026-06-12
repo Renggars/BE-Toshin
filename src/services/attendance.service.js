@@ -5,7 +5,7 @@ import prisma from "../../prisma/index.js";
 import ApiError from "../utils/ApiError.js";
 import poinService from "./poin.service.js";
 import { nowWIB } from "../utils/dateWIB.js";
-import { emitOperatorProgressUpdate } from "../config/socket.js";
+import { emitOperatorProgressUpdate, emitAttendanceUpdate } from "../config/socket.js";
 
 /**
  * Get all users scheduled for a specific shift, date, and optionally division
@@ -179,6 +179,9 @@ const clockIn = async (user, req) => {
       },
     });
 
+    // Real-time attendance update
+    emitAttendanceUpdate({ rphId: rph.id, userId: user.id, status: isTerlambat ? 'TERLAMBAT' : 'HADIR' });
+
     // LOGIKA FITUR: Otomatis kurangi poin jika terlambat
     if (isTerlambat) {
       try {
@@ -230,6 +233,7 @@ const clockIn = async (user, req) => {
 
   // Real-time progress update for Mandor
   emitOperatorProgressUpdate({ rphId: rph.id });
+  emitAttendanceUpdate({ rphId: rph.id, userId: user.id });
 };
 
 const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId }) => {
@@ -301,6 +305,7 @@ const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId 
 
   // Real-time progress update for Mandor
   emitOperatorProgressUpdate({ rphId: rph.id });
+  emitAttendanceUpdate({ rphId: rph.id, userId: parseInt(userId), action });
 
   return attendanceRecord;
 };
