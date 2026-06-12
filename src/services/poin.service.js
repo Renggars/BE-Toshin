@@ -936,17 +936,33 @@ const getHRDashboardStats = async (month, role = "OPERATOR", plant,  tipeOperato
     value: divMap[d.id] || 0,
   })).filter(v => v.value > 0);
 
-  // Process Weekly Trend
-  const weeksMap = {};
-  trendByWeekRaw.forEach((v) => {
-    const weekNum = moment(v.tanggal).week();
-    if (!weeksMap[weekNum]) {
-      weeksMap[weekNum] = { label: `Mgg ${weekNum}`, pelanggaran: 0, penghargaan: 0 };
-    }
-    if (v.tipeDisiplin.kategori === "PELANGGARAN") weeksMap[weekNum].pelanggaran++;
-    else weeksMap[weekNum].penghargaan++;
+  // Process Weekly Trend (Sync with Supervisor Dashboard: Sen, Sel, Rab, Kam, Jum, Sab, Min)
+  const displayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+  const dayNameMap = { 0: "Min", 1: "Sen", 2: "Sel", 3: "Rab", 4: "Kam", 5: "Jum", 6: "Sab" };
+  
+  const weeklyMap = {};
+  displayLabels.forEach(label => {
+    weeklyMap[label] = { pelanggaran: 0, penghargaan: 0 };
   });
-  const trendByWeek = Object.values(weeksMap).sort((a, b) => a.label.localeCompare(b.label));
+
+  trendByWeekRaw.forEach((v) => {
+    const dayLabel = dayNameMap[moment(v.tanggal).day()];
+    if (weeklyMap[dayLabel]) {
+      if (v.tipeDisiplin.kategori === "PELANGGARAN") weeklyMap[dayLabel].pelanggaran++;
+      else weeklyMap[dayLabel].penghargaan++;
+    }
+  });
+
+  const seriesPelanggaran = displayLabels.map(label => weeklyMap[label].pelanggaran);
+  const seriesPenghargaan = displayLabels.map(label => weeklyMap[label].penghargaan);
+
+  const trendByWeek = {
+    labels: displayLabels,
+    series: [
+      { name: "Pelanggaran", data: seriesPelanggaran },
+      { name: "Penghargaan", data: seriesPenghargaan },
+    ],
+  };
 
   return { summary, shiftStats, topViolations, violationByDivisi, trendByWeek };
 };

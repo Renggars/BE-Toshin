@@ -7,10 +7,11 @@ const createPelanggaran = {
       uidNfc: Joi.string().optional(),
       operatorId: Joi.number().integer().optional(),
       tipeDisiplinId: Joi.number().integer().required(),
-      shiftId: Joi.number().integer().required(),
+      shiftId: Joi.number().integer().required(), // Reverted to required
       keterangan: Joi.string().allow("", null).optional(),
     })
-    .or("uidNfc", "operatorId"), // At least one must be present
+    .or("uidNfc", "operatorId") // At least one must be present
+    .unknown(true), // Allow "foto" and other multipart fields
   file: Joi.object()
     .keys({
       mimetype: Joi.string()
@@ -28,9 +29,9 @@ const createPelanggaranByNfc = {
   body: Joi.object().keys({
     uidNfc: Joi.string().required(),
     tipeDisiplinId: Joi.number().integer().required(),
-    shiftId: Joi.number().integer().required(),
+    shiftId: Joi.number().integer().required(), // Reverted to required
     keterangan: Joi.string().optional(),
-  }),
+  }).unknown(true), // Allow extra fields
   file: Joi.object()
     .keys({
       mimetype: Joi.string()
