@@ -1,5 +1,6 @@
 import prisma from "../../prisma/index.js";
 import { emitMandorTaskUpdate } from "../config/socket.js";
+import notificationService from "./notification.service.js";
 
 const createTask = async (data) => {
   const mandorId = parseInt(data.mandorId);
@@ -21,6 +22,18 @@ const createTask = async (data) => {
 
   // Emit to Mandor
   emitMandorTaskUpdate(mandorId, { type: "TASK_ASSIGNED", task });
+
+  // Send Notification to Mandor
+  try {
+    await notificationService.createNotification({
+      userId: mandorId,
+      tipe: "ANNOUNCEMENT",
+      judul: "Tugas Baru dari Supervisor",
+      pesan: `Anda menerima tugas baru: "${task.judul}". Deskripsi: ${task.deskripsi}`,
+    });
+  } catch (err) {
+    console.error("Gagal membuat notifikasi tugas baru:", err);
+  }
 
   return task;
 };
@@ -77,6 +90,18 @@ const updateTask = async (id, updateData) => {
   // Emit to Supervisor and Mandor
   emitMandorTaskUpdate(task.supervisorId, { type: "TASK_UPDATED", task });
   emitMandorTaskUpdate(task.mandorId, { type: "TASK_UPDATED", task });
+
+  // Send Notification to Supervisor
+  try {
+    await notificationService.createNotification({
+      userId: task.supervisorId,
+      tipe: "ANNOUNCEMENT",
+      judul: "Update Status Tugas Mandor",
+      pesan: `Mandor ${task.mandor?.nama || "Mandor"} telah memperbarui status tugas "${task.judul}" menjadi [${task.status}].`,
+    });
+  } catch (err) {
+    console.error("Gagal membuat notifikasi update tugas:", err);
+  }
 
   return task;
 };
