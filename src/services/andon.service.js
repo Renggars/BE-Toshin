@@ -658,6 +658,40 @@ const startRepairAndon = async (id, data) => {
     const hwDivisi = getHardwareDivisi(call.targetDivisi);
     tcpService.broadcastCommand(`ANDON;${hwMesin};${hwDivisi};CLEAR`);
 
+    // Send Notification to Supervisors (Target Division & Produksi)
+    try {
+      const supervisors = await prisma.user.findMany({
+        where: {
+          role: "SUPERVISOR",
+          OR: [
+            { divisi: { namaDivisi: { contains: call.targetDivisi.replace("_", " ") } } },
+            { divisi: { namaDivisi: { contains: "PRODUKSI" } } }
+          ]
+        },
+        select: { id: true },
+      });
+
+      if (supervisors.length > 0) {
+        const waktuWIB = moment(newEvent.waktuRepair).tz(TZ).format("DD-MM-YYYY HH:mm:ss");
+        const pesan =
+          `🔧 Perbaikan Andon Dimulai!\n` +
+          `Mesin: ${newEvent.mesin?.namaMesin || "Unknown"}\n` +
+          `Teknisi: ${user.nama || "-"}\n` +
+          `Waktu Mulai: ${waktuWIB} WIB\n` +
+          `Kategori: ${problem.kategori}\n` +
+          `Masalah: ${problem.namaMasalah}`;
+
+        await notificationService.createBulkNotifications(
+          supervisors.map((s) => s.id),
+          "ANDON_CALL",
+          `Andon Repair - ${newEvent.mesin?.namaMesin || "Unknown"}`,
+          pesan,
+        );
+      }
+    } catch (err) {
+      console.error("Gagal membuat notifikasi start repair:", err);
+    }
+
     return newEvent;
   }
 

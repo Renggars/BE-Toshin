@@ -3,10 +3,18 @@ import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import userValidation from "../validations/user.validation.js";
 import userController from "../controllers/user.controller.js";
+import upload from "../utils/upload.js";
 
 const router = express.Router();
 
 router.route("/").get(auth("HR", "ADMIN", "SUPERVISOR"), userController.getUsers);
+
+router.post(
+  "/upload-photo",
+  auth("HR", "ADMIN"),
+  upload.single("file"),
+  userController.uploadPhoto,
+);
 
 
 router
