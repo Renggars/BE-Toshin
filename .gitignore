@@ -5,14 +5,14 @@ coverage
 .github
 
 # Ignore all files inside uploads (but keep folder structure via .gitkeep)
-# public/uploads/*
-# !public/uploads/.gitkeep
-# !public/uploads/documents/
-# public/uploads/documents/*
-# !public/uploads/documents/.gitkeep
-# !public/uploads/poin-images/
-# public/uploads/poin-images/*
-# !public/uploads/poin-images/.gitkeep
+public/uploads/*
+!public/uploads/.gitkeep
+!public/uploads/documents/
+public/uploads/documents/*
+!public/uploads/documents/.gitkeep
+!public/uploads/poin-images/
+public/uploads/poin-images/*
+!public/uploads/poin-images/.gitkeep
 
 # Ignore exports files but keep folder
 public/exports/*
