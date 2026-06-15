@@ -1,13 +1,13 @@
 {
   "android": {
-    "version": "1.0.0",
+    "version": "2.0",
     "buildNumber": 1,
-    "releaseDate": "2026-03-30",
-    "downloadUrl": "/app-releases/toshin.apk",
-    "releaseNotes": "Initial Android release",
+    "releaseDate": "2026-06-15",
+    "downloadUrl": "/app-releases/toshin-android-1781497705002-975798305.apk",
+    "releaseNotes": "",
     "forceUpdate": false,
     "minVersion": "1.0.0"
-  },  
+  },
   "windows": {
     "version": "1.0.2",
     "buildNumber": 3,

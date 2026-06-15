@@ -68,7 +68,19 @@ app.use(compression());
 // Static Files
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 app.use("/exports", express.static(path.join(process.cwd(), "public/exports")));
-app.use("/app-releases", express.static(path.join(process.cwd(), "storage/releases")));
+app.use(
+  "/app-releases",
+  express.static(path.join(process.cwd(), "storage/releases"), {
+    setHeaders: (res, filePath) => {
+      const filename = path.basename(filePath).toLowerCase();
+      if (filename.endsWith(".exe")) {
+        res.set("Content-Disposition", 'attachment; filename="toshin.exe"');
+      } else if (filename.endsWith(".apk")) {
+        res.set("Content-Disposition", 'attachment; filename="toshin.apk"');
+      }
+    },
+  })
+);
 
 // Route dasar
 app.get("/", (req, res) => {
