@@ -17,7 +17,8 @@ docker-compose down --rmi all --volumes --remove-orphans
 
 1.  **Clone Repository**:
     ```bash
-    git clone -b feature/full-docker-monitoring https://github.com/Renggars/BE-Toshin.git
+    # Gunakan branch utama (main/master) atau sesuai branch project terbaru
+    git clone https://github.com/Renggars/BE-Toshin.git
     cd BE-Toshin
     ```
 
@@ -42,24 +43,27 @@ docker-compose up -d --build
     ```bash
     docker-compose ps
     ```
-    Pastikan `toshin-app`, `toshin-mysql`, `toshin-redis`, dll berstatus `healthy` atau `running`.
+    Pastikan service utama (`toshin-app`, `toshin-mysql`, `toshin-redis`) dan stack monitoring (`alloy`, `loki`, `tempo`, `prometheus`, `grafana`, `nginx`) berstatus `healthy` atau `running`.
 
-2.  **Cek Log Startup**:
+2.  **Cek Log Startup App**:
     ```bash
     docker logs -f toshin-app
     ```
-    Pastikan Anda melihat tulisan `--- Initialization Finished. Starting Application... ---` dan tidak ada error koneksi Loki.
+    Pastikan Anda melihat tulisan `--- Initialization Finished. Starting Application... ---`.
 
-3.  **Akses Dashboard**:
+3.  **Akses Dashboard & API**:
+    - **Nginx (Proxy Utama)**: `http://<IP-SERVER>` (Port 80)
     - **Grafana**: `http://<IP-SERVER>:3000` (Default login: admin/admin)
-    - **Backend API**: `http://<IP-SERVER>:4001`
-    - **Health Check**: `http://<IP-SERVER>:4001/health`
+    - **Backend API (Direct)**: `http://<IP-SERVER>:4001`
+    - **Prometheus**: `http://<IP-SERVER>:9090`
+    - **Health Check App**: `http://<IP-SERVER>:4001/health`
 
 ---
 
 ## Tips Troubleshooting
 
 - **Database Stuck**: Jika terjadi error migrasi (P3009), jalankan `docker-compose down -v` lalu `up` lagi untuk mereset volume database sepenuhnya.
-- **Port Terpakai**: Pastikan port 4001, 3000, 9090, 6380, dan 3307 tidak sedang dipakai oleh aplikasi native di server.
+- **Port Terpakai**: Pastikan port 80 (Nginx), 4001 (App), 3000 (Grafana), 9090 (Prometheus), 6380, dan 3307 tidak sedang dipakai oleh aplikasi native di server.
+- **Docker Desktop (Windows)**: Jika mencoba deploy di Windows, `node-exporter` mungkin tidak bisa membaca metrics host secara penuh karena keterbatasan akses `/proc` dan `/sys`. Ini normal, service lain tetap berjalan.
 
 Selamat mencoba di PC Server! 🚀

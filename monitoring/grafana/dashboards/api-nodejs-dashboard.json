@@ -36,7 +36,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 0 },
       "id": 1,
-      "targets": [{ "expr": "sum(rate(http_requests_total[5m]))", "refId": "A" }],
+      "targets": [{ "expr": "sum(rate(http_requests_total[5m]))", "legendFormat": "Requests", "refId": "A" }],
       "title": "Total Request Rate (5m)",
       "type": "timeseries",
       "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } } }
@@ -76,7 +76,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 15 },
       "id": 5,
-      "targets": [{ "expr": "nodejs_eventloop_lag_seconds", "refId": "A" }],
+      "targets": [{ "expr": "nodejs_eventloop_lag_seconds", "legendFormat": "Lag", "refId": "A" }],
       "title": "Event Loop Lag",
       "type": "timeseries",
       "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "palette-classic" } } }
@@ -97,7 +97,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 15 },
       "id": 7,
-      "targets": [{ "expr": "sum(rate(nodejs_gc_duration_seconds_sum[5m]))", "refId": "A" }],
+      "targets": [{ "expr": "sum(rate(nodejs_gc_duration_seconds_sum[5m]))", "legendFormat": "Duration", "refId": "A" }],
       "title": "GC Duration (Sum Rate)",
       "type": "timeseries",
       "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "palette-classic" } } }

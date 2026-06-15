@@ -80,7 +80,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
       "id": 5,
       "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "expr": "rate(process_cpu_seconds_total[5m])", "refId": "A" }],
+      "targets": [{ "expr": "rate(process_cpu_seconds_total[5m])", "legendFormat": "{{job}}", "refId": "A" }],
       "title": "CPU",
       "type": "stat"
     },
@@ -126,7 +126,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 8 },
       "id": 9,
-      "targets": [{ "expr": "time() - process_start_time_seconds", "refId": "A" }],
+      "targets": [{ "expr": "time() - process_start_time_seconds", "legendFormat": "{{job}}", "refId": "A" }],
       "title": "Uptime",
       "type": "stat",
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "textMode": "auto" },
