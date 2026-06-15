@@ -486,6 +486,21 @@ model OperatorAnnouncement {
   @@map("operator_announcement")
 }
 
+model AppVersion {
+  id           Int      @id @default(autoincrement())
+  platform     String   @unique // 'android' atau 'windows'
+  version      String   @db.VarChar(50)
+  buildNumber  Int      @map("build_number")
+  releaseDate  DateTime @default(now()) @map("release_date")
+  downloadUrl  String   @map("download_url") @db.VarChar(500)
+  releaseNotes String   @map("release_notes") @db.Text
+  forceUpdate  Boolean  @default(false) @map("force_update")
+  minVersion   String   @map("min_version") @db.VarChar(50)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("app_version")
+}
+
 enum UserRole {
   OPERATOR
   QUALITY
