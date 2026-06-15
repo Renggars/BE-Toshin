@@ -2,23 +2,7 @@ import moment from "moment";
 import prisma from "../../prisma/index.js";
 import { nowWIB } from "../utils/dateWIB.js";
 
-const calculateLoadingTime = (shift) => {
-  const start = moment(shift.jamMasuk, "HH:mm");
-  const end = moment(shift.jamKeluar, "HH:mm");
-  let dur = end.diff(start, "minutes");
-  if (dur < 0) dur += 1440;
-
-  const allowance =
-    shift.breakDuration +
-    shift.cleaningDuration +
-    shift.briefingDuration +
-    Math.round(dur * shift.toiletTolerancePct);
-
-  return dur - allowance;
-};
-
 import { emitOeeUpdate } from "../config/socket.js";
-import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
 
 const recalculateByMesin = async (mesinId, date = new Date()) => {
   const shifts = await prisma.shift.findMany();
@@ -73,27 +57,47 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       if (l.cycleTime > 0) idealCycleTime = l.cycleTime;
     });
 
-    // 3. Constants and Adjusted OEE Logic
-    // Planned Downtime (e.g., CHANGE_RPH) reduces the Loading Time window.
-    // Unplanned Downtime reduces the Runtime.
-    const shiftStandardLoading = calculateLoadingTimeFromShift(shift);
-
-    // [New Code] Activity Check: Skip OEE generation if there is absolutely no actual activity
-    // We ONLY care if there is an LRP (actual production).
-    // OEE is only valid and should only be generated when LRP is posted.
-    if (lrpData.length === 0) {
-      // Clean up orphaned/empty OEE records if they exist
-      await prisma.oee.deleteMany({
-        where: {
+    // 3. Dynamic Loading Time based on Attendance & LRP
+    const attendanceRecords = await prisma.attendance.findMany({
+      where: {
+        rencanaProduksi: {
           mesinId: mesinId,
           shiftId: shift.id,
           tanggal: targetDate,
         },
-      });
+      },
+      orderBy: { jamTap: "asc" },
+    });
+
+    const lrpUpdates = await prisma.laporanRealisasiProduksi.findMany({
+      where: {
+        mesinId: mesinId,
+        shiftId: shift.id,
+        tanggal: targetDate,
+      },
+      orderBy: { updatedAt: "asc" },
+    });
+
+    if (attendanceRecords.length === 0 || lrpUpdates.length === 0) {
+      if (lrpData.length > 0) {
+        // Fallback: If LRP exists but no Attendance (should not happen normally)
+        // Clean up OEE as it's incomplete
+        await prisma.oee.deleteMany({
+          where: {
+            mesinId: mesinId,
+            shiftId: shift.id,
+            tanggal: targetDate,
+          },
+        });
+      }
       continue;
     }
 
-    const loadingTime = Math.max(0, shiftStandardLoading - plannedDowntime);
+    const firstTap = moment(attendanceRecords[0].jamTap);
+    const lastUpdate = moment(lrpUpdates[lrpUpdates.length - 1].updatedAt);
+    const dynamicLoadingMinutes = Math.max(0, lastUpdate.diff(firstTap, "minutes"));
+
+    const loadingTime = Math.max(0, dynamicLoadingMinutes - plannedDowntime);
     const runtime = Math.max(0, loadingTime - unplannedDowntime);
 
     // 4. Calculate OEE Components
@@ -101,11 +105,8 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
     const availability = loadingTime > 0 ? (runtime / loadingTime) * 100 : 0;
 
     // Performance = (Ideal Cycle Time * Total Output) / Runtime
-    // Usually cycle time is in seconds, runtime is in minutes, but our seed data uses cycle time in MINUTES.
-    // So both are in minutes. Correct formula: (ideal_cycle_time_min * total_output) / runtime_min
     const performance =
       runtime > 0 ? ((idealCycleTime * totalOutput) / runtime) * 100 : 0;
-
 
     // Quality = Total OK / Total Output
     const quality = totalOutput > 0 ? (totalOk / totalOutput) * 100 : 0;

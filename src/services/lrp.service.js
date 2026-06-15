@@ -3,7 +3,6 @@
 import prisma from "../../prisma/index.js";
 import httpStatus from "http-status";
 import ApiError from "../utils/ApiError.js";
-import calculateLoadingTimeFromShift from "../utils/calculateLoadingTimeFromShift.js";
 import { oeeQueue } from "../queues/oeeQueue.js";
 import { nowWIB } from "../utils/dateWIB.js";
 import oeeService from "./oee.service.js";
@@ -116,7 +115,8 @@ const upsertLrpByRphId = async (rphId, data) => {
       include: {
         target: true,
         shift: true,
-        operator: { select: { noReg: true } }, // noReg operator bisa di-derive dari RPH
+        operator: { select: { noReg: true } },
+        attendance: { orderBy: { jamTap: "asc" }, take: 1 },
       },
     });
 
@@ -132,12 +132,12 @@ const upsertLrpByRphId = async (rphId, data) => {
       );
     }
 
-    // Hitung loading time dari startTime RPH atau fallback ke durasi shift
+    // Hitung loading time dari Attendance tap atau startTime RPH
     let loadingTime = 0;
-    if (rph.startTime) {
-      loadingTime = Math.ceil((nowWIB() - new Date(rph.startTime)) / 60000);
-    } else {
-      loadingTime = calculateLoadingTimeFromShift(rph.shift);
+    const firstActivity = rph.attendance?.[0]?.jamTap || rph.startTime;
+    
+    if (firstActivity) {
+      loadingTime = Math.ceil((nowWIB() - new Date(firstActivity)) / 60000);
     }
 
     const qtyOk      = Number(data.qtyOk      || 0);

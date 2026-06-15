@@ -294,10 +294,6 @@ CREATE TABLE `shift` (
     `nama_shift` VARCHAR(191) NOT NULL,
     `jam_masuk` VARCHAR(191) NOT NULL,
     `jam_keluar` VARCHAR(191) NOT NULL,
-    `break_duration` INTEGER NOT NULL DEFAULT 60,
-    `briefing_duration` INTEGER NOT NULL DEFAULT 10,
-    `cleaning_duration` INTEGER NOT NULL DEFAULT 10,
-    `toilet_tolerance_pct` DOUBLE NOT NULL DEFAULT 0.1,
 
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

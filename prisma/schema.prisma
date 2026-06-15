@@ -336,10 +336,6 @@ model Shift {
   namaShift                String                     @map("nama_shift")
   jamMasuk                 String                     @map("jam_masuk")
   jamKeluar                String                     @map("jam_keluar")
-  breakDuration            Int                        @default(60) @map("break_duration")
-  briefingDuration         Int                        @default(10) @map("briefing_duration")
-  cleaningDuration         Int                        @default(10) @map("cleaning_duration")
-  toiletTolerancePct       Float                      @default(0.1) @map("toilet_tolerance_pct")
   andonCall                AndonCall[]
   andonDowntimeShift       AndonDowntimeShift[]
   andonEvent               AndonEvent[]

@@ -35,7 +35,7 @@ const register = {
     tipeOperator: Joi.string()
       .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
       .when("role", { is: "OPERATOR", then: Joi.optional(), otherwise: Joi.forbidden() }),
-    fotoProfile: Joi.string().uri().allow(null, ""),
+    fotoProfile: Joi.string().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
     noReg: Joi.string().optional().allow(null, ""),
@@ -91,7 +91,7 @@ const updateUser = {
       tipeOperator: Joi.string()
         .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
         .optional(),
-      fotoProfile: Joi.string().uri().allow(null, ""),
+      fotoProfile: Joi.string().allow(null, ""),
       plant: Joi.string().valid("1", "2", "3").optional(),
       line: Joi.string().optional(),
       noReg: Joi.string().optional().allow(null, ""),

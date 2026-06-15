@@ -315,10 +315,6 @@ async function main() {
           namaShift: row[2].toString(),
           jamMasuk: excelTimeToStr(row[3]),
           jamKeluar: excelTimeToStr(row[4]),
-          breakDuration: parseInt(row[5]) || 60,
-          cleaningDuration: parseInt(row[6]) || 10,
-          briefingDuration: parseInt(row[7]) || 10,
-          toiletTolerancePct: parseFloat(row[8]) || 0.1,
         },
         create: {
           id: parseInt(row[0]),
@@ -326,10 +322,6 @@ async function main() {
           namaShift: row[2].toString(),
           jamMasuk: excelTimeToStr(row[3]),
           jamKeluar: excelTimeToStr(row[4]),
-          breakDuration: parseInt(row[5]) || 60,
-          cleaningDuration: parseInt(row[6]) || 10,
-          briefingDuration: parseInt(row[7]) || 10,
-          toiletTolerancePct: parseFloat(row[8]) || 0.1,
         },
       });
     }
