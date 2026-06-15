@@ -1,6 +1,7 @@
 import userService from "../services/user.service.js";
 import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
+import ApiError from "../utils/ApiError.js";
 import {
   responseApiSuccess,
   responseApiCreateSuccess,
@@ -9,6 +10,16 @@ import {
 const createUser = catchAsync(async (req, res) => {
   const result = await userService.createUser(req.body);
   responseApiCreateSuccess(res, "Success create user", result);
+});
+
+const uploadPhoto = catchAsync(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "File gambar harus disertakan");
+  }
+  const relativePath = `/uploads/user-profiles/${req.file.filename}`;
+  responseApiSuccess(res, "Foto profil berhasil diunggah", {
+    url: relativePath,
+  });
 });
 
 const getUsers = catchAsync(async (req, res) => {
@@ -47,6 +58,7 @@ export default {
   getUsers,
   getUser,
   createUser,
+  uploadPhoto,
   updateUser,
   getCurrentUser,
   deactivateUser,
