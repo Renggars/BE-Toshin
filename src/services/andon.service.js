@@ -1026,45 +1026,62 @@ const resolveAndon = async (id, data) => {
  * Helper: Generate promises for splitting downtime
  */
 const generateSplitDowntimePromises = async (event, resolvedAt) => {
-  const shifts = await prisma.shift.findMany();
   const triggerTime = moment(event.waktuTrigger).tz(TZ);
   const resolveTime = moment(resolvedAt).tz(TZ);
+  const totalDurationMs = moment(resolveTime).diff(triggerTime);
+  const totalDurationMenit = Number((totalDurationMs / 60000).toFixed(2));
   const dataList = [];
 
-  // Determine RPH to attribute downtime to
-  // Rule: Prioritize opened RPH for Switch events, otherwise use closed or active.
-  let rphId = event.rphOpenedId || event.rphClosedId;
+  // 1. Determine target RPH and Shift
+  let rphId = event.rphOpenedId || event.rphClosedId || event.rphId;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
-      where: {
-        mesinId: event.mesinId,
-        status: "ACTIVE",
-        // Fallback or specific window check could be added here
-      },
+      where: { mesinId: event.mesinId, status: "ACTIVE" },
     });
     rphId = activeRph?.id || null;
   }
 
-  for (const shift of shifts) {
-    const dateStr = triggerTime.format("YYYY-MM-DD");
-    const shiftStart = moment.tz(
-      `${dateStr} ${shift.jamMasuk}`,
-      "YYYY-MM-DD HH:mm",
-      TZ,
-    );
-    let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jamKeluar}`,
-      "YYYY-MM-DD HH:mm",
-      TZ,
-    );
+  let targetShiftId = event.shiftId;
+  if (rphId) {
+    const rph = await prisma.rencanaProduksi.findUnique({
+      where: { id: rphId },
+      select: { shiftId: true },
+    });
+    if (rph) targetShiftId = rph.shiftId;
+  }
 
+  // 2. If we have a clear target RPH/Shift, attribute the entire downtime to it.
+  // This ensures Downtime stays in the same bucket as Production/Loading Time
+  // even if it overflows into the next physical shift's time window.
+  if (targetShiftId) {
+    dataList.push({
+      data: {
+        andonEventId: event.id,
+        shiftId: targetShiftId,
+        mesinId: event.mesinId,
+        rphId: rphId,
+        waktuStart: triggerTime.toDate(),
+        waktuEnd: resolveTime.toDate(),
+        durasiMenit: totalDurationMenit,
+        tanggal: event.tanggal,
+        createdAt: nowWIB(),
+      },
+    });
+    return dataList;
+  }
+
+  // 3. Fallback: Physical splitting (only if no RPH/Shift detected)
+  const shifts = await prisma.shift.findMany();
+  for (const shift of shifts) {
+    const dateStr = moment(event.tanggal).tz(TZ).format("YYYY-MM-DD");
+    const shiftStart = moment.tz(`${dateStr} ${shift.jamMasuk}`, "YYYY-MM-DD HH:mm", TZ);
+    let shiftEnd = moment.tz(`${dateStr} ${shift.jamKeluar}`, "YYYY-MM-DD HH:mm", TZ);
     if (shiftEnd.isBefore(shiftStart)) shiftEnd.add(1, "day");
 
     const overlapStart = moment.max(triggerTime, shiftStart);
     const overlapEnd = moment.min(resolveTime, shiftEnd);
 
     if (overlapStart.isBefore(overlapEnd)) {
-      const minutes = overlapEnd.diff(overlapStart, "minutes");
       dataList.push({
         data: {
           andonEventId: event.id,
@@ -1073,15 +1090,14 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
           rphId: rphId,
           waktuStart: overlapStart.toDate(),
           waktuEnd: overlapEnd.toDate(),
-          durasiMenit: Number(
-            (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
-          ),
+          durasiMenit: Number((overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2)),
           tanggal: event.tanggal,
           createdAt: nowWIB(),
         },
       });
     }
   }
+
   return dataList;
 };
 
@@ -1089,12 +1105,13 @@ const generateSplitDowntimePromises = async (event, resolvedAt) => {
  * Split downtime into shifts
  */
 const splitDowntimePerShift = async (event, resolvedAt) => {
-  const shifts = await prisma.shift.findMany();
   const triggerTime = moment(event.waktuTrigger).tz(TZ);
   const resolveTime = moment(resolvedAt).tz(TZ);
+  const totalDurationMs = moment(resolveTime).diff(triggerTime);
+  const totalDurationMenit = Number((totalDurationMs / 60000).toFixed(2));
 
-  // Determine RPH
-  let rphId = event.rphOpenedId || event.rphClosedId;
+  // Determine RPH and Shift
+  let rphId = event.rphOpenedId || event.rphClosedId || event.rphId;
   if (!rphId) {
     const activeRph = await prisma.rencanaProduksi.findFirst({
       where: { mesinId: event.mesinId, status: "ACTIVE" },
@@ -1102,27 +1119,44 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
     rphId = activeRph?.id || null;
   }
 
-  for (const shift of shifts) {
-    const dateStr = triggerTime.format("YYYY-MM-DD");
-    const shiftStart = moment.tz(
-      `${dateStr} ${shift.jamMasuk}`,
-      "YYYY-MM-DD HH:mm",
-      TZ,
-    );
-    let shiftEnd = moment.tz(
-      `${dateStr} ${shift.jamKeluar}`,
-      "YYYY-MM-DD HH:mm",
-      TZ,
-    );
+  let targetShiftId = event.shiftId;
+  if (rphId) {
+    const rph = await prisma.rencanaProduksi.findUnique({
+      where: { id: rphId },
+      select: { shiftId: true },
+    });
+    if (rph) targetShiftId = rph.shiftId;
+  }
 
+  if (targetShiftId) {
+    await prisma.andonDowntimeShift.create({
+      data: {
+        andonEventId: event.id,
+        shiftId: targetShiftId,
+        mesinId: event.mesinId,
+        rphId: rphId,
+        waktuStart: triggerTime.toDate(),
+        waktuEnd: resolveTime.toDate(),
+        durasiMenit: totalDurationMenit,
+        tanggal: event.tanggal,
+        createdAt: nowWIB(),
+      },
+    });
+    return;
+  }
+
+  // Fallback
+  const shifts = await prisma.shift.findMany();
+  for (const shift of shifts) {
+    const dateStr = moment(event.tanggal).tz(TZ).format("YYYY-MM-DD");
+    const shiftStart = moment.tz(`${dateStr} ${shift.jamMasuk}`, "YYYY-MM-DD HH:mm", TZ);
+    let shiftEnd = moment.tz(`${dateStr} ${shift.jamKeluar}`, "YYYY-MM-DD HH:mm", TZ);
     if (shiftEnd.isBefore(shiftStart)) shiftEnd.add(1, "day");
 
-    // Overlap calculation
     const overlapStart = moment.max(triggerTime, shiftStart);
     const overlapEnd = moment.min(resolveTime, shiftEnd);
 
     if (overlapStart.isBefore(overlapEnd)) {
-      const minutes = overlapEnd.diff(overlapStart, "minutes");
       await prisma.andonDowntimeShift.create({
         data: {
           andonEventId: event.id,
@@ -1131,10 +1165,8 @@ const splitDowntimePerShift = async (event, resolvedAt) => {
           rphId: rphId,
           waktuStart: overlapStart.toDate(),
           waktuEnd: overlapEnd.toDate(),
-          durasiMenit: Number(
-            (overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2),
-          ),
-          tanggal: event.tanggal, // Operational date from parent
+          durasiMenit: Number((overlapEnd.diff(overlapStart, "milliseconds") / 60000).toFixed(2)),
+          tanggal: event.tanggal,
           createdAt: nowWIB(),
         },
       });

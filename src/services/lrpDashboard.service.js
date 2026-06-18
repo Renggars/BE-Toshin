@@ -606,7 +606,7 @@ const exportData = async (filter) => {
     border: brdr(),
   });
 
-  const COLS = "ABCDEFGHIJKLM".split("");
+  const COLS = "ABCDEFGHIJKLMN".split("");
   const wb = xlsx.utils.book_new();
   // Format tanggal dengan WIB (UTC+7)
   const startMoment = filter.startDate
@@ -758,8 +758,7 @@ const exportData = async (filter) => {
       totalMins % 60,
     )}m`;
     const ce = lrp.counterEnd;
-    const counterEndFmt =
-      ce != null ? `${Math.floor(ce / 60)}h ${ce % 60}m` : "-";
+    const counterEndFmt = ce != null ? ce : "-";
     const jp = lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-";
     ws4[`A${row}`] = { v: tgl, s: cellS(isAlt) };
     ws4[`B${row}`] = { v: lrp.operator?.nama || "-", s: cellS(isAlt, "left") };

@@ -7,6 +7,7 @@ services:
     init: true
     ports:
       - "4001:4001"
+      - "4210:4210"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4001
@@ -20,6 +21,10 @@ services:
       - JWT_REFRESH_EXPIRATION_DAYS=${JWT_REFRESH_EXPIRATION_DAYS:-7}
       - EMAIL_USER=${EMAIL_USER:-}
       - EMAIL_PASS=${EMAIL_PASS:-}
+      - EMAIL_AM_PLANT_1=${EMAIL_AM_PLANT_1:-}
+      - EMAIL_AM_PLANT_2=${EMAIL_AM_PLANT_2:-}
+      - EMAIL_AM_PLANT_3=${EMAIL_AM_PLANT_3:-}
+      - EMAIL_HR=${EMAIL_HR:-}
       - OTEL_SERVICE_NAME=toshin-backend
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
       - LOKI_HOST=http://loki:3100

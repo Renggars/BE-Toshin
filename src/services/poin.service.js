@@ -261,7 +261,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
       keterangan: keterangan || "-",
       poinSebelum,
       poinSesudah: poinSetelahUpdate,
-      timestamp: now,
+      timestamp: new Date(),
       riwayatPelanggaran: historyResult.teks,
       totalMinusRiwayat: historyResult.total,
     };

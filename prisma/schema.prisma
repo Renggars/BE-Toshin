@@ -247,8 +247,8 @@ model Oee {
   performance    Float    @default(0)
   quality        Float    @default(0)
   oeeScore       Float    @default(0) @map("oee_score")
-  loadingTime    Int      @map("loading_time")
-  downtime       Int      @default(0)
+  loadingTime    Float    @map("loading_time")
+  downtime       Float    @default(0)
   totalOutput    Int      @default(0) @map("total_output")
   totalOk        Int      @default(0) @map("total_ok")
   tanggal        DateTime @db.Date
