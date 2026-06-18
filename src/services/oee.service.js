@@ -43,6 +43,7 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
         shiftId: shift.id,
         tanggal: targetDate,
       },
+      include: { rencanaProduksi: true },
     });
 
     let totalOk = 0;
@@ -67,14 +68,7 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       orderBy: { jamTap: "asc" },
     });
 
-    const lrpUpdates = await prisma.laporanRealisasiProduksi.findMany({
-      where: {
-        mesinId: mesinId,
-        shiftId: shift.id,
-        tanggal: targetDate,
-      },
-      orderBy: { updatedAt: "asc" },
-    });
+    const lrpUpdates = lrpData.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
 
     // 3. Filter by RencanaProduksi (RPH) - Only process if discovery shows it's relevant
     // If no LRP and no Downtime, we skip this machine/shift
@@ -82,7 +76,7 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       continue;
     }
 
-    const now = moment();
+    const now = nowWIB(); // Use consistent WIB time
     
    // Start of operating time: Absolut menggunakan jam tap absensi
     const firstActivity = attendanceRecords.length > 0 
@@ -91,10 +85,14 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
 
     if (!firstActivity) continue; 
 
+    // CASE: Check if ANY RPH for this machine/shift/date is still ACTIVE
+    // If ACTIVE, window goes until 'now'. If all are CLOSED, window goes until the last LRP update.
+    const isAnyActive = lrpData.some(l => l.rencanaProduksi?.status === "ACTIVE" || l.rencanaProduksi?.status === "PLANNED");
+
     // End of operating window: Last LRP update or Now
-    const lastActivity = lrpUpdates.length > 0 
-      ? moment(lrpUpdates[lrpUpdates.length - 1].updatedAt)
-      : now;
+    const lastActivity = (isAnyActive || lrpUpdates.length === 0)
+      ? now 
+      : moment(lrpUpdates[lrpUpdates.length - 1].updatedAt);
 
     // Measurement window duration (use float diff for precision)
     const dynamicLoadingMinutes = Math.max(0, lastActivity.diff(firstActivity, "minutes", true));
@@ -125,13 +123,14 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
 
     // DEBUG LOGS
     // console.log(`[OEE DEBUG] Mesin: ${mesinId}, Shift: ${shift.id}, Tanggal: ${dateStr}`);
-    // console.log(`  > Activity: ${firstActivity.format("HH:mm:ss")} - ${lastActivity.format("HH:mm:ss")}`);
+    // console.log(`  > Activity: ${firstActivity.format("HH:mm:ss")} - ${lastActivity.format("HH:mm:ss")} ${isAnyActive ? '(ACTIVE)' : '(CLOSED)'}`);
     // console.log(`  > Total Time: ${totalTime.toFixed(2)}m | PlannedDt: ${plannedDowntime.toFixed(2)}m`);
     // console.log(`  > Loading Time (Planned Prod Time): ${loadingTime.toFixed(2)}m`);
     // console.log(`  > Unplanned Downtime: ${downtime.toFixed(2)}m | Runtime (Operating Time): ${runtime.toFixed(2)}m`);
     // console.log(`  > Ideal CT: ${idealCycleTime}m | Output: ${totalOutput} | Expected Time: ${expectedTimeMinutes.toFixed(2)}m`);
     // console.log(`  > Performance: ${performanceRaw.toFixed(2)}% (Capped to ${performance.toFixed(2)}%)`);
     // console.log(`  > Availability: ${availability.toFixed(2)}% | Quality: ${quality.toFixed(2)}% | OEEScore: ${oeeScore.toFixed(2)}%`);
+
 
     // 5. Upsert OEE Record
     const oeeRecord = await prisma.oee.upsert({
