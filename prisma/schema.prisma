@@ -240,54 +240,27 @@ model Notification {
 }
 
 model Oee {
-<<<<<<< HEAD
-  id              Int      @id @default(autoincrement())
-  mesinId         Int      @map("fk_id_mesin")
-  shiftId         Int?     @map("fk_id_shift")
-  tanggal         DateTime @db.Date
+  id      Int  @id @default(autoincrement())
+  mesinId Int  @map("fk_id_mesin")
+  shiftId Int? @map("fk_id_shift")
 
-  availability    Float    @default(0)
-  performance     Float    @default(0)
-  quality         Float    @default(0)
-  oeeScore        Float    @default(0) @map("oee_score")
+  availability Float @default(0)
+  performance  Float @default(0)
+  quality      Float @default(0)
+  oeeScore     Float @default(0) @map("oee_score")
 
-  loadingTime     Int      @map("loading_time")
-  downtime        Int      @default(0)
-  idealCycleTime  Float?   @map("ideal_cycle_time")
-  actualCycleTime Float?   @map("actual_cycle_time")
+  loadingTime    Float  @map("loading_time")
+  downtime       Float  @default(0)
+  idealCycleTime Float? @map("ideal_cycle_time")
 
-  totalOutput     Int      @default(0) @map("total_output")
-  totalOk         Int      @default(0) @map("total_ok")
-  totalNg         Int      @default(0) @map("total_ng")
-  totalRework     Int      @default(0) @map("total_rework")
+  totalOutput Int      @default(0) @map("total_output")
+  totalOk     Int      @default(0) @map("total_ok")
+  tanggal     DateTime @db.Date
 
-  targetProduksi    Int?     @default(0) @map("target_produksi") 
-  gapProduksi       Int?     @default(0) @map("gap_produksi")    
-  predictedOutput   Int?     @map("predicted_output")            
-  downtimeSignature String?  @db.Text @map("downtime_signature")
-
-  createdAt       DateTime @default(now()) @map("created_at")
-  mesin           Mesin    @relation(fields: [mesinId], references: [id])
-  shift           Shift?   @relation(fields: [shiftId], references: [id])
-=======
-  id             Int      @id @default(autoincrement())
-  mesinId        Int      @map("fk_id_mesin")
-  shiftId        Int?     @map("fk_id_shift")
-  availability   Float    @default(0)
-  performance    Float    @default(0)
-  quality        Float    @default(0)
-  oeeScore       Float    @default(0) @map("oee_score")
-  loadingTime    Float    @map("loading_time")
-  downtime       Float    @default(0)
-  totalOutput    Int      @default(0) @map("total_output")
-  totalOk        Int      @default(0) @map("total_ok")
-  tanggal        DateTime @db.Date
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
-  idealCycleTime Float?   @map("ideal_cycle_time")
-  mesin          Mesin    @relation(fields: [mesinId], references: [id])
-  shift          Shift?   @relation(fields: [shiftId], references: [id])
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  mesin     Mesin    @relation(fields: [mesinId], references: [id])
+  shift     Shift?   @relation(fields: [shiftId], references: [id])
 
   @@unique([mesinId, tanggal, shiftId])
   @@index([shiftId], map: "oee_fk_id_shift_fkey")

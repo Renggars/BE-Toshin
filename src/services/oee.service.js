@@ -76,12 +76,24 @@ const recalculateByMesin = async (mesinId, date = new Date()) => {
       continue;
     }
 
-    const now = nowWIB(); // Use consistent WIB time
+    const now = moment(nowWIB()); // Use consistent WIB time as moment object
     
    // Start of operating time: Absolut menggunakan jam tap absensi
-    const firstActivity = attendanceRecords.length > 0 
+    const attendanceTap = attendanceRecords.length > 0 
       ? moment(attendanceRecords[0].jamTap)
       : null;
+
+    // Fallback: Gunakan startTime dari Rencana Produksi (RPH) jika tidak ada jam tap
+    const rphStartTimes = lrpData
+      .map(l => l.rencanaProduksi?.startTime)
+      .filter(st => st != null)
+      .map(st => moment(st));
+    
+    const earliestRphStart = rphStartTimes.length > 0
+      ? moment.min(rphStartTimes)
+      : null;
+
+    const firstActivity = attendanceTap || earliestRphStart;
 
     if (!firstActivity) continue; 
 
@@ -246,45 +258,18 @@ const getOEESummary = async (tanggal, plant) => {
     };
   }
 
-  let totalLoadingTime = 0;
-  let weightedAvail = 0;
-  let weightedPerf = 0;
-  let weightedQual = 0;
-  let weightedOee = 0;
-
-  oeeData.forEach((item) => {
-    const lt = item.loadingTime || 0;
-    totalLoadingTime += lt;
-    weightedAvail += item.availability * lt;
-    weightedPerf += item.performance * lt;
-    weightedQual += item.quality * lt;
-    weightedOee += item.oeeScore * lt;
-  });
-
-  if (totalLoadingTime === 0) {
-    const count = oeeData.length;
-    const result = {
-      availability: Number(
-        (oeeData.reduce((s, i) => s + i.availability, 0) / count).toFixed(1),
-      ),
-      performance: Number(
-        (oeeData.reduce((s, i) => s + i.performance, 0) / count).toFixed(1),
-      ),
-      quality: Number(
-        (oeeData.reduce((s, i) => s + i.quality, 0) / count).toFixed(1),
-      ),
-      oee: Number(
-        (oeeData.reduce((s, i) => s + i.oeeScore, 0) / count).toFixed(1),
-      ),
-    };
-    return { ...result, status: determineStatus(result.oee) };
-  }
-
+  const count = oeeData.length;
   const result = {
-    availability: Number((weightedAvail / totalLoadingTime).toFixed(1)),
-    performance: Number((weightedPerf / totalLoadingTime).toFixed(1)),
-    quality: Number((weightedQual / totalLoadingTime).toFixed(1)),
-    oee: Number((weightedOee / totalLoadingTime).toFixed(1)),
+    availability: Number(
+      (oeeData.reduce((s, i) => s + i.availability, 0) / count).toFixed(1),
+    ),
+    performance: Number(
+      (oeeData.reduce((s, i) => s + i.performance, 0) / count).toFixed(1),
+    ),
+    quality: Number(
+      (oeeData.reduce((s, i) => s + i.quality, 0) / count).toFixed(1),
+    ),
+    oee: Number((oeeData.reduce((s, i) => s + i.oeeScore, 0) / count).toFixed(1)),
   };
 
   return { ...result, status: determineStatus(result.oee) };
@@ -361,7 +346,15 @@ const getDowntimeHistory = async (tanggal, plant) => {
   const dateStr = moment(tanggal).format("YYYY-MM-DD");
   const targetDate = new Date(`${dateStr}T00:00:00.000Z`);
 
-  const where = { tanggal: targetDate, status: "RESOLVED" };
+  const where = {
+    tanggal: targetDate,
+    status: "RESOLVED",
+    masterMasalahAndon: {
+      kategori: {
+        not: "PLAN_DOWNTIME",
+      },
+    },
+  };
   if (plant) where.plant = plant;
 
   const andonEvents = await prisma.andonEvent.findMany({
@@ -414,7 +407,7 @@ const getMachineDetail = async (tanggal, plant) => {
   const machines = await prisma.mesin.findMany({ where: machineWhere });
   const machineIds = machines.map((m) => m.id);
 
-  const [oeeRecords, lrpRecords, downtimeShifts, rencanaProduksis] =
+  const [oeeRecords, lrpRecords, rencanaProduksis] =
     await Promise.all([
       prisma.oee.findMany({
         where: { 
@@ -430,13 +423,6 @@ const getMachineDetail = async (tanggal, plant) => {
           ...(plant ? { rphId: { in: plantRphIds } } : {})
         },
       }),
-      prisma.andonDowntimeShift.findMany({
-        where: { 
-          tanggal: targetDate, 
-          mesinId: { in: machineIds },
-          ...(plant ? { shiftId: { in: plantPairs.map(p => p.shiftId) } } : {})
-        },
-      }),
       prisma.rencanaProduksi.findMany({
         where: { 
           tanggal: targetDate, 
@@ -450,7 +436,6 @@ const getMachineDetail = async (tanggal, plant) => {
   return machines.map((mesin) => {
     const mcOee = oeeRecords.filter((r) => r.mesinId === mesin.id);
     const mcLrp = lrpRecords.filter((r) => r.mesinId === mesin.id);
-    const mcDt = downtimeShifts.filter((r) => r.mesinId === mesin.id);
     const mcRencana = rencanaProduksis.filter(
       (r) => r.mesinId === mesin.id,
     );
@@ -460,45 +445,29 @@ const getMachineDetail = async (tanggal, plant) => {
       (sum, l) => sum + (l.qtyNgProses || 0) + (l.qtyNgPrev || 0),
       0,
     );
-    const totalDowntime = mcDt.reduce((sum, d) => sum + (d.durasiMenit || 0), 0);
+    const totalDowntime = mcOee.reduce((sum, d) => sum + (d.downtime || 0), 0);
     const totalTarget = mcRencana.reduce(
       (sum, r) => sum + (r.target ? r.target.totalTarget : 0),
       0,
     );
 
-    const validOee = mcOee.filter((o) => (o.loadingTime || 0) > 0);
-    const totalLt = validOee.reduce((sum, r) => sum + (r.loadingTime || 0), 0);
-
+    const count = mcOee.length;
     const summary =
-      totalLt > 0
+      count > 0
         ? {
             availability: Number(
-              (
-                validOee.reduce(
-                  (s, r) => s + r.availability * r.loadingTime,
-                  0,
-                ) / totalLt
-              ).toFixed(1),
+              (mcOee.reduce((s, r) => s + r.availability, 0) / count).toFixed(
+                1,
+              ),
             ),
             performance: Number(
-              (
-                validOee.reduce(
-                  (s, r) => s + r.performance * r.loadingTime,
-                  0,
-                ) / totalLt
-              ).toFixed(1),
+              (mcOee.reduce((s, r) => s + r.performance, 0) / count).toFixed(1),
             ),
             quality: Number(
-              (
-                validOee.reduce((s, r) => s + r.quality * r.loadingTime, 0) /
-                totalLt
-              ).toFixed(1),
+              (mcOee.reduce((s, r) => s + r.quality, 0) / count).toFixed(1),
             ),
             oee: Number(
-              (
-                validOee.reduce((s, r) => s + r.oeeScore * r.loadingTime, 0) /
-                totalLt
-              ).toFixed(1),
+              (mcOee.reduce((s, r) => s + r.oeeScore, 0) / count).toFixed(1),
             ),
           }
         : {

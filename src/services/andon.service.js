@@ -359,7 +359,7 @@ const triggerAndon = async (payload) => {
       orderBy: { id: "asc" },
     });
 
-    if (!nextPlannedRph) {
+    if (!nextPlannedRph && masalah.namaMasalah !== "Pindah Mesin") {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
         "Tidak ada RPH berikutnya (PLANNED) untuk dialihkan",
@@ -400,16 +400,19 @@ const triggerAndon = async (payload) => {
             durasiDowntime: duration,
             resolvedById: detectedOperator,
             catatan: "Auto-resolved by RPH switch",
+            rphId: activeRphId || reportAndon.rphId, // 🔥 FIX: Ensure it stays with the closed RPH
           },
         });
       }
 
-      // Activate next planned RPH
-      await tx.rencanaProduksi.update({
-        where: { id: nextPlannedRph.id },
-        data: { status: "ACTIVE", startTime: currentTime },
-      });
-      openedRphId = nextPlannedRph.id;
+      // Activate next planned RPH if exists (always exists for Pindah Produk/Pekerjaan)
+      if (nextPlannedRph) {
+        await tx.rencanaProduksi.update({
+          where: { id: nextPlannedRph.id },
+          data: { status: "ACTIVE", startTime: currentTime },
+        });
+        openedRphId = nextPlannedRph.id;
+      }
 
       businessTaskCreatedTotal.inc({ type: "andon_event" });
       return {
@@ -424,7 +427,7 @@ const triggerAndon = async (payload) => {
             kategori: masalah.kategori,
             status: "ACTIVE",
             waktuTrigger: currentTime,
-            rphId: openedRphId,
+            rphId: openedRphId || activeRphId,
             rphClosedId: activeRphId,
             rphOpenedId: openedRphId,
           },
@@ -469,7 +472,17 @@ const triggerAndon = async (payload) => {
     }
   } else {
     // 8. Normal PLAN_DOWNTIME (Ngisi Laporan, Kamar Mandi, dll)
-    // Link ke current active RPH jika ada
+    // 🔥 FIX: If "Ngisi Laporan" triggered after RPH closed (by LRP), 
+    // try to find the most recently closed RPH for this machine today.
+    let effectiveRphId = currentActiveRph?.id || null;
+    if (!effectiveRphId && masalah.namaMasalah === "Ngisi Laporan") {
+      const lastClosedRph = await prisma.rencanaProduksi.findFirst({
+        where: { mesinId, status: "CLOSED", tanggal: operationalDate },
+        orderBy: { endTime: "desc" },
+      });
+      effectiveRphId = lastClosedRph?.id || null;
+    }
+
     newEvent = await prisma.andonEvent.create({
       data: {
         mesinId,
@@ -481,8 +494,8 @@ const triggerAndon = async (payload) => {
         kategori: masalah.kategori,
         status: "ACTIVE",
         waktuTrigger: currentTime,
-        rphId: currentActiveRph?.id || null,
-        rphClosedId: currentActiveRph?.id || null,
+        rphId: effectiveRphId,
+        rphClosedId: effectiveRphId,
       },
       include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
     });
