@@ -1,5 +1,6 @@
 import express from "express";
 import client from "prom-client";
+import prisma from "../../prisma/index.js";
 
 const router = express.Router();
 
@@ -23,7 +24,9 @@ client.collectDefaultMetrics();
  */
 router.get("/", async (req, res) => {
   res.set("Content-Type", client.register.contentType);
-  res.end(await client.register.metrics());
+  const appMetrics = await client.register.metrics();
+  const prismaMetrics = await prisma.$metrics.prometheus();
+  res.end(appMetrics + prismaMetrics);
 });
 
 export default router;

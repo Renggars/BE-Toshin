@@ -28,8 +28,8 @@ const getWeeklyTrend = catchAsync(async (req, res) => {
 });
 
 const getHistoryRPH = catchAsync(async (req, res) => {
-  const { tanggal } = req.query; // Opsional: filter per tanggal, default today di service
-  const history = await rencanaProduksiService.getHistoryRPH(tanggal);
+  const { tanggal, userId } = req.query; // Opsional: filter per tanggal atau userId
+  const history = await rencanaProduksiService.getHistoryRPH(tanggal, userId);
   res.send({ status: true, ...history });
 });
 
@@ -86,6 +86,17 @@ const closeActiveRph = catchAsync(async (req, res) => {
   });
 });
 
+const activateActiveRph = catchAsync(async (req, res) => {
+  const { rphId } = req.params;
+  const data = await rencanaProduksiService.activateRph(parseInt(rphId));
+
+  res.send({
+    status: true,
+    message: "RPH berhasil diaktifkan",
+    data,
+  });
+});
+
 export default {
   createRencanaProduksi,
   getDashboardSummary,
@@ -96,4 +107,5 @@ export default {
   deleteRencanaProduksi,
   getMyRPH,
   closeActiveRph,
+  activateActiveRph,
 };

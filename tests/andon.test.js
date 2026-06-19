@@ -19,7 +19,7 @@ global.__ANDON_MOCKS__ = {
     createCall: jest.fn(),
   },
   // Default mock user (role can be overridden per-test)
-  mockUser: { id: 1, role: "PRODUKSI", plant: "1" },
+  mockUser: { id: 1, role: "OPERATOR", plant: "1" },
   auth: {
     auth: jest.fn((...requiredRoles) => (req, res, next) => {
       req.user = global.__ANDON_MOCKS__.mockUser;
@@ -67,7 +67,7 @@ const setRole = (role) => {
   global.__ANDON_MOCKS__.mockUser.role = role;
 };
 const resetRole = () => {
-  global.__ANDON_MOCKS__.mockUser.role = "PRODUKSI";
+  global.__ANDON_MOCKS__.mockUser.role = "OPERATOR";
 };
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.BAD_REQUEST);
     });
 
-    test("❌ should return 403 if user role is not PRODUKSI (RBAC)", async () => {
+    test("❌ should return 403 if user role is not OPERATOR (RBAC)", async () => {
       setRole("MAINTENANCE");
       const res = await request(app).post("/andon/trigger").send(validPayload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
@@ -217,7 +217,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.BAD_REQUEST);
     });
 
-    test("❌ should return 403 if role is not PRODUKSI (RBAC)", async () => {
+    test("❌ should return 403 if role is not OPERATOR (RBAC)", async () => {
       setRole("ADMIN");
       const res = await request(app).post("/andon/call").send(validPayload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
@@ -234,7 +234,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // PATCH /andon/:id/start-repair
   // ===========================================================================
   describe("PATCH /andon/:id/start-repair", () => {
-    const roles = ["MAINTENANCE", "DIE_MAINT", "SUPERVISOR", "QUALITY", "PRODUKSI"];
+    const roles = ["MAINTENANCE", "DIE_MAINT", "SUPERVISOR", "QUALITY", "OPERATOR"];
 
     test("✅ should return 200 on successful start-repair", async () => {
       setRole("MAINTENANCE");
@@ -313,7 +313,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // PATCH /andon/:id/resolve
   // ===========================================================================
   describe("PATCH /andon/:id/resolve", () => {
-    const resolveRoles = ["DIE_MAINT", "MAINTENANCE", "SUPERVISOR", "PRODUKSI", "QUALITY"];
+    const resolveRoles = ["DIE_MAINT", "MAINTENANCE", "SUPERVISOR", "OPERATOR", "QUALITY"];
 
     test("✅ should return 200 on successful resolve", async () => {
       setRole("MAINTENANCE");
@@ -430,8 +430,8 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("❌ should return 403 if role is PRODUKSI (not authorized)", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR (not authorized)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/andon/active");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -454,7 +454,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // GET /andon/my-active
   // ===========================================================================
   describe("GET /andon/my-active", () => {
-    const myActiveRoles = ["ADMIN", "SUPERVISOR", "PRODUKSI", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
+    const myActiveRoles = ["ADMIN", "SUPERVISOR", "OPERATOR", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
 
     test("✅ should return the authenticated user's active events", async () => {
       const mockMyActive = [{ id: 3, operatorId: 1 }];
@@ -491,7 +491,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // GET /andon/dashboard
   // ===========================================================================
   describe("GET /andon/dashboard", () => {
-    const dashboardRoles = ["ADMIN", "SUPERVISOR", "PRODUKSI", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
+    const dashboardRoles = ["ADMIN", "SUPERVISOR", "OPERATOR", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
 
     test("✅ should return dashboard data with no filters", async () => {
       setRole("SUPERVISOR");
@@ -572,7 +572,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // GET /andon/filters
   // ===========================================================================
   describe("GET /andon/filters", () => {
-    const filterRoles = ["ADMIN", "SUPERVISOR", "PRODUKSI", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
+    const filterRoles = ["ADMIN", "SUPERVISOR", "OPERATOR", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
 
     test("✅ should return available filters (machines, shifts, categories)", async () => {
       setRole("SUPERVISOR");
@@ -617,10 +617,10 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // GET /andon/trigger-master
   // ===========================================================================
   describe("GET /andon/trigger-master", () => {
-    const triggerMasterRoles = ["ADMIN", "SUPERVISOR", "PRODUKSI", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
+    const triggerMasterRoles = ["ADMIN", "SUPERVISOR", "OPERATOR", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
 
     test("✅ should return trigger master data (problems, machines)", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const mockMasterData = {
         masalahList: [{ id: 1, namaMasalah: "Mesin Mati", kategori: "MAINTENANCE" }],
         mesinList: [{ id: 1, namaMesin: "Mesin A" }],
@@ -634,7 +634,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
     });
 
     test("✅ should return empty data if no masters exist", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       andonService.getTriggerMasterData.mockResolvedValue({ masalahList: [], mesinList: [] });
 
       const res = await request(app).get("/andon/trigger-master");
@@ -649,7 +649,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
     });
 
     test("❌ should return 500 if service fails", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       andonService.getTriggerMasterData.mockRejectedValue(new Error("PRISMA_ERROR"));
       const res = await request(app).get("/andon/trigger-master");
       expect(res.status).toBe(httpStatus.INTERNAL_SERVER_ERROR);
@@ -660,7 +660,7 @@ describe("Andon Controller - Comprehensive Unit Tests", () => {
   // GET /andon/history
   // ===========================================================================
   describe("GET /andon/history", () => {
-    const historyRoles = ["PRODUKSI", "SUPERVISOR", "ADMIN", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
+    const historyRoles = ["OPERATOR", "SUPERVISOR", "ADMIN", "QUALITY", "DIE_MAINT", "MAINTENANCE"];
 
     test("✅ should return personal history for authenticated user", async () => {
       const mockHistory = {

@@ -176,7 +176,7 @@ describe("Rencana Produksi Controller Unit Tests", () => {
     });
 
     test("should return 403 Forbidden for non-SUPERVISOR role", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const res = await request(app).post(`${BASE}/`).send(validPayload);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
       expect(res.body.message).toMatch(/Forbidden/);
@@ -295,8 +295,8 @@ describe("Rencana Produksi Controller Unit Tests", () => {
       expect(res.body.message).toMatch(/CLOSED/);
     });
 
-    test("should return 403 if user role is PRODUKSI (not in allowed roles)", async () => {
-      // PRODUKSI is allowed, so let's test with a disallowed role
+    test("should return 403 if user role is OPERATOR (not in allowed roles)", async () => {
+      // OPERATOR is allowed, so let's test with a disallowed role
       setRole("MAINTENANCE");
       const res = await request(app).post(`${BASE}/close-rph/5`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
@@ -352,8 +352,8 @@ describe("Rencana Produksi Controller Unit Tests", () => {
       expect(res.body.summary.persentase).toBe(0);
     });
 
-    test("should return 403 if role is PRODUKSI (not allowed)", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 if role is OPERATOR (not allowed)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get(`${BASE}/dashboard/summary`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -442,8 +442,8 @@ describe("Rencana Produksi Controller Unit Tests", () => {
       expect(res.body.data).toEqual([]);
     });
 
-    test("should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get(`${BASE}/list`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -496,7 +496,7 @@ describe("Rencana Produksi Controller Unit Tests", () => {
     });
 
     test("should return 403 if role is not SUPERVISOR", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const res = await request(app).get(`${BASE}/search-operator?q=Budi`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -560,8 +560,8 @@ describe("Rencana Produksi Controller Unit Tests", () => {
       expect(res.body.message).toBe("Rencana Produksi tidak ditemukan");
     });
 
-    test("should return 403 if role is PRODUKSI (not SUPERVISOR)", async () => {
-      setRole("PRODUKSI");
+    test("should return 403 if role is OPERATOR (not SUPERVISOR)", async () => {
+      setRole("OPERATOR");
       const res = await request(app).put(`${BASE}/10`).send({ fk_id_produk: 2 });
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -625,7 +625,7 @@ describe("Rencana Produksi Controller Unit Tests", () => {
     });
 
     test("should return 403 if role is not SUPERVISOR", async () => {
-      setRole("PRODUKSI");
+      setRole("OPERATOR");
       const res = await request(app).delete(`${BASE}/10`);
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

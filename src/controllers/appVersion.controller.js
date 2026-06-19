@@ -1,15 +1,51 @@
+import { PrismaClient } from "@prisma/client";
 import fs from "fs/promises";
 import path from "path";
 import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
 import ApiError from "../utils/ApiError.js";
 
-const VERSION_FILE_PATH = path.join(
-  process.cwd(),
-  "storage",
-  "app-version.json",
-);
+const prisma = new PrismaClient();
+const VERSION_FILE_PATH = path.join(process.cwd(), "storage", "app-version.json");
 
+/**
+ * Inisialisasi awal (Migrasi dari JSON ke Database jika database kosong)
+ */
+const getOrMigrateInitialData = async () => {
+  const count = await prisma.appVersion.count();
+  if (count === 0) {
+    try {
+      const data = await fs.readFile(VERSION_FILE_PATH, "utf-8");
+      const versionInfo = JSON.parse(data);
+      
+      const platforms = ["android", "windows"];
+      for (const platform of platforms) {
+        if (versionInfo[platform]) {
+          const info = versionInfo[platform];
+          await prisma.appVersion.create({
+            data: {
+              platform,
+              version: info.version,
+              buildNumber: parseInt(info.buildNumber, 10),
+              releaseDate: new Date(info.releaseDate),
+              downloadUrl: info.downloadUrl,
+              releaseNotes: info.releaseNotes || "",
+              forceUpdate: info.forceUpdate === true,
+              minVersion: info.minVersion || info.version,
+            }
+          });
+        }
+      }
+      console.log("Inisialisasi data versi awal dari JSON ke database sukses.");
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        console.error("Gagal mengimigrasikan data versi awal dari JSON:", error);
+      }
+    }
+  }
+};
+
+<<<<<<< HEAD
 /**
  * Inisialisasi awal (Migrasi dari JSON ke Database jika database kosong)
  */
@@ -76,6 +112,38 @@ const uploadAppVersion = catchAsync(async (req, res) => {
   if (platform !== "android" && platform !== "windows") {
     throw new ApiError(httpStatus.BAD_REQUEST, "Platform harus 'android' atau 'windows'");
   }
+=======
+const getAppVersion = catchAsync(async (req, res) => {
+  // Jalankan migrasi awal jika database kosong
+  await getOrMigrateInitialData();
+
+  const versions = await prisma.appVersion.findMany();
+  
+  // Format data kembali ke struktur JSON yang diharapkan Client
+  const formattedInfo = {};
+  versions.forEach(v => {
+    formattedInfo[v.platform] = {
+      version: v.version,
+      buildNumber: v.buildNumber,
+      releaseDate: v.releaseDate.toISOString().split("T")[0],
+      downloadUrl: v.downloadUrl,
+      releaseNotes: v.releaseNotes,
+      forceUpdate: v.forceUpdate,
+      minVersion: v.minVersion,
+    };
+  });
+
+  res.status(httpStatus.OK).send(formattedInfo);
+});
+
+const uploadAppVersion = catchAsync(async (req, res) => {
+  const { platform } = req.params;
+  const { version, buildNumber, releaseNotes, forceUpdate, minVersion } = req.body;
+
+  if (platform !== "android" && platform !== "windows") {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Platform harus 'android' atau 'windows'");
+  }
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
   if (!version || !buildNumber) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Versi dan nomor build wajib diisi");
@@ -148,4 +216,6 @@ const uploadAppVersion = catchAsync(async (req, res) => {
 
 export default {
   getAppVersion,
+  uploadAppVersion,
 };
+

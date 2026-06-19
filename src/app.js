@@ -14,6 +14,7 @@ import setupSwagger from "./docs/swaggerConfig.js";
 import { sanitize } from "./middlewares/sanitizeXss.js";
 import path from "path";
 import logger from "./config/logger.js";
+import { metricsMiddleware } from "./middlewares/prometheus.js";
 
 const app = express();
 
@@ -30,10 +31,13 @@ if (config.env !== "test") {
   logger.info("Morgan logging skipped (TEST environment)");
 }
 
+// 1.5. METRICS MIDDLEWARE (Must be before routes)
+app.use(metricsMiddleware);
+
 // 2. SETUP CORS (Menggunakan library agar lebih stabil)
 app.use(
   cors({
-    origin: "*", // Mengizinkan semua origin
+    origin: true, // Reflect request origin (required for credentials: true)
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
@@ -64,7 +68,19 @@ app.use(compression());
 // Static Files
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 app.use("/exports", express.static(path.join(process.cwd(), "public/exports")));
-app.use("/app-releases", express.static(path.join(process.cwd(), "storage/releases")));
+app.use(
+  "/app-releases",
+  express.static(path.join(process.cwd(), "storage/releases"), {
+    setHeaders: (res, filePath) => {
+      const filename = path.basename(filePath).toLowerCase();
+      if (filename.endsWith(".exe")) {
+        res.set("Content-Disposition", 'attachment; filename="toshin.exe"');
+      } else if (filename.endsWith(".apk")) {
+        res.set("Content-Disposition", 'attachment; filename="toshin.apk"');
+      }
+    },
+  })
+);
 
 // Route dasar
 app.get("/", (req, res) => {

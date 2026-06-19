@@ -1,36 +1,96 @@
-/**
- * export.controller.js
- *
- * Controller untuk menangani endpoint Async Excel Export.
- * Endpoint ini mendelegasikan proses pembentukan file ke BullMQ exportQueue
- * dengan proteksi pencegahan duplikasi *active/waiting* request untuk user yang sama.
- */
-
-import httpStatus from "http-status";
 import catchAsync from "../utils/catchAsync.js";
+<<<<<<< HEAD
 import ApiError from "../utils/ApiError.js";
 import { exportQueue } from "../queues/exportQueue.js";
 import lrpDashboardService from "../services/lrpDashboard.service.js"; // Import tambahan
 import fs from "fs";                                                 // Import tambahan
 import path from "path";                                             // Import tambahan
 import { v4 as uuidv4 } from "uuid";                                 // Import tambahan
+=======
+import poinService from "../services/poin.service.js";
+import moment from "moment";
+import XlsxStyle from "xlsx-js-style";
+import { toWIB } from "../utils/dateWIB.js";
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
-/**
- * Mendaftarkan pekerjaan export data LRP ke antrean (Queue)
- * POST /lrp-dashboard/export/request
- */
-const requestExport = catchAsync(async (req, res) => {
-  const userId = req.user.id;
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const HEADER_STYLE = {
+  font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+  fill: { fgColor: { rgb: "1F4E79" } },
+  alignment: { horizontal: "center", vertical: "center", wrapText: true },
+  border: {
+    top: { style: "thin", color: { rgb: "000000" } },
+    bottom: { style: "thin", color: { rgb: "000000" } },
+    left: { style: "thin", color: { rgb: "000000" } },
+    right: { style: "thin", color: { rgb: "000000" } },
+  },
+};
+
+const SECTION_TITLE_STYLE = {
+  font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 },
+  fill: { fgColor: { rgb: "2E75B6" } },
+  alignment: { horizontal: "left", vertical: "center" },
+};
+
+const CELL_STYLE_EVEN = {
+  fill: { fgColor: { rgb: "FFFFFF" } },
+  alignment: { vertical: "center" },
+  border: {
+    top: { style: "hair", color: { rgb: "DDDDDD" } },
+    bottom: { style: "hair", color: { rgb: "DDDDDD" } },
+    left: { style: "thin", color: { rgb: "CCCCCC" } },
+    right: { style: "thin", color: { rgb: "CCCCCC" } },
+  },
+};
+
+const CELL_STYLE_ODD = {
+  fill: { fgColor: { rgb: "DEEAF1" } },
+  alignment: { vertical: "center" },
+  border: {
+    top: { style: "hair", color: { rgb: "DDDDDD" } },
+    bottom: { style: "hair", color: { rgb: "DDDDDD" } },
+    left: { style: "thin", color: { rgb: "CCCCCC" } },
+    right: { style: "thin", color: { rgb: "CCCCCC" } },
+  },
+};
+
+const STATUS_COLOR = {
+  AMAN: "2D7D46",
+  TEGURAN: "E6A817",
+  SP1: "C05621",
+  SP2: "C0392B",
+  SP3: "891A1A",
+};
+
+const makeCell = (value, style = {}) => ({
+  v: value ?? "-",
+  s: style,
+});
+
+const makeHeaderCell = (value) => ({ v: value, s: HEADER_STYLE });
+
+const sendWorkbook = (res, wb, filename) => {
+  const buf = XlsxStyle.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).send(buf);
+};
+
+// ─── Export Riwayat Pelanggaran ────────────────────────────────────────────────
+
+const exportHRPoinExcel = catchAsync(async (req, res) => {
   const filter = {
+    month: req.query.month,
+    role: req.query.role,
+    tipeOperator: req.query.tipeOperator,
+    plant: req.query.plant,
+    divisiId: req.query.divisiId,
     startDate: req.query.startDate,
     endDate: req.query.endDate,
-    mesinId: req.query.mesinId,
-    shiftId: req.query.shiftId,
-    plant: req.query.plant,
-    jenisPekerjaanId: req.query.jenisPekerjaanId,
-    produkId: req.query.produkId,
   };
 
+<<<<<<< HEAD
   // [Fallback Tanpa Redis] Jika exportQueue disabled (null), generate file secara sinkron
   if (!exportQueue) {
     try {
@@ -61,37 +121,86 @@ const requestExport = catchAsync(async (req, res) => {
   const userHasActiveJob = activeJobs.find(
     (job) => job.name === "export-data" && job.data.userId === userId,
   );
+=======
+  const result = await poinService.getHRHistory(filter, { page: 1, limit: 10000 });
+  const data = result.data;
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
-  if (userHasActiveJob) {
-    return res.status(httpStatus.TOO_MANY_REQUESTS).json({
-      status: "error",
-      message:
-        "Anda memiliki proses export yang sedang berjalan. Mohon tunggu.",
-      jobId: userHasActiveJob.id,
+  // Sheet setup
+  const ws = {};
+  const cols = [5, 14, 12, 22, 18, 8, 14, 18,  14, 26, 15, 14, 12, 35];
+
+  // Title rows
+  const periodLabel = filter.month
+    ? moment(filter.month, "YYYY-MM").format("MMMM YYYY")
+    : filter.startDate
+    ? `${filter.startDate} s/d ${filter.endDate || "sekarang"}`
+    : "Seluruh Waktu";
+
+  ws["A1"] = { v: "LAPORAN RIWAYAT PELANGGARAN SISTEM POIN DISIPLIN", s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } };
+  ws["A2"] = { v: `Periode: ${periodLabel} | Role: ${filter.role || "Semua"} | Tipe Operator: ${filter.tipeOperator || "Semua"} | Plant: ${filter.plant || "Semua"}`, s: { alignment: { horizontal: "center" } } };
+  ws["A3"] = { v: `Digenerate: ${toWIB(new Date()).format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
+  ws["A4"] = { v: "" };
+
+  // Headers (row 5)
+  const headers = ["No", "Tanggal", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Role", "Tipe Operator", "Shift", "Tipe Disiplin", "Kategori", "Poin", "Status", "Keterangan"];
+  headers.forEach((h, i) => {
+    ws[XlsxStyle.utils.encode_cell({ r: 4, c: i })] = makeHeaderCell(h);
+  });
+
+  // Data rows start at row 6 (index 5)
+  data.forEach((item, rowIdx) => {
+    const style = rowIdx % 2 === 0 ? CELL_STYLE_EVEN : CELL_STYLE_ODD;
+    const statusStyle = { ...style, font: { bold: true, color: { rgb: STATUS_COLOR[item.statusLevel] || "000000" } } };
+    const poinStyle = {
+      ...style,
+      font: { bold: true, color: { rgb: item.poinBerubah < 0 ? "C0392B" : "2D7D46" } },
+      alignment: { horizontal: "center", vertical: "center" },
+    };
+
+    const row = [
+      makeCell(rowIdx + 1, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+      makeCell(moment(item.tanggal).format("DD/MM/YYYY"), style),
+      makeCell(item.noReg, style),
+      makeCell(item.nama, style),
+      makeCell(item.divisi, style),
+      makeCell(item.plant, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+      makeCell(item.role, style),
+      makeCell(item.tipeOperator || "-", style),
+      makeCell(item.shift, style),
+      makeCell(item.tipe, style),
+      makeCell(item.kategori, style),
+      makeCell(item.poinBerubah, poinStyle),
+      makeCell(item.statusLevel, statusStyle),
+      makeCell(item.keterangan, style),
+    ];
+
+    row.forEach((cell, colIdx) => {
+      ws[XlsxStyle.utils.encode_cell({ r: 5 + rowIdx, c: colIdx })] = cell;
     });
-  }
-
-  // 2. Tambahkan ke Antrean Export OEE (BullMQ)
-  const job = await exportQueue.add("export-data", {
-    userId,
-    filter,
   });
 
-  res.status(httpStatus.ACCEPTED).json({
-    status: "success",
-    message: "Request export diterima. Sedang diproses di latar belakang.",
-    jobId: job.id,
-  });
+  // Merge title rows
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 13 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: 13 } },
+  ];
+
+  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5 + data.length, c: 13 } });
+  ws["!cols"] = cols.map((w) => ({ wch: w }));
+  ws["!rows"] = [{ hpx: 30 }, { hpx: 18 }, { hpx: 18 }, { hpx: 8 }, { hpx: 22 }];
+
+  const wb = XlsxStyle.utils.book_new();
+  XlsxStyle.utils.book_append_sheet(wb, ws, "Riwayat Pelanggaran");
+
+  sendWorkbook(res, wb, `laporan_poin_${toWIB(new Date()).format("YYYYMMDD_HHmm")}.xlsx`);
 });
 
-/**
- * Mengecek status job ekspor
- * GET /lrp-dashboard/export/status/:jobId
- */
-const getExportStatus = catchAsync(async (req, res) => {
-  const { jobId } = req.params;
-  const userId = req.user.id;
+// ─── Export Ranking Karyawan ───────────────────────────────────────────────────
 
+<<<<<<< HEAD
   // [Fallback Tanpa Redis] Jika jobId berawalan 'sync_', file telah selesai digenerate seketika
   if (jobId.startsWith("sync_")) {
     const fileName = jobId.replace("sync_", "");
@@ -111,46 +220,83 @@ const getExportStatus = catchAsync(async (req, res) => {
   if (!job) {
     throw new ApiError(httpStatus.NOT_FOUND, "Job tidak ditemukan.");
   }
+=======
+const exportHRRankingsExcel = catchAsync(async (req, res) => {
+  const { month, role, tipeOperator, plant, type = "worst" } = req.query;
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
-  // Auth Guard: memastikan HANYA pemilik request yang bisa melihat/mendownload URL ini
-  if (job.data?.userId !== userId) {
-    throw new ApiError(
-      httpStatus.FORBIDDEN,
-      "Anda tidak memiliki izin untuk melihat status job ini.",
-    );
-  }
+  const result = await poinService.getHRRankings(month, role || null, tipeOperator, plant, type, 1, 1000);
+  const periodLabel = month ? moment(month, "YYYY-MM").format("MMMM YYYY") : "Seluruh Waktu";
+  const isWorst = type !== "best";
 
-  // Cek Status Job
-  const isFinished = await job.isCompleted();
-  const isFailed = await job.isFailed();
+  const sectionTitle = isWorst
+    ? "WORST EMPLOYEES - Poin Terendah (Perlu Perhatian)"
+    : "BEST EMPLOYEES - Poin Tertinggi (Berprestasi)";
+  const sectionColor = isWorst ? "C0392B" : "1E8449";
 
-  if (isFailed) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
-      status: "failed",
-      message: "Proses eksport mengalami kegagalan.",
-      error: job.failedReason,
-    });
-  }
+  const rankCols = [5, 12, 22, 18, 8, 18, 12, 12, 22]; // ← +1 kolom Tipe Operator
+  const rankHeaders = ["No", "No Reg", "Nama Karyawan", "Divisi", "Plant", "Tipe Operator", "Poin", "Status", "Total Pelanggaran"]; // ← tambah
 
-  if (!isFinished) {
-    return res.status(httpStatus.OK).json({
-      status: "processing",
-      message: "Data masih sedang diproses.",
-    });
-  }
+  const ws = {};
 
-  // Jika Selesai, berikan download_url
-  // (nilai di-return dari export.worker.js -> job.returnvalue)
-  const resultURL = job.returnvalue?.downloadUrl;
+  ws["A1"] = { v: `LAPORAN RANKING KARYAWAN - ${isWorst ? "WORST EMPLOYEES" : "BEST EMPLOYEES"}`, s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } };
+  ws["A2"] = {
+    v: `Periode: ${periodLabel} | Role: ${role || "Semua"} | Plant: ${plant || "Semua"} | Tipe Operator: ${tipeOperator || "Semua"}`,
+    s: { alignment: { horizontal: "center" } }
+  };
+  ws["A3"] = { v: `Digenerate: ${toWIB(new Date()).format("DD/MM/YYYY HH:mm")} WIB`, s: { alignment: { horizontal: "center" } } };
 
-  res.status(httpStatus.OK).json({
-    status: "completed",
-    message: "Data berhasil diexport.",
-    downloadUrl: resultURL,
+  ws[XlsxStyle.utils.encode_cell({ r: 4, c: 0 })] = {
+    v: sectionTitle,
+    s: { ...SECTION_TITLE_STYLE, fill: { fgColor: { rgb: sectionColor } } },
+  };
+
+  rankHeaders.forEach((h, i) => {
+    ws[XlsxStyle.utils.encode_cell({ r: 5, c: i })] = makeHeaderCell(h);
   });
-});
 
+  result.data.forEach((u, idx) => {
+    const style = idx % 2 === 0 ? CELL_STYLE_EVEN : CELL_STYLE_ODD;
+    const statusStyle = { ...style, font: { bold: true, color: { rgb: STATUS_COLOR[u.status] || "000000" } } };
+
+    const row = [
+      makeCell(idx + 1, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+      makeCell(u.noReg, style),
+      makeCell(u.nama, style),
+      makeCell(u.divisi, style),
+      makeCell(u.plant, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+      makeCell(u.tipeOperator || "-", style), // ← tambah
+      makeCell(u.poin, { ...style, alignment: { horizontal: "center", vertical: "center" }, font: { bold: true } }),
+      makeCell(u.status, statusStyle),
+      makeCell(u.totalPelanggaran, { ...style, alignment: { horizontal: "center", vertical: "center" } }),
+    ];
+
+    row.forEach((cell, colIdx) => {
+      ws[XlsxStyle.utils.encode_cell({ r: 6 + idx, c: colIdx })] = cell;
+    });
+  });
+
+  const lastRow = 6 + result.data.length;
+
+  // ← semua merge dan ref sekarang sampai kolom 8 (index 0-8)
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+    { s: { r: 4, c: 0 }, e: { r: 4, c: 8 } },
+  ];
+
+  ws["!ref"] = XlsxStyle.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: 8 } });
+  ws["!cols"] = rankCols.map((w) => ({ wch: w }));
+  ws["!rows"] = [{ hpx: 30 }, { hpx: 18 }, { hpx: 18 }, {}, { hpx: 22 }, { hpx: 22 }];
+
+  const wb = XlsxStyle.utils.book_new();
+  XlsxStyle.utils.book_append_sheet(wb, ws, isWorst ? "Worst Employees" : "Best Employees");
+
+  const typeLabel = isWorst ? "worst" : "best";
+  sendWorkbook(res, wb, `laporan_ranking_${typeLabel}_${toWIB(new Date()).format("YYYYMMDD_HHmm")}.xlsx`);
+});
 export default {
-  requestExport,
-  getExportStatus,
+  exportHRPoinExcel,
+  exportHRRankingsExcel,
 };

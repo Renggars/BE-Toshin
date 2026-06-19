@@ -7,9 +7,9 @@ import { auth } from "../middlewares/auth.js";
 const router = express.Router();
 
 // Role yang diizinkan melihat (Read Only)
-const allRoles = auth("ADMIN", "SUPERVISOR", "PRODUKSI");
+const allRoles = auth("ADMIN", "SUPERVISOR", "OPERATOR", "HR", "MANDOR");
 // Role yang diizinkan mengubah (Write/Edit)
-const managerRoles = auth("SUPERVISOR", "ADMIN");
+const managerRoles = auth("SUPERVISOR", "ADMIN", "HR", "MANDOR");
 
 // --- Tipe Disiplin ---
 router.get("/tipe-disiplin", allRoles, masterController.getTipeDisiplin);
@@ -36,6 +36,23 @@ router.get("/all", managerRoles, masterController.getAllMasterData);
 
 // --- MESIN ---
 router.get("/mesin", allRoles, masterController.getMesin);
+router.get("/mesin/line", allRoles, masterController.getLineMesin);
+
+// --- LINE CRUD ---
+router.get("/line", allRoles, masterController.getLines);
+router.post(
+  "/line",
+  managerRoles,
+  validate(masterValidation.createLine),
+  masterController.createLine,
+);
+router.put(
+  "/line/:id",
+  managerRoles,
+  validate(masterValidation.updateLine),
+  masterController.updateLine,
+);
+router.delete("/line/:id", managerRoles, masterController.deleteLine);
 router.post(
   "/mesin",
   managerRoles,
@@ -119,6 +136,27 @@ router.delete(
   "/masalah-andon/:id",
   managerRoles,
   masterController.deleteMasalahAndon,
+);
+
+// --- KATEGORI MESIN ---
+router.get("/kategori-mesin", allRoles, masterController.getKategoriMesin);
+router.get("/kategori-mesin/:id", allRoles, masterController.getKategoriMesinById);
+router.post(
+  "/kategori-mesin",
+  managerRoles,
+  validate(masterValidation.createKategoriMesin),
+  masterController.createKategoriMesin,
+);
+router.put(
+  "/kategori-mesin/:id",
+  managerRoles,
+  validate(masterValidation.updateKategoriMesin),
+  masterController.updateKategoriMesin,
+);
+router.delete(
+  "/kategori-mesin/:id",
+  managerRoles,
+  masterController.deleteKategoriMesin,
 );
 
 export default router;

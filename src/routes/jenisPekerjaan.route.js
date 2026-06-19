@@ -9,11 +9,11 @@ const router = express.Router();
 router
   .route("/")
   .get(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "MANDOR"),
     jenisPekerjaanController.getJenisPekerjaanList,
   )
   .post(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "MANDOR"),
     validate(jenisPekerjaanValidation.createJenisPekerjaan),
     jenisPekerjaanController.createJenisPekerjaan,
   );
@@ -21,17 +21,17 @@ router
 router
   .route("/:jenisPekerjaanId")
   .get(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "MANDOR"),
     validate(jenisPekerjaanValidation.getJenisPekerjaan),
     jenisPekerjaanController.getJenisPekerjaan,
   )
   .put(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "MANDOR"),
     validate(jenisPekerjaanValidation.updateJenisPekerjaan),
     jenisPekerjaanController.updateJenisPekerjaan,
   )
   .delete(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("SUPERVISOR", "ADMIN", "MANDOR"),
     validate(jenisPekerjaanValidation.deleteJenisPekerjaan),
     jenisPekerjaanController.deleteJenisPekerjaan,
   );

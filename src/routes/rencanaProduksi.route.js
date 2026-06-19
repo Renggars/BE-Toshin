@@ -15,15 +15,21 @@ router.post(
 
 router.get(
   "/my-rph",
-  auth("SUPERVISOR", "ADMIN", "PRODUKSI"),
+  auth("SUPERVISOR", "ADMIN", "OPERATOR"),
   validate(rencanaProduksiValidation.getMyRPH),
   rencanaProduksiController.getMyRPH,
 );
 
 router.post(
   "/close-rph/:rphId",
-  auth("PRODUKSI", "SUPERVISOR"),
+  auth("OPERATOR", "SUPERVISOR"),
   rencanaProduksiController.closeActiveRph,
+);
+
+router.post(
+  "/activate-rph/:rphId",
+  auth("OPERATOR", "SUPERVISOR"),
+  rencanaProduksiController.activateActiveRph,
 );
 
 router.get(

@@ -3,10 +3,12 @@
 import ApiError from "../utils/ApiError.js";
 import httpStatus from "http-status";
 import moment from "moment";
+import { nowWIB } from "../utils/dateWIB.js";
 
 import prisma from "../../prisma/index.js";
 import { calculateProductionTarget } from "../utils/productionCalc.js";
 import notificationService from "./notification.service.js";
+import { emitOperatorProgressUpdate } from "../config/socket.js";
 
 const createRencanaProduksi = async (payload) => {
   const {
@@ -18,6 +20,7 @@ const createRencanaProduksi = async (payload) => {
     jenisPekerjaanId,
     tanggal,
     keterangan,
+    targetOverride,
   } = payload;
 
   // 1. Validasi foreign key (Mencoba ambil target dulu untuk auto-derive jenis_pekerjaan jika tidak ada)
@@ -64,6 +67,9 @@ const createRencanaProduksi = async (payload) => {
       jenisPekerjaanId: effectiveJenisPekerjaanId,
       tanggal: new Date(tanggal),
       keterangan,
+      targetOverride: (targetOverride !== undefined && targetOverride !== null && targetOverride !== "")
+        ? (isNaN(parseInt(targetOverride)) ? null : parseInt(targetOverride))
+        : null,
     },
     include: {
       operator: { include: { divisi: true } },
@@ -75,15 +81,32 @@ const createRencanaProduksi = async (payload) => {
     },
   });
 
-  //kirim notifikasi ke user yang di assign
-  await notificationService.createNotification({
-    userId: userId,
-    tipe: "RPH_ASSIGNED",
-    judul: "RPH Baru Ditugaskan",
-    pesan: `RPH baru telah ditambahkan pada ${moment().format(
-      "DD-MM-YYYY HH:mm",
-    )}`,
+  // Cek apakah ini rph pertama untuk hari ini bagi operator tersebut
+  const startOfDay = moment(tanggal).startOf("day").toDate();
+  const endOfDay = moment(tanggal).endOf("day").toDate();
+  
+  const existingRphCount = await prisma.rencanaProduksi.count({
+    where: {
+      userId: userId,
+      tanggal: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+      id: { not: rph.id } // exclude the newly created rph
+    }
   });
+
+  // Hanya kirim notifikasi jika bukan RPH pertama hari ini (artinya RPH tambahan/susulan)
+  if (existingRphCount > 0) {
+    await notificationService.createNotification({
+      userId: userId,
+      tipe: "RPH_ASSIGNED",
+      judul: "RPH Baru Ditugaskan",
+      pesan: `RPH baru telah ditambahkan pada ${moment().format(
+        "DD-MM-YYYY HH:mm",
+      )}`,
+    });
+  }
 
   return rph;
 };
@@ -110,12 +133,13 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
         },
       },
     },
-    mesin: true,
+    mesin: { include: { kategori: true } },
     produk: true,
     shift: true,
     target: {
       include: { jenisPekerjaan: true },
     },
+    laporanRealisasiProduksi: true,
     attendance: {
       take: 1,
       orderBy: { jamTap: "asc" },
@@ -156,22 +180,15 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
 
   if (allRphs.length === 0) return null;
 
-  // ✅ Auto-activation logic: If no ACTIVE RPH, but there are PLANNED ones, activate the most recent PLANNED.
   let rp = [...allRphs].reverse().find((r) => r.status === "ACTIVE");
-
+  let justActivated = false;
   if (!rp) {
     const plannedRph = [...allRphs]
       .reverse()
       .find((r) => r.status === "PLANNED");
     if (plannedRph) {
-      // Update status to ACTIVE in database
-      await prisma.rencanaProduksi.update({
-        where: { id: plannedRph.id },
-        data: { status: "ACTIVE", startTime: new Date() },
-      });
-      plannedRph.status = "ACTIVE"; // Update object in memory
-      plannedRph.startTime = new Date();
       rp = plannedRph;
+      justActivated = true;
     }
   }
 
@@ -192,8 +209,8 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   const firstAttendance =
     allAttendances.length > 0
       ? [...allAttendances].sort(
-          (a, b) => new Date(a.jamTap) - new Date(b.jamTap),
-        )[0]
+        (a, b) => new Date(a.jamTap) - new Date(b.jamTap),
+      )[0]
       : null;
 
   let statusAbsensi = "Belum Hadir";
@@ -207,9 +224,10 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
 
     const [h, m] = jamMasukShift.split(":");
     const shiftTime = new Date(jamTap);
-    shiftTime.setHours(parseInt(h), parseInt(m), 0, 0);
+    shiftTime.setUTCHours(parseInt(h), parseInt(m), 0, 0);
 
-    jamMasukAktual = moment(jamTap).format("HH:mm");
+
+    jamMasukAktual = moment.utc(jamTap).format("HH:mm");
 
     if (jamTap > shiftTime) {
       statusAbsensi = "Terlambat";
@@ -224,11 +242,11 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
   }
 
   const targetKalkulasi = calculateProductionTarget(
-    rp.target.totalTarget,
+    rp.targetOverride ?? rp.target.totalTarget,
     rp.shift.tipeShift,
   );
 
-  // ✅ Context Detection: Active Andon RPH Switch
+  // Context Detection: Active Andon RPH Switch
   const RPH_SWITCH_NAMES = [
     "Pindah Mesin",
     "Pindah Produk",
@@ -252,7 +270,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
 
   if (activeAndonSwitch) {
     andonStatus = "RPH_SWITCH_IN_PROGRESS";
-    const durationMs = new Date() - new Date(activeAndonSwitch.waktuTrigger);
+    const durationMs = nowWIB() - new Date(activeAndonSwitch.waktuTrigger);
     const standardMin = activeAndonSwitch.masterMasalahAndon?.waktuPerbaikanMenit || 0;
 
     // Real decimal minutes (2 decimal precision)
@@ -272,7 +290,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     },
     absensi: {
       status: statusAbsensi,
-      jam_masuk_shift: rp.shift.jam_masuk,
+      jam_masuk_shift: rp.shift.jamMasuk,
       jam_masuk_aktual: jamMasukAktual,
       terlambat: isTerlambat,
       keterangan: isTerlambat ? `Telat ${selisihWaktu}` : "On Time",
@@ -284,8 +302,10 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       fk_id_jenis_pekerjaan:
         rp.jenisPekerjaanId || rp.target.jenisPekerjaanId,
       mesin: rp.mesin.namaMesin,
+      kategori_mesin: rp.mesin.kategori?.nama || '-',
       produk: rp.produk.namaProduk,
       jenis_pekerjaan: rp.target.jenisPekerjaan.namaPekerjaan,
+      no_kanagata: rp.laporanRealisasiProduksi?.noKanagata,
       status_rph: rp.status,
       catatan: rp.keterangan || "Tidak ada catatan untuk hari ini",
     },
@@ -306,7 +326,7 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       status: r.status,
       produk: r.produk.namaProduk,
       mesin: r.mesin.namaMesin,
-      target: r.target.totalTarget,
+      target: r.targetOverride ?? r.target.totalTarget,
     })),
     context: {
       andon_status: andonStatus,
@@ -314,17 +334,18 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
       late_menit: lateMinutes,
       pending_rph: pendingRph
         ? {
-            id: pendingRph.id,
-            fk_id_mesin: pendingRph.mesinId,
-            fk_id_produk: pendingRph.produkId,
-            fk_id_jenis_pekerjaan:
-              pendingRph.jenisPekerjaanId ||
-              pendingRph.target?.jenisPekerjaanId,
-            produk: pendingRph.produk.namaProduk,
-            mesin: pendingRph.mesin.namaMesin,
-          }
+          id: pendingRph.id,
+          fk_id_mesin: pendingRph.mesinId,
+          fk_id_produk: pendingRph.produkId,
+          fk_id_jenis_pekerjaan:
+            pendingRph.jenisPekerjaanId ||
+            pendingRph.target?.jenisPekerjaanId,
+          produk: pendingRph.produk.namaProduk,
+          mesin: pendingRph.mesin.namaMesin,
+        }
         : null,
     },
+    just_activated: justActivated,
   };
 };
 
@@ -346,6 +367,7 @@ const getDashboardSummary = async (filterTanggal) => {
     },
     select: {
       shiftId: true,
+      targetOverride: true,
       target: {
         select: {
           totalTarget: true,
@@ -374,7 +396,7 @@ const getDashboardSummary = async (filterTanggal) => {
   // Tapi mari kita gunakan pendekatan yang lebih "clean".
 
   const totalTarget = rphToday.reduce(
-    (acc, curr) => acc + (curr.target?.totalTarget || 0),
+    (acc, curr) => acc + (curr.targetOverride ?? curr.target?.totalTarget ?? 0),
     0,
   );
 
@@ -405,7 +427,7 @@ const getDashboardSummary = async (filterTanggal) => {
 
   // 4. Hitung Statistik Operator (Widget Tengah Atas)
   const totalOperator = await prisma.user.count({
-    where: { role: "PRODUKSI" },
+    where: { role: "OPERATOR" },
   });
 
   // Perbaikan error 'distinct': Gunakan groupBy untuk menghitung operator unik yang tap absensi
@@ -436,7 +458,7 @@ const getDashboardSummary = async (filterTanggal) => {
   const rphByShift = {};
   rphToday.forEach((r) => {
     rphByShift[r.shiftId] =
-      (rphByShift[r.shiftId] || 0) + (r.target?.totalTarget || 0);
+      (rphByShift[r.shiftId] || 0) + (r.targetOverride ?? r.target?.totalTarget ?? 0);
   });
 
   // Group LRP by Shift (Tercapai) - ambil dari lrpStatsGroup yang sudah di-query sebelumnya
@@ -479,6 +501,7 @@ const getDashboardSummary = async (filterTanggal) => {
     },
     select: {
       tanggal: true,
+      targetOverride: true,
       target: {
         select: {
           totalTarget: true,
@@ -515,11 +538,10 @@ const getDashboardSummary = async (filterTanggal) => {
     };
   }
 
-  // Aggregate target dari RPH
   weeklyData.forEach((rph) => {
     const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
     if (trendByDate[dateKey]) {
-      trendByDate[dateKey].target += rph.target?.totalTarget || 0;
+      trendByDate[dateKey].target += rph.targetOverride ?? rph.target?.totalTarget ?? 0;
     }
   });
 
@@ -572,6 +594,7 @@ const getWeeklyTrend = async (filterTanggal) => {
     },
     select: {
       tanggal: true,
+      targetOverride: true,
       target: {
         select: {
           totalTarget: true,
@@ -610,11 +633,19 @@ const getWeeklyTrend = async (filterTanggal) => {
     };
   }
 
+<<<<<<< HEAD
   // Aggregate target
   weeklyData.forEach((rph) => {
     const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
     if (trendByDate[dateKey]) {
       trendByDate[dateKey].target_achievement += rph.target?.totalTarget || 0;
+=======
+  // 5. Agregasi target dari RPH
+  weeklyRph.forEach((r) => {
+    const dateKey = moment(r.tanggal).format("YYYY-MM-DD");
+    if (trendMap[dateKey]) {
+      trendMap[dateKey].totalTarget += r.targetOverride ?? r.target?.totalTarget ?? 0;
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
     }
   });
 
@@ -626,6 +657,7 @@ const getWeeklyTrend = async (filterTanggal) => {
     }
   });
 
+<<<<<<< HEAD
   // Calculate percentage
   Object.keys(trendByDate).forEach((key) => {
     const data = trendByDate[key];
@@ -634,6 +666,16 @@ const getWeeklyTrend = async (filterTanggal) => {
         ((data.total_production / data.target_achievement) * 100).toFixed(1),
       );
     }
+=======
+  // 7. Hitung persentase
+  const results = Object.values(trendMap).map((item) => {
+    return {
+      ...item,
+      percentage: item.totalTarget > 0
+        ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
+        : 0,
+    };
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
   });
 
   return Object.values(trendByDate);
@@ -643,7 +685,7 @@ const searchOperator = async (query) => {
   return prisma.user.findFirst({
     where: {
       OR: [{ nama: { contains: query } }, { uidNfc: query }],
-      role: "PRODUKSI",
+      role: "OPERATOR",
     },
     select: {
       id: true,
@@ -654,41 +696,53 @@ const searchOperator = async (query) => {
   });
 };
 
-const getHistoryRPH = async (filterTanggal) => {
-  // Gunakan string YYYY-MM-DD agar diparse sebagai UTC 00:00 oleh new Date()
+const getHistoryRPH = async (filterTanggal, userId) => {
   const dateStr = filterTanggal || moment().format("YYYY-MM-DD");
-  const date = new Date(dateStr);
 
-  const where = {
-    tanggal: date,
-  };
+  const where = {};
+  if (userId) {
+    where.userId = parseInt(userId);
+  } else {
+    where.tanggal = new Date(dateStr);
+  }
 
-  // Mengambil data untuk widget "Data RPH"
+  // Mengambil data untuk widget "Data RPH" atau Auto-fill history
   const data = await prisma.rencanaProduksi.findMany({
     where,
     include: {
-      operator: { select: { nama: true } },
-      mesin: { select: { namaMesin: true } },
-      produk: { select: { namaProduk: true } },
-      shift: { select: { namaShift: true, tipeShift: true } },
-      target: { select: { totalTarget: true } },
+      operator: { select: { id: true, nama: true } },
+      mesin: { select: { id: true, namaMesin: true } },
+      produk: { select: { id: true, namaProduk: true } },
+      shift: { select: { id: true, namaShift: true, tipeShift: true, jamMasuk: true, jamKeluar: true } },
+      target: { select: { id: true, totalTarget: true } },
+      jenisPekerjaan: { select: { id: true, namaPekerjaan: true } },
     },
-    orderBy: { tanggal: "desc" },
+    orderBy: { id: "desc" },
+    take: userId ? 1 : undefined,
   });
 
-  // Map data ke format yang diinginkan
   const result = data.map((curr) => {
     const targetKalkulasi = calculateProductionTarget(
-      curr.target?.totalTarget || 0,
+      curr.targetOverride ?? curr.target?.totalTarget ?? 0,
       curr.shift?.tipeShift || "Normal",
     );
 
     return {
+      id: curr.id,
       nama: curr.operator?.nama || "-",
+      operator_id: curr.operator?.id,
       detail: `${curr.mesin?.namaMesin || "-"} • ${curr.produk?.namaProduk || "-"}`,
-      shift: curr.shift?.namaShift || "-",
+      mesin_id: curr.mesin?.id,
+      produk_id: curr.produk?.id,
+      shift: curr.shift ? `${curr.shift.namaShift}(${curr.shift.jamMasuk}-${curr.shift.jamKeluar})` : "-",
+      shift_id: curr.shift?.id,
       kategori_shift: curr.shift?.tipeShift || "-",
       target: targetKalkulasi.totalTarget,
+      target_id: curr.target?.id,
+      target_override: curr.targetOverride,
+      jenis_pekerjaan_id: curr.jenisPekerjaanId || curr.target?.jenisPekerjaanId,
+      jenis_pekerjaan: curr.jenisPekerjaan?.namaPekerjaan || "-",
+      keterangan: curr.keterangan || "",
     };
   });
 
@@ -712,14 +766,31 @@ const updateRencanaProduksi = async (rphId, payload) => {
 
   // Jika ada perubahan user, kirim notifikasi ke user baru
   if (payload.userId && payload.userId !== rph.userId) {
-    await notificationService.createNotification({
-      userId: payload.userId,
-      tipe: "RPH_ASSIGNED",
-      judul: "RPH Baru Ditugaskan",
-      pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
-        "DD-MM-YYYY HH:mm",
-      )} (Update)`,
+    const rphDate = payload.tanggal || rph.tanggal;
+    const startOfDay = moment(rphDate).startOf("day").toDate();
+    const endOfDay = moment(rphDate).endOf("day").toDate();
+    
+    const existingRphCount = await prisma.rencanaProduksi.count({
+      where: {
+        userId: payload.userId,
+        tanggal: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        id: { not: rphId }
+      }
     });
+
+    if (existingRphCount > 0) {
+      await notificationService.createNotification({
+        userId: payload.userId,
+        tipe: "RPH_ASSIGNED",
+        judul: "RPH Baru Ditugaskan",
+        pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
+          "DD-MM-YYYY HH:mm",
+        )} (Update)`,
+      });
+    }
   }
 
   const updatedRph = await prisma.rencanaProduksi.update({
@@ -733,6 +804,9 @@ const updateRencanaProduksi = async (rphId, payload) => {
       jenisPekerjaanId: payload.jenisPekerjaanId || undefined,
       keterangan: payload.keterangan || undefined,
       tanggal: payload.tanggal ? new Date(payload.tanggal) : undefined,
+      targetOverride: payload.targetOverride !== undefined
+        ? (payload.targetOverride === null || payload.targetOverride === "" || isNaN(parseInt(payload.targetOverride)) ? null : parseInt(payload.targetOverride))
+        : undefined,
     },
     include: {
       operator: { include: { divisi: true } },
@@ -751,10 +825,12 @@ const deleteRencanaProduksi = async (rphId) => {
   const rph = await prisma.rencanaProduksi.findUnique({
     where: { id: rphId },
     include: {
+      laporanRealisasiProduksi: {
+        select: { id: true },
+      },
       _count: {
         select: {
           attendance: true,
-          laporanRealisasiProduksi: true,
         },
       },
     },
@@ -767,7 +843,7 @@ const deleteRencanaProduksi = async (rphId) => {
     );
   }
 
-  if (rph._count.laporanRealisasiProduksi > 0) {
+  if (rph.laporanRealisasiProduksi) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Gagal menghapus! RPH ini sudah memiliki Laporan Realisasi Produksi (LRP). Hapus LRP terlebih dahulu jika ingin menghapus RPH ini.",
@@ -793,7 +869,7 @@ const getUserRPHList = async (userId, tanggalStr) => {
   const endOfDay = moment(tanggalStr).endOf("day").toDate();
 
   const includeQuery = {
-    mesin: true,
+    mesin: { include: { kategori: true } },
     produk: true,
     jenisPekerjaan: true,
     target: {
@@ -833,22 +909,7 @@ const getUserRPHList = async (userId, tanggalStr) => {
     });
   }
 
-  // ✅ Auto-activation: Sama seperti di dashboard, aktifkan PLANNED jika tidak ada ACTIVE
-  const hasActive = allRphs.some((r) => r.status === "ACTIVE");
-  if (!hasActive) {
-    const plannedIdx = [...allRphs]
-      .reverse()
-      .findIndex((r) => r.status === "PLANNED");
-    if (plannedIdx !== -1) {
-      const idx = allRphs.length - 1 - plannedIdx;
-      await prisma.rencanaProduksi.update({
-        where: { id: allRphs[idx].id },
-        data: { status: "ACTIVE", startTime: new Date() },
-      });
-      allRphs[idx].status = "ACTIVE";
-      allRphs[idx].startTime = new Date();
-    }
-  }
+
 
   // Map to detailed format requested by user
   return allRphs.map((r) => ({
@@ -859,6 +920,7 @@ const getUserRPHList = async (userId, tanggalStr) => {
     mesin: {
       id: r.mesin.id,
       nama: r.mesin.namaMesin,
+      kategori_mesin: r.mesin.kategori?.nama || '-',
     },
     produk: {
       id: r.produk.id,
@@ -899,9 +961,48 @@ const closeRph = async (rphId) => {
     where: { id: rphId },
     data: {
       status: "CLOSED",
-      endTime: new Date(),
+      endTime: nowWIB(),
     },
   });
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
+
+  return updatedRph;
+};
+
+const activateRph = async (rphId) => {
+  const rph = await prisma.rencanaProduksi.findUnique({
+    where: {
+      id: rphId,
+    },
+  });
+
+  if (!rph) {
+    throw new ApiError(httpStatus.NOT_FOUND, "RPH tidak ditemukan");
+  }
+
+  if (rph.status === "ACTIVE") {
+    return rph; // Already active, idempotent success
+  }
+
+  if (rph.status !== "PLANNED") {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Hanya RPH dengan status PLANNED yang dapat diaktifkan",
+    );
+  }
+
+  const updatedRph = await prisma.rencanaProduksi.update({
+    where: { id: rphId },
+    data: {
+      status: "ACTIVE",
+      startTime: nowWIB(),
+    },
+  });
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
 
   return updatedRph;
 };
@@ -917,4 +1018,5 @@ export default {
   updateRencanaProduksi,
   deleteRencanaProduksi,
   closeRph,
+  activateRph,
 };

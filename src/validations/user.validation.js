@@ -4,13 +4,13 @@ import { password } from "./custom.validation.js";
 const register = {
   body: Joi.object().keys({
     nama: Joi.string().required(),
-    email: Joi.string().email().required(),
+    noReg: Joi.string().required(),
     password: Joi.string().custom(password).required(),
     uidNfc: Joi.string().optional().allow(null, ""),
     divisiId: Joi.number().integer().required(),
     role: Joi.string()
       .valid(
-        "PRODUKSI",
+        "OPERATOR",
         "QUALITY",
         "MAINTENANCE",
         "DIE_MAINT",
@@ -27,10 +27,15 @@ const register = {
         "ACCOUNTING",
         "FINANCE",
         "SUPERVISOR",
+        "MANDOR",
         "ADMIN",
+        "HR",
       )
       .required(),
-    fotoProfile: Joi.string().uri().allow(null, ""),
+    tipeOperator: Joi.string()
+      .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
+      .when("role", { is: "OPERATOR", then: Joi.optional(), otherwise: Joi.forbidden() }),
+    fotoProfile: Joi.string().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
     noReg: Joi.string().optional().allow(null, ""),
@@ -56,13 +61,12 @@ const updateUser = {
   body: Joi.object()
     .keys({
       nama: Joi.string().optional(),
-      email: Joi.string().email().optional(),
       password: Joi.string().custom(password).optional(),
       uidNfc: Joi.string().optional().allow(null, ""),
       divisiId: Joi.number().integer().optional(),
       role: Joi.string()
         .valid(
-          "PRODUKSI",
+          "OPERATOR",
           "QUALITY",
           "MAINTENANCE",
           "DIE_MAINT",
@@ -79,10 +83,15 @@ const updateUser = {
           "ACCOUNTING",
           "FINANCE",
           "SUPERVISOR",
+          "MANDOR",
           "ADMIN",
+          "HR",
         )
         .optional(),
-      fotoProfile: Joi.string().uri().allow(null, ""),
+      tipeOperator: Joi.string()
+        .valid("OPERATOR_LAPANGAN", "OPERATOR_OFFICE")
+        .optional(),
+      fotoProfile: Joi.string().allow(null, ""),
       plant: Joi.string().valid("1", "2", "3").optional(),
       line: Joi.string().optional(),
       noReg: Joi.string().optional().allow(null, ""),
@@ -96,11 +105,6 @@ const deactivateUser = {
   }),
 };
 
-const getUserByEmail = {
-  query: Joi.object().keys({
-    email: Joi.string().email().required(),
-  }),
-};
 
 export default {
   register,
@@ -108,5 +112,4 @@ export default {
   getUser,
   updateUser,
   deactivateUser,
-  getUserByEmail,
 };

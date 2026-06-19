@@ -32,7 +32,7 @@ global.__NOTIF_MOCKS__ = {
         }
     ),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 
@@ -205,8 +205,8 @@ describe("Notification Controller - Comprehensive Unit Tests", () => {
       expect(res.body.meta.currentPage).toBe(2);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       notificationService.getNotifications.mockResolvedValue(mockGetNotificationsResult);
 
       const res = await request(app).get("/notification");
@@ -442,8 +442,8 @@ describe("Notification Controller - Comprehensive Unit Tests", () => {
       expect(res.body.unreadCount).toBe(0);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       notificationService.getUnreadCount.mockResolvedValue(mockUnreadCountResult);
 
       const res = await request(app).get("/notification/unread-count");
@@ -599,8 +599,8 @@ describe("Notification Controller - Comprehensive Unit Tests", () => {
       expect(res.body.message).toBe("Notification marked as read");
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       notificationService.markAsRead.mockResolvedValue(mockMarkAsReadResult);
 
       const res = await request(app).patch("/notification/1/read");

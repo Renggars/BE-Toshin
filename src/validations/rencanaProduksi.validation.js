@@ -12,6 +12,7 @@ const createRencanaProduksi = {
     jenisPekerjaanId: Joi.number().integer().required(),
     tanggal: Joi.date().required(),
     keterangan: Joi.string().allow("", null),
+    targetOverride: Joi.number().integer().allow(null).optional(),
   }),
 };
 
@@ -35,6 +36,7 @@ const updateRencanaProduksi = {
         "ACTIVE",
         "CLOSED",
       ),
+      targetOverride: Joi.number().integer().allow(null).optional(),
     })
     .min(1),
 };

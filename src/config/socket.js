@@ -1,17 +1,64 @@
 import { Server } from "socket.io";
 import { instrument } from "@socket.io/admin-ui";
+import client from "prom-client";
 import logger from "./logger.js";
+import { businessBroadcastTotal } from "./businessMetrics.js";
 
 let io = null;
 
+// Metrics
+const socketActiveConnections = new client.Gauge({
+  name: "socket_io_connections_active",
+  help: "Number of currently active Socket.io connections",
+});
+
+const socketConnectsTotal = new client.Counter({
+  name: "socket_io_connects_total",
+  help: "Total number of Socket.io connections established",
+});
+
+const socketDisconnectsTotal = new client.Counter({
+  name: "socket_io_disconnects_total",
+  help: "Total number of Socket.io disconnections",
+});
+
+const socketMessagesInTotal = new client.Counter({
+  name: "socket_io_messages_in_total",
+  help: "Total number of incoming socket messages",
+  labelNames: ["event"],
+});
+
+const socketMessagesOutTotal = new client.Counter({
+  name: "socket_io_messages_out_total",
+  help: "Total number of outgoing socket messages",
+  labelNames: ["event"],
+});
+
+const socketOnlineUsersByRole = new client.Gauge({
+  name: "socket_io_online_users_by_role",
+  help: "Number of online users grouped by role",
+  labelNames: ["role"],
+});
+
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
+    pingTimeout: 60000,
+    pingInterval: 25000,
     cors: {
       origin: ["https://admin.socket.io", "*"],
       credentials: true,
       methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     },
   });
+
+  // Track Outgoing Messages (Server-level)
+  // If your version doesn't support Server.onAnyOut, we fallback to per-socket
+  if (typeof io.onAnyOut === 'function') {
+    io.onAnyOut((event) => {
+      socketMessagesOutTotal.inc({ event });
+      businessBroadcastTotal.inc({ event });
+    });
+  }
 
   // Enable Socket.io Admin UI
   instrument(io, {
@@ -20,15 +67,57 @@ export const initSocket = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
+    socketActiveConnections.inc();
+    socketConnectsTotal.inc();
     logger.info(`New client connected: ${socket.id}`);
 
+    // Track Incoming Messages
+    if (typeof socket.onAny === "function") {
+      socket.onAny((event) => {
+        socketMessagesInTotal.inc({ event });
+      });
+    }
+
+    // Track Outgoing Messages (Per-socket fallback)
+    if (typeof socket.onAnyOut === "function") {
+      socket.onAnyOut((event) => {
+        // Only increment if server-level tracking was not available
+        if (typeof io.onAnyOut !== "function") {
+          socketMessagesOutTotal.inc({ event });
+          businessBroadcastTotal.inc({ event });
+        }
+      });
+    }
+
     // Emit notifikasi baru ke client spesifik
-    socket.on("join", (userId) => {
+    socket.on("join", ({ userId, role }) => {
+      // Guard: Cek jika sudah pernah join untuk menghindari redundansi log & metrik
+      if (socket.hasJoined) return;
+
       socket.join(`user:${userId}`);
-      logger.info(`Socket ${socket.id} joined room user: ${userId}`);
+      if (role) {
+        socket.join(`role:${role}`);
+        socket.role = role; // Store role for disconnect tracking
+        socketOnlineUsersByRole.inc({ role });
+
+        logger.info(
+          `Socket ${socket.id} joined rooms user: ${userId}, role: ${role}`,
+        );
+      } else {
+        logger.info(`Socket ${socket.id} joined room user: ${userId}`);
+      }
+      
+      socket.hasJoined = true;
     });
 
     socket.on("disconnect", () => {
+      socketActiveConnections.dec();
+      socketDisconnectsTotal.inc();
+
+      if (socket.role) {
+        socketOnlineUsersByRole.dec({ role: socket.role });
+      }
+
       logger.info(`Client disconnected: ${socket.id}`);
     });
   });
@@ -206,3 +295,81 @@ export const emitNotification = (userId, notification) => {
     logger.error(`Failed to emit notification to user: ${userId}`, error);
   }
 };
+
+/**
+ * Emit event real-time untuk Mandor Task
+ * @param {number} userId - ID user penerima (Mandor atau Supervisor)
+ * @param {Object} task - Data task
+ */
+export const emitMandorTaskUpdate = (userId, task) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`user:${userId}`).emit("mandor-task-updated", task);
+    logger.info(`Mandor Task update emitted to user: ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to emit Mandor Task update to user: ${userId}`, error);
+  }
+};
+
+/**
+ * Emit event real-time untuk Pengumuman Operator
+ * @param {number} userId - ID user penerima (Operator)
+ * @param {Object} announcement - Data pengumuman
+ */
+export const emitOperatorAnnouncement = (userId, announcement) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`user:${userId}`).emit("new-announcement", announcement);
+    logger.info(`Announcement emitted to user: ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to emit announcement to user: ${userId}`, error);
+  }
+};
+
+/**
+ * Broadcast event real-time ke semua user dengan role tertentu
+ * @param {string} role - Role penerima (misal: OPERATOR)
+ * @param {string} event - Nama event
+ * @param {Object} data - Data yang dikirim
+ */
+export const broadcastToRole = (role, event, data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.to(`role:${role}`).emit(event, data);
+    logger.info(`Broadcast ${event} emitted to role: ${role}`);
+  } catch (error) {
+    logger.error(`Failed to broadcast to role: ${role}`, error);
+  }
+};
+/**
+ * Emit event real-time ketika ada update progres operator (LRP)
+ * @param {Object} data - Progress data
+ */
+export const emitOperatorProgressUpdate = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("operator-progress-updated", data);
+    logger.info("WebSocket: operator-progress-updated emitted");
+  } catch (error) {
+    logger.error("Failed to emit operator-progress-updated event", error);
+  }
+};
+
+/**
+ * Emit event real-time ketika ada update kehadiran operator (Attendance)
+ * @param {Object} data - Attendance data
+ * @param {number} data.rphId - ID Rencana Produksi
+ * @param {number} data.userId - ID user yang absen
+ * @param {string} [data.status] - Status kehadiran (HADIR/TERLAMBAT)
+ * @param {string} [data.action] - Action manual (HADIR/TERLAMBAT/TIDAK_HADIR)
+ */
+export const emitAttendanceUpdate = (data) => {
+  try {
+    const ioInstance = getIo();
+    ioInstance.emit("attendance-updated", data);
+    logger.info(`WebSocket: attendance-updated emitted for RPH ${data.rphId}`);
+  } catch (error) {
+    logger.error("Failed to emit attendance-updated event", error);
+  }
+};
+

@@ -14,8 +14,10 @@ const getDashboardSummary = catchAsync(async (req, res) => {
     "jenisPekerjaanId",
     "produkId",
     "plant",
+    "noLot",
     "page",
     "limit",
+    "statusLrp",
   ]);
 
   if (!filter.startDate && !filter.endDate) {
@@ -68,6 +70,8 @@ const exportExcel = catchAsync(async (req, res) => {
     "jenisPekerjaanId",
     "produkId",
     "plant",
+    "statusLrp",
+    "noLot",
   ]);
 
   const buffer = await lrpDashboardService.exportData(filter);

@@ -30,15 +30,16 @@ const buildFilterWhereClause = (filter) => {
 
   // 3. Filter Relation (Jenis Pekerjaan & Produk)
   // Filter ini ada di model RencanaProduksi
-  if (filter.jenisPekerjaanId || filter.produkId) {
+  const jId = filter.jenisPekerjaanId || filter.workTypeId;
+  const pId = filter.produkId || filter.productId;
+
+  if (jId || pId) {
     where.rencanaProduksi = {};
-    if (filter.jenisPekerjaanId) {
-      where.rencanaProduksi.jenisPekerjaanId = Number(
-        filter.jenisPekerjaanId,
-      );
+    if (jId) {
+      where.rencanaProduksi.jenisPekerjaanId = Number(jId);
     }
-    if (filter.produkId) {
-      where.rencanaProduksi.produkId = Number(filter.produkId);
+    if (pId) {
+      where.rencanaProduksi.produkId = Number(pId);
     }
   }
 
@@ -51,9 +52,14 @@ const buildFilterWhereClause = (filter) => {
 
   // 5. Pencarian (Optional)
   if (filter.noKanagata)
-    where.noKanagata = { contains: filter.noKanagata, mode: "insensitive" };
+    where.noKanagata = { contains: filter.noKanagata };
   if (filter.noLot)
-    where.noLot = { contains: filter.noLot, mode: "insensitive" };
+    where.noLot = { contains: filter.noLot };
+
+  // 6. Filter Status LRP
+  if (filter.statusLrp && filter.statusLrp !== "ALL") {
+    where.statusLrp = filter.statusLrp;
+  }
 
   return where;
 };
@@ -138,7 +144,8 @@ const getTrendBulananHarian = async (filter) => {
   const daysInMonth = lastDay.date();
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = moment.utc([year, month, d]).format("YYYY-MM-DD");
+    const current = moment.utc([year, month, d]);
+    const dateStr = current.format("YYYY-MM-DD");
 
     const existing = data.find((item) => {
       const itemDate = moment.utc(item.tanggal).format("YYYY-MM-DD");
@@ -198,6 +205,11 @@ const getTrendBulanan = async (filter) => {
   if (filter.shiftId) {
     conditions.push(
       Prisma.sql`lrp.fk_id_shift = ${Number(filter.shiftId)}`,
+    );
+  }
+  if (filter.noLot) {
+    conditions.push(
+      Prisma.sql`lrp.no_lot LIKE ${`%${filter.noLot}%`}`,
     );
   }
 
@@ -310,7 +322,9 @@ const getLrpList = async (filter) => {
       mesin: true,
       shift: true,
       operator: true,
-      rencanaProduksi: { include: { jenisPekerjaan: true, produk: true } },
+      rencanaProduksi: {
+        include: { jenisPekerjaan: true, produk: true, target: true },
+      },
     },
     orderBy: { createdAt: "desc" },
     skip,
@@ -324,8 +338,9 @@ const getLrpList = async (filter) => {
     const counterEnd = lrp.counterEnd;
     const counterEndFormatted =
       counterEnd != null
-        ? `${Math.floor(counterEnd / 60)} h ${counterEnd % 60} m`
+        ? counterEnd.toString()
         : "-";
+    const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
     return {
       id: lrp.id,
       tanggal: lrp.tanggal,
@@ -341,9 +356,11 @@ const getLrpList = async (filter) => {
       qtyTotalProd: lrp.qtyTotalProd,
       jenisPekerjaan:
         lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
+      targetQty: lrp.rencanaProduksi?.target?.totalTarget || 0,
       counterEndFormatted: counterEndFormatted,
       jamKerja: `${hours}h ${minutes}m`,
       statusLrp: lrp.statusLrp,
+      targetQty: targetQty,
     };
   });
 
@@ -368,6 +385,13 @@ const getLrpDetail = async (id) => {
       mesin: true,
       shift: true,
       operator: true,
+      rencanaProduksi: {
+        include: {
+          produk: true,
+          jenisPekerjaan: true,
+          target: true,
+        },
+      },
     },
   });
 
@@ -375,16 +399,121 @@ const getLrpDetail = async (id) => {
     throw new ApiError(httpStatus.NOT_FOUND, "LRP not found");
   }
 
-  // Summary Waktu (Placeholder since logs are removed)
+  // Fetch all LRPs for the same machine, shift, and date as an operator breakdown (from HEAD)
+  const breakdownRaw = await prisma.laporanRealisasiProduksi.findMany({
+    where: {
+      mesinId: lrp.mesinId,
+      shiftId: lrp.shiftId,
+      tanggal: lrp.tanggal,
+    },
+    include: {
+      operator: { select: { nama: true } },
+    },
+  });
+
+  // Combine with attendance-based logic (from rev3)
+  const attendances = await prisma.attendance.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      operator: true,
+    },
+  });
+
+  const operatorsMap = new Map();
+  // Initialize with LRP operators
+  breakdownRaw.forEach((item) => {
+    operatorsMap.set(item.operatorId, {
+      id: item.operatorId,
+      operatorName: item.operator?.nama || "-",
+      qtyOk: item.qtyOk,
+      qtyNg: (item.qtyNgPrev || 0) + (item.qtyNgProses || 0),
+      qtyRework: item.qtyRework,
+      qtyTotal: item.qtyTotalProd,
+    });
+  });
+
+  // Add from attendance if not present
+  attendances.forEach((att) => {
+    if (!operatorsMap.has(att.userId)) {
+      operatorsMap.set(att.userId, {
+        id: att.userId,
+        operatorName: att.operator.nama,
+        qtyOk: 0,
+        qtyNg: 0,
+        qtyRework: 0,
+        qtyTotal: 0,
+      });
+    }
+  });
+
+  const operatorBreakdown = Array.from(operatorsMap.values());
+
+  // Fetch actual activity logs (breakdown) linked to this RPH (HEAD logic)
+  const logsRaw = await prisma.andonDowntimeShift.findMany({
+    where: { rphId: lrp.rphId },
+    include: {
+      andonEvent: {
+        include: { masterMasalahAndon: true },
+      },
+    },
+    orderBy: { waktuStart: "asc" },
+  });
+
+  // Deduplicate logs (HEAD logic)
+  const dedupedLogs = [];
+  const logMap = new Map();
+
+  logsRaw.forEach((log) => {
+    const key = `${log.andonEventId}-${log.waktuStart.toISOString()}-${log.waktuEnd.toISOString()}`;
+    if (!logMap.has(key)) {
+      logMap.set(key, true);
+      dedupedLogs.push(log);
+    }
+  });
+
+  const andonBreakdown = dedupedLogs.map((log) => ({
+    problemName: log.andonEvent?.masterMasalahAndon?.namaMasalah || "Unknown",
+    category: log.andonEvent?.masterMasalahAndon?.kategori || "-",
+    duration: log.durasiMenit || 0,
+    status: log.andonEvent?.status || "RESOLVED",
+    startTime: log.waktuStart,
+    endTime: log.waktuEnd,
+  }));
+
+  // Summary Waktu (Combination)
+  const plannedDowntime = andonBreakdown
+    .filter((l) => l.category === "PLAN_DOWNTIME")
+    .reduce((acc, curr) => acc + curr.duration, 0);
+
+  const unplannedDowntime = andonBreakdown
+    .filter((l) => l.category !== "PLAN_DOWNTIME")
+    .reduce((acc, curr) => acc + curr.duration, 0);
+
+  // Use net runtime if planned/unplanned downtime is subtracted (rev3 logic style)
+  const totalDowntime = plannedDowntime + unplannedDowntime;
+  const runtime = Math.max(0, (lrp.loadingTime || 0) - totalDowntime);
+
   const summaryWaktu = {
-    runtime: lrp.loadingTime || 0,
-    breakdown: 0,
-    planDowntime: 0,
+    runtime: Number(runtime.toFixed(2)),
+    breakdown: Number(unplannedDowntime.toFixed(2)),
+    planDowntime: Number(plannedDowntime.toFixed(2)),
+  };
+
+  // Header Preparation (rev3 fields included)
+  const targetQty = lrp.rencanaProduksi?.targetOverride ?? lrp.rencanaProduksi?.target?.totalTarget ?? 0;
+  const header = {
+    ...lrp,
+    targetQty,
+    target_qty: targetQty,
+    produk: lrp.rencanaProduksi?.produk?.namaProduk || "-",
+    jenisPekerjaan: lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-",
   };
 
   return {
-    header: lrp,
+    header,
     logs: [],
+    operatorBreakdown,
+    andonBreakdown,
     summaryWaktu,
   };
 };
@@ -407,7 +536,9 @@ const exportData = async (filter) => {
           mesin: true,
           shift: true,
           operator: true,
-          rencanaProduksi: { include: { jenisPekerjaan: true } },
+          rencanaProduksi: {
+            include: { jenisPekerjaan: true, produk: true, target: true },
+          },
         },
         orderBy: { tanggal: "desc" },
       }),
@@ -475,7 +606,7 @@ const exportData = async (filter) => {
     border: brdr(),
   });
 
-  const COLS = "ABCDEFGHIJKLM".split("");
+  const COLS = "ABCDEFGHIJKLMN".split("");
   const wb = xlsx.utils.book_new();
   // Format tanggal dengan WIB (UTC+7)
   const startMoment = filter.startDate
@@ -627,8 +758,7 @@ const exportData = async (filter) => {
       totalMins % 60,
     )}m`;
     const ce = lrp.counterEnd;
-    const counterEndFmt =
-      ce != null ? `${Math.floor(ce / 60)}h ${ce % 60}m` : "-";
+    const counterEndFmt = ce != null ? ce : "-";
     const jp = lrp.rencanaProduksi?.jenisPekerjaan?.namaPekerjaan || "-";
     ws4[`A${row}`] = { v: tgl, s: cellS(isAlt) };
     ws4[`B${row}`] = { v: lrp.operator?.nama || "-", s: cellS(isAlt, "left") };
@@ -669,7 +799,7 @@ const exportData = async (filter) => {
   // SHEET 5 — TREND PRESS
   // ═══════════════════════════════════════════════════════════════════════════
   const ws5 = {};
-  const tpTitle = `TREND PRODUKSI PRESS`;
+  const tpTitle = `TREND PRODUKSI PRIMARY & SECONDARY`;
   ["A", "B", "C", "D", "E"].forEach((c) => {
     ws5[`${c}1`] = { v: c === "A" ? tpTitle : "", s: hdr() };
   });
@@ -710,20 +840,16 @@ const getTrendPress = async (filter) => {
   let start, end;
 
   // Determine range logic based on priority: Range > Single Side > Default Today
-  if (filter.startDate && filter.endDate) {
-    start = moment.utc(filter.startDate).startOf("day");
-    end = moment.utc(filter.endDate).endOf("day");
-  } else if (filter.startDate) {
-    start = moment.utc(filter.startDate).startOf("day");
-    end = moment.utc(filter.startDate).endOf("day");
-  } else if (filter.endDate) {
-    start = moment.utc(filter.endDate).startOf("day");
-    end = moment.utc(filter.endDate).endOf("day");
-  } else {
-    // Default today WIB (Asia/Jakarta)
-    start = moment().startOf("day");
-    end = moment().endOf("day");
-  }
+  const refDate = filter.startDate ? moment.utc(filter.startDate) : moment().utcOffset(7);
+  const year = refDate.year();
+  const month = refDate.month();
+
+  const firstDay = moment.utc([year, month, 1]).startOf("day");
+  const lastDay = moment.utc(firstDay).endOf("month");
+
+  // Always use full month range for trend
+  start = firstDay;
+  end = lastDay;
 
   // Clone filter to avoid side effects and force our calculated range
   const innerFilter = { ...filter };
@@ -733,7 +859,7 @@ const getTrendPress = async (filter) => {
   const where = {
     ...buildFilterWhereClause(innerFilter),
     statusLrp: "VERIFIED",
-    mesin: { kategori: "PRESS" },
+    mesin: { kategori: { nama: { in: ["PRESS", "SECONDARY"] } } },
     tanggal: {
       gte: start.toDate(),
       lte: end.toDate(),

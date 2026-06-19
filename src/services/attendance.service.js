@@ -1,7 +1,11 @@
 import httpStatus from "http-status";
+import moment from "moment";
 import prisma from "../../prisma/index.js";
+
 import ApiError from "../utils/ApiError.js";
 import poinService from "./poin.service.js";
+import { nowWIB } from "../utils/dateWIB.js";
+import { emitOperatorProgressUpdate, emitAttendanceUpdate } from "../config/socket.js";
 
 /**
  * Get all users scheduled for a specific shift, date, and optionally division
@@ -116,10 +120,11 @@ const getPresentUsers = async ({ tanggal, shiftId, divisiId }) => {
 };
 
 const clockIn = async (user, req) => {
-  if (user.role !== "PRODUKSI") return;
+  if (user.role !== "OPERATOR") return;
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const now = nowWIB();
+  const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
 
   // 1. Cari RPH hari ini
   const rph = await prisma.rencanaProduksi.findFirst({
@@ -142,7 +147,8 @@ const clockIn = async (user, req) => {
 
     // Set jam masuk shift berdasarkan tanggal hari ini
     const shiftStartTime = new Date(now);
-    shiftStartTime.setHours(parseInt(h), parseInt(m), 0, 0);
+    shiftStartTime.setUTCHours(parseInt(h), parseInt(m), 0, 0);
+
 
     // LOGIKA FITUR: Maksimal absen 2 jam sebelum jam shift
     const earliestAllowed = new Date(
@@ -155,10 +161,8 @@ const clockIn = async (user, req) => {
     if (now < earliestAllowed && !isBypass) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        `Terlalu awal. Absen dibuka mulai jam ${earliestAllowed.toLocaleTimeString(
-          "id-ID",
-          { hour: "2-digit", minute: "2-digit" },
-        )}`,
+        `Terlalu awal. Absen dibuka mulai jam ${moment.utc(earliestAllowed).format("HH:mm")}`,
+
       );
     }
 
@@ -174,6 +178,9 @@ const clockIn = async (user, req) => {
         isTerlambat: isTerlambat,
       },
     });
+
+    // Real-time attendance update
+    emitAttendanceUpdate({ rphId: rph.id, userId: user.id, status: isTerlambat ? 'TERLAMBAT' : 'HADIR' });
 
     // LOGIKA FITUR: Otomatis kurangi poin jika terlambat
     if (isTerlambat) {
@@ -195,13 +202,8 @@ const clockIn = async (user, req) => {
                 operatorId: user.id,
                 tipeDisiplinId: tipeDisiplin.id,
                 shiftId: rph.shiftId,
-                keterangan: `Sistem: Terlambat login pada ${now.toLocaleTimeString(
-                  "id-ID",
-                  {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  },
-                )} (Shift: ${rph.shift.jamMasuk})`,
+                keterangan: `Sistem: Terlambat login pada jam ${moment.utc(now).format("HH:mm")} (Shift: ${rph.shift.namaShift} tipe ${rph.shift.tipeShift} - ${rph.shift.jamMasuk})`,
+
               },
               adminStaff.id,
             );
@@ -215,7 +217,23 @@ const clockIn = async (user, req) => {
         );
       }
     }
+  } else {
+    // LOGIKA FITUR: Login Kedua -> Aktifkan RPH (PLANNED -> ACTIVE)
+    // Jika user login lagi dan sudah ada record attendance, berarti dia mulai bekerja.
+    if (rph.status === "PLANNED") {
+      await prisma.rencanaProduksi.update({
+        where: { id: rph.id },
+        data: {
+          status: "ACTIVE",
+          startTime: now, // Catat waktu mulai kerja yang sesungguhnya
+        },
+      });
+    }
   }
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
+  emitAttendanceUpdate({ rphId: rph.id, userId: user.id });
 };
 
 const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId }) => {
@@ -250,12 +268,11 @@ const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId 
   } else {
     // Determine the tap time for a manual present mark - lets use start of shift + a bit, or current time
     // Better to use current time or start of shift. Let's use current time.
-    const now = new Date();
     attendanceRecord = await prisma.attendance.create({
       data: {
         userId: parseInt(userId),
         rphId: rph.id,
-        jamTap: now,
+        jamTap:nowWIB(),
         tanggal: new Date(tanggal),
         isTerlambat,
       },
@@ -285,6 +302,10 @@ const updateAttendanceManual = async ({ rphId, userId, tanggal, action, adminId 
        console.error("[ManualAttendance] Gagal mencatat poin disiplin otomatis:", error);
     }
   }
+
+  // Real-time progress update for Mandor
+  emitOperatorProgressUpdate({ rphId: rph.id });
+  emitAttendanceUpdate({ rphId: rph.id, userId: parseInt(userId), action });
 
   return attendanceRecord;
 };

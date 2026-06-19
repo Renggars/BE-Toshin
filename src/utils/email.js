@@ -8,14 +8,20 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Konfigurasi Email Testing
-export const EMAIL_AM_PER_PLANT = {
-  1: ["putrajon403@gmail.com", "puutradev02@gmail.com", "renggars30@gmail.com"],
-  2: ["puutradev02@gmail.com"],
-  3: ["renggars30@gmail.com"],
+// Helper to parse comma-separated emails from process.env
+const parseEnvEmails = (envValue) => {
+  if (!envValue) return [];
+  return envValue.split(",").map((email) => email.trim()).filter((email) => email !== "");
 };
 
-export const EMAIL_HR = ["renggarendy0@gmail.com"];
+// Konfigurasi Email
+export const EMAIL_AM_PER_PLANT = {
+  1: parseEnvEmails(process.env.EMAIL_AM_PLANT_1),
+  2: parseEnvEmails(process.env.EMAIL_AM_PLANT_2),
+  3: parseEnvEmails(process.env.EMAIL_AM_PLANT_3),
+};
+
+export const EMAIL_HR = parseEnvEmails(process.env.EMAIL_HR);
 
 /*
 export const EMAIL_AM_PER_PLANT_PROD = {

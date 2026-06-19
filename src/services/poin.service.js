@@ -12,6 +12,7 @@ import {
   getAMEmailTemplate,
   getHREmailTemplate,
 } from "../utils/emailTemplate.js";
+import { nowWIB } from "../utils/dateWIB.js";
 
 const BASE_POINT = 100;
 
@@ -43,7 +44,8 @@ const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
   let totalMinus = 0;
 
   for (const item of history) {
-    const tanggal = new Date(item.tanggal).toLocaleDateString("id-ID");
+    const tanggal = moment.utc(item.tanggal).format("DD/MM/YYYY");
+
     const pelanggaran = item.tipeDisiplin.namaTipeDisiplin;
     const potong = Math.abs(item.poinBerubah);
 
@@ -65,9 +67,9 @@ const ambilRiwayatPelanggaran = async (operatorId, targetMinus) => {
  */
 const getFormData = async () => {
   const [operators, tipeDisiplin, shifts] = await Promise.all([
-    // Get all users with PRODUKSI role
+    // Get all users with OPERATOR role
     prisma.user.findMany({
-      where: { role: "PRODUKSI" },
+      where: { role: "OPERATOR" },
       select: {
         id: true,
         nama: true,
@@ -150,7 +152,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
   }
 
-  if (operator.role !== "PRODUKSI") {
+  if (operator.role !== "OPERATOR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Target bukan operator produksi",
@@ -202,7 +204,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
     ? `/uploads/poin-images/${imageFile.filename}`
     : null;
 
-  const now = new Date();
+  const now = nowWIB();
   let suspendedUntil = operator.suspendedUntil;
 
   // Logic: Set masa SP 6 bulan jika masuk SP1 atau SP2
@@ -259,7 +261,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
       keterangan: keterangan || "-",
       poinSebelum,
       poinSesudah: poinSetelahUpdate,
-      timestamp: now,
+      timestamp: new Date(),
       riwayatPelanggaran: historyResult.teks,
       totalMinusRiwayat: historyResult.total,
     };
@@ -303,7 +305,7 @@ const createPelanggaran = async (payload, staffId, imageFile = null) => {
 
 const getPoinDashboardStats = async (plant, tanggal) => {
   const whereOperator = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -337,10 +339,11 @@ const getPoinDashboardStats = async (plant, tanggal) => {
   let dateFilter = {};
   if (tanggal) {
     const startDate = new Date(tanggal);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
 
     const endDate = new Date(tanggal);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
+
 
     dateFilter = {
       tanggal: {
@@ -401,7 +404,7 @@ const getPoinDashboardStats = async (plant, tanggal) => {
 
 const getPoinRankings = async (plant) => {
   const whereClause = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -453,7 +456,7 @@ const getPoinHistory = async (filter, options) => {
   const skip = (page - 1) * limit;
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -482,10 +485,11 @@ const getPoinHistory = async (filter, options) => {
 
   if (filter.tanggal) {
     const startDate = new Date(filter.tanggal);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
 
     const endDate = new Date(filter.tanggal);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
+
 
     whereClause.tanggal = {
       gte: startDate,
@@ -556,13 +560,14 @@ const getWeeklyStats = async (plant) => {
   const displayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
   const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  today.setUTCHours(23, 59, 59, 999);
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 6);
-  sevenDaysAgo.setHours(0, 0, 0, 0);
+  sevenDaysAgo.setUTCHours(0, 0, 0, 0);
+
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -656,7 +661,7 @@ const getMonthlyStats = async (plant) => {
   const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
 
   const operatorWhere = {
-    role: "PRODUKSI",
+    role: "OPERATOR",
     ...(plant && { plant: String(plant) }),
   };
 
@@ -751,7 +756,7 @@ const getUserByNfc = async (uidNfc) => {
     );
   }
 
-  if (user.role !== "PRODUKSI") {
+  if (user.role !== "OPERATOR") {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       "Hanya Operator yang dapat dikenakan poin disiplin",
@@ -784,7 +789,7 @@ const createPelanggaranByNfc = async (payload, staffId) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Operator tidak ditemukan");
   }
 
-  if (operator.role !== "PRODUKSI") {
+  if (operator.role !== "OPERATOR") {
     throw new ApiError(httpStatus.BAD_REQUEST, "Target bukan operator");
   }
 
@@ -812,12 +817,417 @@ const createPelanggaranByNfc = async (payload, staffId) => {
   return createPelanggaran(enrichedPayload, staffId);
 };
 
+const getHRDashboardStats = async (month, role = "OPERATOR", plant,  tipeOperator,) => {
+  const whereOperator = {
+    role: role,
+    ...(plant && { plant: String(plant) }),
+    ...(tipeOperator && { tipeOperator: tipeOperator }),
+  };
+
+  // 1. Get Summary (Overall status counts)
+  const users = await prisma.user.findMany({
+    where: whereOperator,
+    select: {
+      id: true,
+      currentPoint: true,
+    },
+  });
+
+  const summary = {
+    totalEmployee: users.length,
+    aman: users.filter((u) => getStatusFromPoin(u.currentPoint) === "AMAN").length,
+    teguran: users.filter((u) => getStatusFromPoin(u.currentPoint) === "TEGURAN").length,
+    sp1: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP1").length,
+    sp2: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP2").length,
+    sp3: users.filter((u) => getStatusFromPoin(u.currentPoint) === "SP3").length,
+  };
+
+  const targetUserIds = users.map((u) => u.id);
+
+  // 2. Date conditions for historical stats
+  let dateFilter = {};
+  if (month) {
+    const startOfMonth = moment(month, "YYYY-MM").startOf("month").toDate();
+    const endOfMonth = moment(month, "YYYY-MM").endOf("month").toDate();
+    dateFilter = {
+      tanggal: {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      },
+    };
+  }
+
+  // 3. Parallel data fetching
+  const [shiftStatsRaw, topViolationsRaw, violationsByDivisiRaw, trendByWeekRaw, masterShift, masterTipe, masterDivisi] = await Promise.all([
+    // Shift stats
+    prisma.poinDisiplin.groupBy({
+      by: ["shiftId"],
+      _count: { id: true },
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+    }),
+    // Top violations
+    prisma.poinDisiplin.groupBy({
+      by: ["tipeDisiplinId"],
+      _count: { id: true },
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
+    }),
+    // Violations by Divisi
+    prisma.poinDisiplin.findMany({
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      include: {
+        operator: {
+          select: { divisiId: true },
+        },
+      },
+    }),
+    // Weekly trend within the month
+    prisma.poinDisiplin.findMany({
+      where: {
+        operatorId: { in: targetUserIds },
+        ...dateFilter,
+      },
+      include: {
+        tipeDisiplin: { select: { kategori: true } },
+      },
+    }),
+    prisma.shift.findMany(),
+    prisma.tipeDisiplin.findMany(),
+    prisma.divisi.findMany(),
+  ]);
+
+  // Total summary additions
+  summary.totalPelanggaran = trendByWeekRaw.filter(v => v.tipeDisiplin.kategori === "PELANGGARAN").length;
+  summary.totalPenghargaan = trendByWeekRaw.filter(v => v.tipeDisiplin.kategori === "PENGHARGAAN").length;
+
+  // Process Shift Stats
+  const shiftStats = shiftStatsRaw.map((stat) => {
+    const shift = masterShift.find((s) => s.id === stat.shiftId);
+    return {
+      label: shift ? `${shift.namaShift} (${shift.tipeShift})` : "N/A",
+      value: stat._count.id,
+    };
+  });
+
+  // Process Top Violations
+  const topViolations = topViolationsRaw.map((v) => ({
+    label: masterTipe.find((t) => t.id === v.tipeDisiplinId)?.namaTipeDisiplin || "Lainnya",
+    value: v._count.id,
+  }));
+
+  // Process Divisi Stats
+  const divMap = {};
+  violationsByDivisiRaw.forEach((v) => {
+    const dId = v.operator?.divisiId;
+    if (dId) divMap[dId] = (divMap[dId] || 0) + 1;
+  });
+  const violationByDivisi = masterDivisi.map((d) => ({
+    label: d.namaDivisi,
+    value: divMap[d.id] || 0,
+  })).filter(v => v.value > 0);
+
+  // Process Weekly Trend (Sync with Supervisor Dashboard: Sen, Sel, Rab, Kam, Jum, Sab, Min)
+  const displayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+  const dayNameMap = { 0: "Min", 1: "Sen", 2: "Sel", 3: "Rab", 4: "Kam", 5: "Jum", 6: "Sab" };
+  
+  const weeklyMap = {};
+  displayLabels.forEach(label => {
+    weeklyMap[label] = { pelanggaran: 0, penghargaan: 0 };
+  });
+
+  trendByWeekRaw.forEach((v) => {
+    const dayLabel = dayNameMap[moment(v.tanggal).day()];
+    if (weeklyMap[dayLabel]) {
+      if (v.tipeDisiplin.kategori === "PELANGGARAN") weeklyMap[dayLabel].pelanggaran++;
+      else weeklyMap[dayLabel].penghargaan++;
+    }
+  });
+
+  const seriesPelanggaran = displayLabels.map(label => weeklyMap[label].pelanggaran);
+  const seriesPenghargaan = displayLabels.map(label => weeklyMap[label].penghargaan);
+
+  const trendByWeek = {
+    labels: displayLabels,
+    series: [
+      { name: "Pelanggaran", data: seriesPelanggaran },
+      { name: "Penghargaan", data: seriesPenghargaan },
+    ],
+  };
+
+  return { summary, shiftStats, topViolations, violationByDivisi, trendByWeek };
+};
+
+const getHRRankings = async (month, role, tipeOperator, plant, type = "worst", page = 1, limit = 10) => {
+  const skip = (page - 1) * limit;
+  const whereClause = {
+    ...(role && { role: role }),
+    ...(plant && { plant: String(plant) }),
+    ...(tipeOperator && { tipeOperator: tipeOperator }),
+  };
+
+  const orderBy = type === "worst" ? { currentPoint: "asc" } : { currentPoint: "desc" };
+
+  // Note: Month filter for currentPoint is tricky because currentPoint is a snapshot.
+  // We can instead filter users who had violations/rewards in that month if necessary, 
+  // but usually rankings show CURRENT status filtered by employee metadata.
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where: whereClause,
+      orderBy: orderBy,
+      skip,
+      take: limit,
+      include: {
+        divisi: { select: { namaDivisi: true } },
+        _count: {
+          select: {
+            poinDisiplinOperator: {
+              where: month ? {
+                tanggal: {
+                  gte: moment(month, "YYYY-MM").startOf("month").toDate(),
+                  lte: moment(month, "YYYY-MM").endOf("month").toDate(),
+                },
+              } : {},
+            },
+          },
+        },
+      },
+    }),
+    prisma.user.count({ where: whereClause }),
+  ]);
+
+  const data = users.map((u) => ({
+    nama: u.nama,
+    noReg: u.noReg,
+    divisi: u.divisi?.namaDivisi || "-",
+    tipeOperator: u.tipeOperator || "-",
+    plant: u.plant,
+    poin: u.currentPoint,
+    totalPelanggaran: u._count.poinDisiplinOperator,
+    status: getStatusFromPoin(u.currentPoint),
+  }));
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const getHRHistory = async (filter, options) => {
+  const page = options.page || 1;
+  const limit = options.limit || 10;
+  const skip = (page - 1) * limit;
+
+  const whereClause = {};
+
+  // User filters
+  const userFilters = {};
+  if (filter.role) userFilters.role = filter.role;
+  if (filter.plant) userFilters.plant = String(filter.plant);
+  if (filter.divisiId) userFilters.divisiId = Number(filter.divisiId);
+  if (filter.tipeOperator) userFilters.tipeOperator = filter.tipeOperator; 
+
+  if (Object.keys(userFilters).length > 0) {
+    whereClause.operator = userFilters;
+  }
+
+  // Date filters
+  if (filter.month) {
+    whereClause.tanggal = {
+      gte: moment(filter.month, "YYYY-MM").startOf("month").toDate(),
+      lte: moment(filter.month, "YYYY-MM").endOf("month").toDate(),
+    };
+  } else if (filter.startDate || filter.endDate) {
+    whereClause.tanggal = {
+      ...(filter.startDate && { gte: new Date(filter.startDate) }),
+      ...(filter.endDate && { lte: new Date(filter.endDate) }),
+    };
+  }
+
+  const [dataRaw, total] = await Promise.all([
+    prisma.poinDisiplin.findMany({
+      where: whereClause,
+      include: {
+        operator: {
+          include: { divisi: true },
+        },
+        shift: true,
+        tipeDisiplin: true,
+      },
+      orderBy: { tanggal: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.poinDisiplin.count({ where: whereClause }),
+  ]);
+
+  const data = dataRaw.map((item) => ({
+    id: item.id,
+    tanggal: item.tanggal,
+    noReg: item.operator.noReg,
+    nama: item.operator.nama,
+    divisi: item.operator.divisi?.namaDivisi || "-",
+    plant: item.operator.plant,
+    role: item.operator.role,
+    tipeOperator: item.operator.tipeOperator || "-",
+    shift: item.shift?.namaShift || "-",
+    tipe: item.tipeDisiplin.namaTipeDisiplin,
+    kategori: item.tipeDisiplin.kategori,
+    poinBerubah: item.poinBerubah,
+    statusLevel: item.statusLevel,
+    keterangan: item.keterangan,
+  }));
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const updatePoinDisiplin = async (id, payload, staffId) => {
+  const existing = await prisma.poinDisiplin.findUnique({
+    where: { id },
+    include: {
+      operator: true,
+      tipeDisiplin: true,
+    },
+  });
+
+  if (!existing) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Data poin tidak ditemukan");
+  }
+
+  const updateData = {};
+  let newPoinBerubah = existing.poinBerubah;
+
+  if (payload.tipeDisiplinId !== undefined) {
+    const tipe = await prisma.tipeDisiplin.findUnique({
+      where: { id: payload.tipeDisiplinId },
+    });
+
+    if (!tipe) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Tipe pelanggaran tidak ditemukan",
+      );
+    }
+
+    const isReward = tipe.kategori?.toLowerCase().includes("penghargaan");
+    newPoinBerubah = isReward ? Math.abs(tipe.poin) : -Math.abs(tipe.poin);
+    updateData.tipeDisiplinId = payload.tipeDisiplinId;
+  }
+
+  if (payload.poinBerubah !== undefined) {
+    newPoinBerubah = payload.poinBerubah;
+  }
+
+  if (payload.shiftId !== undefined) {
+    const shift = await prisma.shift.findUnique({
+      where: { id: payload.shiftId },
+    });
+
+    if (!shift) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Shift tidak ditemukan");
+    }
+
+    updateData.shiftId = payload.shiftId;
+  }
+
+  if (payload.keterangan !== undefined) {
+    updateData.keterangan =
+      payload.keterangan && payload.keterangan.trim() !== ""
+        ? payload.keterangan
+        : "-";
+  }
+
+  if (payload.tanggal !== undefined) {
+    updateData.tanggal = new Date(payload.tanggal);
+  }
+
+  const poinDelta = newPoinBerubah - existing.poinBerubah;
+  const operator = existing.operator;
+  const statusLama = getStatusFromPoin(operator.currentPoint);
+  const poinSetelahUpdate = operator.currentPoint + poinDelta;
+  const statusBaru = getStatusFromPoin(poinSetelahUpdate);
+
+  updateData.poinBerubah = newPoinBerubah;
+  updateData.statusLevel = statusBaru;
+  updateData.staffId = staffId;
+
+  let suspendedUntil = operator.suspendedUntil;
+  if (statusBaru === "SP1" || statusBaru === "SP2") {
+    if (STATUS_LEVEL_MAP[statusBaru] < STATUS_LEVEL_MAP[statusLama]) {
+      suspendedUntil = new Date();
+      suspendedUntil.setMonth(suspendedUntil.getMonth() + 6);
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: operator.id },
+      data: {
+        currentPoint: poinSetelahUpdate,
+        suspendedUntil,
+      },
+    });
+
+    return tx.poinDisiplin.update({
+      where: { id },
+      data: updateData,
+      include: {
+        operator: {
+          include: { divisi: true },
+        },
+        shift: true,
+        tipeDisiplin: true,
+      },
+    });
+  });
+
+  return {
+    id: result.id,
+    tanggal: result.tanggal,
+    noReg: result.operator.noReg,
+    nama: result.operator.nama,
+    divisi: result.operator.divisi?.namaDivisi || "-",
+    plant: result.operator.plant,
+    role: result.operator.role,
+    shift: result.shift?.namaShift || "-",
+    tipe: result.tipeDisiplin.namaTipeDisiplin,
+    kategori: result.tipeDisiplin.kategori,
+    poinBerubah: result.poinBerubah,
+    statusLevel: result.statusLevel,
+    keterangan: result.keterangan,
+    operatorCurrentPoint: poinSetelahUpdate,
+  };
+};
+
 const resetAllUsersPoints = async () => {
   const sekarang = new Date();
 
-  // Ambil semua user PRODUKSI
+  // Ambil semua user OPERATOR
   const users = await prisma.user.findMany({
-    where: { role: "PRODUKSI" },
+    where: { role: "OPERATOR" },
   });
 
   // Proses satu per satu untuk mengecek status sanksi dan poin saat ini
@@ -872,4 +1282,8 @@ export default {
   resetAllUsersPoints,
   getUserByNfc,
   createPelanggaranByNfc,
+  getHRDashboardStats,
+  getHRRankings,
+  getHRHistory,
+  updatePoinDisiplin,
 };

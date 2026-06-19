@@ -7,7 +7,7 @@ global.__HARDWARE_MOCKS__ = {
   tcpService: {
     sendCommandToDevice: jest.fn(),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   auth: {
     auth: jest.fn(
       (...requiredRoles) =>
@@ -141,8 +141,8 @@ describe("Hardware Controller Unit Tests", () => {
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
 
-    test("✅ should allow PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should allow OPERATOR role", async () => {
+      setRole("OPERATOR");
       tcpService.sendCommandToDevice.mockReturnValue(true);
 
       const res = await request(app).post("/hardware/trigger").send(validPayload);

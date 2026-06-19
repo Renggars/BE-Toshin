@@ -97,6 +97,50 @@ const resetPoints = catchAsync(async (req, res) => {
   res.send({ status: true, message: "Poin semua user berhasil direset ke 100" });
 });
 
+const getHRStats = catchAsync(async (req, res) => {
+  const { month, role, plant, tipeOperator } = req.query;
+  const stats = await poinService.getHRDashboardStats(month, role, plant, tipeOperator);
+  res.send({ status: true, data: stats });
+});
+
+const getHRRankings = catchAsync(async (req, res) => {
+  const { month, role, plant, type, page, limit,  tipeOperator } = req.query;
+  const result = await poinService.getHRRankings(month, role, tipeOperator, plant, type,  parseInt(page) || 1, parseInt(limit) || 10);
+  res.send({ status: true, ...result });
+});
+
+const getHRHistory = catchAsync(async (req, res) => {
+  const filter = {
+    month: req.query.month,
+    role: req.query.role,
+    tipeOperator: req.query.tipeOperator, 
+    plant: req.query.plant,
+    divisiId: req.query.divisiId,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  };
+  const options = {
+    page: parseInt(req.query.page) || 1,
+    limit: parseInt(req.query.limit) || 10,
+  };
+
+  const result = await poinService.getHRHistory(filter, options);
+  res.send({ status: true, ...result });
+});
+
+const updatePoinDisiplin = catchAsync(async (req, res) => {
+  const result = await poinService.updatePoinDisiplin(
+    parseInt(req.params.id),
+    req.body,
+    req.user.id,
+  );
+  res.send({
+    status: true,
+    message: "Data poin berhasil diperbarui",
+    data: result,
+  });
+});
+
 export default {
   getFormData,
   getMyPoin,
@@ -109,4 +153,8 @@ export default {
   getMonthlyStats,
   getUserByNfc,
   resetPoints,
+  getHRStats,
+  getHRRankings,
+  getHRHistory,
+  updatePoinDisiplin,
 };

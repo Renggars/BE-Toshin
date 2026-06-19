@@ -3,34 +3,36 @@ import { auth } from "../middlewares/auth.js";
 import validate from "../middlewares/validate.js";
 import userValidation from "../validations/user.validation.js";
 import userController from "../controllers/user.controller.js";
+import upload from "../utils/upload.js";
 
 const router = express.Router();
 
-router.route("/").get(auth("SUPERVISOR", "ADMIN"), userController.getUsers);
+router.route("/").get(auth("HR", "ADMIN", "SUPERVISOR"), userController.getUsers);
 
-router.get(
-  "/searchByEmail",
-  auth("SUPERVISOR", "ADMIN"),
-  validate(userValidation.getUserByEmail),
-  userController.getUserByEmail,
+router.post(
+  "/upload-photo",
+  auth("HR", "ADMIN"),
+  upload.single("file"),
+  userController.uploadPhoto,
 );
+
 
 router
   .route("/:userId")
   .get(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("HR"),
     validate(userValidation.getUser),
     userController.getUser,
   )
   .put(
-    auth("SUPERVISOR", "ADMIN"),
+    auth("HR"),
     validate(userValidation.updateUser),
     userController.updateUser,
   );
 
 router.put(
   "/:userId/deactivate",
-  auth("SUPERVISOR", "ADMIN"),
+  auth("HR"),
   validate(userValidation.deactivateUser),
   userController.deactivateUser,
 );

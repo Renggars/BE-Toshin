@@ -11,12 +11,12 @@ paths:
             schema:
               type: object
               required:
-                - email
+                - noReg
                 - password
               properties:
-                email:
+                noReg:
                   type: string
-                  format: email
+                  example: "REG12345"
                 password:
                   type: string
       responses:
@@ -42,9 +42,9 @@ paths:
                           name:
                             type: string
                             example: admin
-                          email:
+                          noReg:
                             type: string
-                            example: admin@example.com
+                            example: "REG12345"
                           role:
                             type: string
                             example: admin

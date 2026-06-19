@@ -8,12 +8,13 @@ import tokenService from "../services/token.service.js";
 import ApiError from "../utils/ApiError.js";
 import rencanaProduksiService from "../services/rencanaProduksi.service.js";
 import moment from "moment";
+import { businessLoginTotal } from "../config/businessMetrics.js";
 
 const register = catchAsync(async (req, res) => {
-  // Cek apakah email sudah terdaftar
-  const existingUserByEmail = await userService.getUserByEmail(req.body.email);
-  if (existingUserByEmail) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Email sudah terdaftar");
+  // Cek apakah noReg sudah terdaftar
+  const existingUserByNoReg = await userService.getUserByNoReg(req.body.noReg);
+  if (existingUserByNoReg) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "No Registrasi sudah terdaftar");
   }
 
   const user = await userService.createUser(req.body);
@@ -30,18 +31,24 @@ const register = catchAsync(async (req, res) => {
 const login = catchAsync(async (req, res) => {
   let user;
 
-  // Deteksi metode login: NFC atau Email
-  if (req.body.uidNfc) {
-    // Login dengan NFC
-    user = await authService.loginWithNfc(req.body.uidNfc, req);
-  } else if (req.body.email && req.body.password) {
-    // Login dengan Email & Password
-    user = await authService.loginWithEmail(req.body.email, req.body.password, req);
-  } else {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      "Harus menyertakan uidNfc atau (email dan password)",
-    );
+  try {
+    // Deteksi metode login: NFC atau NoReg
+    if (req.body.uidNfc) {
+      // Login dengan NFC
+      user = await authService.loginWithNfc(req.body.uidNfc, req);
+    } else if (req.body.noReg && req.body.password) {
+      // Login dengan NoReg & Password
+      user = await authService.loginWithNoReg(req.body.noReg, req.body.password, req);
+    } else {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Harus menyertakan uidNfc atau (noReg dan password)",
+      );
+    }
+    businessLoginTotal.inc({ status: "success" });
+  } catch (error) {
+    businessLoginTotal.inc({ status: "failed" });
+    throw error;
   }
 
   // Generate JWT tokens
@@ -49,7 +56,7 @@ const login = catchAsync(async (req, res) => {
 
   let dashboardData = null;
 
-  if (user.role === "PRODUKSI") {
+  if (user.role === "OPERATOR") {
     try {
       const today = moment().format("YYYY-MM-DD");
       dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
@@ -76,7 +83,34 @@ const login = catchAsync(async (req, res) => {
   });
 });
 
+const refreshDashboard = catchAsync(async (req, res) => {
+  const user = req.user;
+  let dashboardData = null;
+
+  if (user.role === "OPERATOR") {
+    try {
+      const today = moment().format("YYYY-MM-DD");
+      dashboardData = await rencanaProduksiService.getRencanaProduksiHarian(
+        user.id,
+        today,
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "test") {
+        console.error("Error fetching dashboard data:", error.message);
+      }
+    }
+  }
+
+  res.send({
+    message: "Dashboard refreshed",
+    data: {
+      dashboard: dashboardData,
+    },
+  });
+});
+
 export default {
   register,
   login,
+  refreshDashboard,
 };

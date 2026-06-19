@@ -1,11 +1,15 @@
 #!/bin/sh
 set -e
 
-echo "Running Prisma Migrations (Production)..."
+echo "--- Starting Node.js Backend Startup Sequence ---"
+
+# 1. Run migrations safely (Production-ready)
+echo "Step 1/2: Running Prisma Migrations..."
 npx prisma migrate deploy
 
-echo "Running Prisma Seeding..."
+# 2. Run Seeding (Idempotent using upsert)
+echo "Step 2/2: Running Prisma Seeding (Idempotent)..."
 npx prisma db seed
 
-echo "Starting Application..."
+echo "--- Initialization Finished. Starting Application... ---"
 exec "$@"

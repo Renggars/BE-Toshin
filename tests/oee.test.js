@@ -35,7 +35,7 @@ global.__OEE_MOCKS__ = {
         }
     ),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 
@@ -241,8 +241,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(oeeService.getOEEByMesin).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
 
       const res = await request(app).get("/oee/mesin/10");
 
@@ -350,8 +350,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(oeeService.getOEEByShift).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/oee/shift/1");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -406,8 +406,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       oeeService.getOEEByMesin.mockResolvedValue(mockOeeList);
 
       const res = await request(app).get("/oee/shift-mesin/10");
@@ -487,8 +487,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(oeeService.getPlantOEE).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/oee/plant");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -616,8 +616,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       oeeService.getOEESummary.mockResolvedValue(mockOeeSummary);
       const res = await request(app).get("/oee/summary");
       expect(res.status).toBe(httpStatus.OK);
@@ -777,8 +777,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       oeeService.getOEETrend.mockResolvedValue(mockOeeTrend);
       const res = await request(app).get("/oee/trend");
       expect(res.status).toBe(httpStatus.OK);
@@ -905,8 +905,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       oeeService.getDowntimeHistory.mockResolvedValue(mockDowntimeHistory);
       const res = await request(app).get("/oee/history");
       expect(res.status).toBe(httpStatus.OK);
@@ -1038,8 +1038,8 @@ describe("OEE Controller - Comprehensive Unit Tests", () => {
       expect(res.status).toBe(httpStatus.OK);
     });
 
-    test("✅ should return 200 with PRODUKSI role", async () => {
-      setRole("PRODUKSI");
+    test("✅ should return 200 with OPERATOR role", async () => {
+      setRole("OPERATOR");
       oeeService.getMachineDetail.mockResolvedValue(mockMachineDetail);
       const res = await request(app).get("/oee/machine-detail");
       expect(res.status).toBe(httpStatus.OK);

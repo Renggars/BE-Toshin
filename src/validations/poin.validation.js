@@ -7,10 +7,11 @@ const createPelanggaran = {
       uidNfc: Joi.string().optional(),
       operatorId: Joi.number().integer().optional(),
       tipeDisiplinId: Joi.number().integer().required(),
-      shiftId: Joi.number().integer().required(),
+      shiftId: Joi.number().integer().required(), // Reverted to required
       keterangan: Joi.string().allow("", null).optional(),
     })
-    .or("uidNfc", "operatorId"), // At least one must be present
+    .or("uidNfc", "operatorId") // At least one must be present
+    .unknown(true), // Allow "foto" and other multipart fields
   file: Joi.object()
     .keys({
       mimetype: Joi.string()
@@ -28,9 +29,9 @@ const createPelanggaranByNfc = {
   body: Joi.object().keys({
     uidNfc: Joi.string().required(),
     tipeDisiplinId: Joi.number().integer().required(),
-    shiftId: Joi.number().integer().required(),
+    shiftId: Joi.number().integer().required(), // Reverted to required
     keterangan: Joi.string().optional(),
-  }),
+  }).unknown(true), // Allow extra fields
   file: Joi.object()
     .keys({
       mimetype: Joi.string()
@@ -53,8 +54,24 @@ const getHistory = {
   }),
 };
 
+const updatePoinDisiplin = {
+  params: Joi.object().keys({
+    id: Joi.number().integer().required(),
+  }),
+  body: Joi.object()
+    .keys({
+      tipeDisiplinId: Joi.number().integer(),
+      shiftId: Joi.number().integer(),
+      keterangan: Joi.string().allow("", null),
+      tanggal: Joi.date().iso(),
+      poinBerubah: Joi.number().integer(),
+    })
+    .min(1),
+};
+
 export default {
   createPelanggaran,
   createPelanggaranByNfc,
   getHistory,
+  updatePoinDisiplin,
 };

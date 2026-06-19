@@ -8,7 +8,7 @@ info:
     email: renggarendy22@gmail.com
 
 servers:
-  - url: http://localhost:4002
+  - url: http://localhost:4001
     description: Development Server
   - url: https://lesli-thorny-bunny.ngrok-free.dev/
     description: Production Server
@@ -39,7 +39,7 @@ components:
           type: integer
         nama:
           type: string
-        email:
+        noReg:
           type: string
         uidNfc:
           type: string
@@ -48,12 +48,14 @@ components:
           nullable: true
         role:
           type: string
-          enum: [PRODUKSI, SUPERVISOR, ENGINEERING, MAINTENANCE]
+          enum: [OPERATOR, SUPERVISOR, ENGINEERING, MAINTENANCE]
+        tipeOperator:
+          type: string
+          enum: [OPERATOR_LAPANGAN, OPERATOR_OFFICE]
+          nullable: true
         plant:
           type: string
-        noReg:
-          type: string
-          nullable: true
+
         line:
           type: string
         currentPoint:
@@ -144,7 +146,7 @@ components:
           type: object
           properties:
             namaMasalah: { type: string }
-            kategori: { type: string }
+            kategori: { type: string, enum: [MAINTENANCE, QUALITY, DIE_MAINT, PRODUKSI, PLAN_DOWNTIME] }
             waktuPerbaikanMenit: { type: integer }
         operator:
           type: object
@@ -192,6 +194,24 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    Document:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        judul: { type: string, example: "SOP Maintenance Mesin A" }
+        deskripsi: { type: string, nullable: true, example: "Panduan perawatan preventif mesin A" }
+        kategori: { type: string, nullable: true, example: "MAINTENANCE" }
+        namaFile: { type: string, example: "sop-maintenance.pdf" }
+        ukuranByte: { type: integer, example: 1048576 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        uploadedBy:
+          type: object
+          properties:
+            id: { type: integer, example: 3 }
+            nama: { type: string, example: "Admin User" }
+            role: { type: string, example: "ADMIN" }
 
 security:
   - bearerAuth: []
@@ -244,6 +264,23 @@ tags:
       - `ANDON_RESOLVED` - Saat Andon diselesaikan
 
       **WebSocket Event:** `notification` - Dikirim ke room `user:<userId>` secara real-time
+  - name: Document
+    description: |
+      Sistem Manajemen Dokumen PDF.
+      - **Read**: Bisa diakses semua user.
+      - **CRUD**: Hanya bisa diakses oleh role `ADMIN` atau `SUPERVISOR`.
+      - Mendukung pencarian judul dan pagination.
+  - name: Mandor Task
+    description: Task management for Mandor by Supervisor
+  - name: Announcement
+    description: Real-time announcements and broadcast for Operators
+  - name: HR Analytics
+    description: |
+      Dashboard Analitik Poin Disiplin khusus untuk role **HR**.
+      - Hanya bisa diakses oleh role `HR`.
+      - Mencakup statistik bulanan, ranking karyawan (paginated), riwayat extended, dan export CSV.
+  - name: Branding
+    description: Endpoints for branding customization (Background images, etc.)
 
 paths:
   /health:
@@ -284,9 +321,8 @@ paths:
     post:
       summary: Register New User
       description: |
-        Register a new user account with email and password.
-        - Email and password are required
-        - uidNfc is not required during registration (will be added separately)
+        - noReg and password are required
+        - Registered via Registration Number (noReg)
         - Returns user data without password
       tags: [Auth]
       security: []
@@ -296,15 +332,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nama, email, password, divisiId, role, plant, line]
+              required: [nama, noReg, password, divisiId, role, plant, line]
               properties:
                 nama:
                   type: string
                   example: "John Doe"
-                email:
+                noReg:
                   type: string
-                  format: email
-                  example: "john.doe@example.com"
+                  example: "REG12345"
                 password:
                   type: string
                   format: password
@@ -317,7 +352,7 @@ paths:
                   type: string
                   enum:
                     [
-                      PRODUKSI,
+                      OPERATOR,
                       QUALITY,
                       MAINTENANCE,
                       DIE_MAINT,
@@ -336,7 +371,11 @@ paths:
                       SUPERVISOR,
                       ADMIN,
                     ]
-                  example: "PRODUKSI"
+                  example: "OPERATOR"
+                tipeOperator:
+                  type: string
+                  enum: [OPERATOR_LAPANGAN, OPERATOR_OFFICE]
+                  description: "Wajib diisi jika role OPERATOR"
                 fotoProfile:
                   type: string
                   format: uri
@@ -349,10 +388,6 @@ paths:
                 line:
                   type: string
                   example: "Line A"
-                noReg:
-                  type: string
-                  example: "REG12345"
-                  nullable: true
       responses:
         "201":
           description: Registration successful
@@ -370,7 +405,7 @@ paths:
                       user:
                         $ref: "#/components/schemas/User"
         "400":
-          description: Bad request - Email already registered or validation error
+          description: Bad request - NoReg already registered or validation error
           content:
             application/json:
               schema:
@@ -382,8 +417,8 @@ paths:
       description: |
         Login with either NFC card or email/password combination.
         - NFC Login: Provide uidNfc only
-        - Email Login: Provide email and password
-        - Returns user data, JWT tokens, and dashboard data (for PRODUKSI role)
+        - NoReg Login: Provide noReg and password
+        - Returns user data, JWT tokens, and dashboard data (for OPERATOR role)
       tags: [Auth]
       security: []
       requestBody:
@@ -399,12 +434,11 @@ paths:
                       type: string
                       example: "ABC123DEF456"
                 - type: object
-                  required: [email, password]
+                  required: [noReg, password]
                   properties:
-                    email:
+                    noReg:
                       type: string
-                      format: email
-                      example: "john.doe@example.com"
+                      example: "REG12345"
                     password:
                       type: string
                       format: password
@@ -447,7 +481,7 @@ paths:
                       dashboard:
                         type: object
                         nullable: true
-                        description: "Dashboard data for PRODUKSI role only"
+                        description: "Dashboard data for OPERATOR role only"
         "401":
           description: Unauthorized - Invalid credentials
           content:
@@ -574,8 +608,8 @@ paths:
       summary: Resolve Andon
       description: |
         Complete the Andon repair.
-        - Plan Downtime: Can resolve directly from ACTIVE.
-        - Others: Must be IN_REPAIR before resolving.
+        - Plan Downtime: Can resolve directly from ACTIVE. **Auth: Must be same User ID as who started it.**
+        - Others (Breakdown): Must be IN_REPAIR before resolving. **Auth: Authorized by Division/Role.**
         - Calculates total downtime and maintenance wait time.
       tags: [Andon]
       security:
@@ -585,6 +619,21 @@ paths:
           name: id
           required: true
           schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                catatan:
+                  type: string
+                  description: "Optional notes about the resolution"
+                masalahId:
+                  type: integer
+                  description: "Optionally update the problem type at resolve"
+                resolvedBy:
+                  type: integer
+                  description: "Optionally override the resolver user ID"
       responses:
         "200":
           description: Success
@@ -1803,7 +1852,7 @@ paths:
         - Minimal salah satu dari `uidNfc` atau `operatorId` harus ada
         - Jika `uidNfc` dikirim, sistem akan:
           - Mencari operator berdasarkan UID NFC
-          - Validasi role harus `PRODUKSI`
+          - Validasi role harus `OPERATOR`
           - Validasi status harus `active`
           - Cek apakah sedang suspend
 
@@ -2498,16 +2547,17 @@ paths:
                         properties:
                           id: { type: integer }
                           namaMesin: { type: string }
-                          kategori: { type: string }
+                          line: { type: string }
+                          kategori: { type: string, enum: [PRIMARY, SECONDARY, NON_PRESS] }
                           ideal_cycle_time: { type: number }
                 example:
                   status: "success"
                   message: "Success get machines"
                   data:
-                    press:
+                    primary:
                       - id: 1
                         namaMesin: "A-01"
-                        kategori: "PRESS"
+                        kategori: "PRIMARY"
                     secondary:
                       - id: 10
                         namaMesin: "S-01"
@@ -2528,10 +2578,12 @@ paths:
               properties:
                 namaMesin:
                   type: string
+                line:
+                  type: string
                 kategori:
                   type: string
                   enum:
-                    [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
+                    [PRIMARY, SECONDARY, NON_PRESS]
                   description: Kategori mesin
       responses:
         "201":
@@ -2555,10 +2607,11 @@ paths:
               type: object
               properties:
                 namaMesin: { type: string }
+                line: { type: string }
                 kategori:
                   type: string
                   enum:
-                    [PRESS, SECONDARY, PROGRESIVE_TRANSFER, FINE_BLANKING, TACI]
+                    [PRIMARY, SECONDARY, NON_PRESS]
       responses:
         "200":
           description: Updated
@@ -2580,139 +2633,167 @@ paths:
   # ==========================================
   # LRP PATHS
   # ==========================================
-  /lrp:
-    post:
-      summary: Create LRP (Submit Laporan Realisasi Produksi) (PRODUKSI / ADMIN)
-      description: |
-        Submit laporan realisasi produksi baru. RPH yang direferensikan harus berstatus **ACTIVE** atau **CLOSED**.
 
-        **Field yang dihitung otomatis oleh backend (tidak perlu dikirim):**
-        - `qty_total_prod` = qty_ok + qty_ng_proses + qty_rework
-        - `loading_time` = dihitung dari `start_time` → `end_time` RPH
-        - `cycle_time` = diambil dari `target.ideal_cycle_time` RPH
-        - `statusLrp` = default "SUBMITTED"
+  # ─── UPSERT (Pertama Kali / Update Progress) ──────────────────────────────
+  /lrp/rph/{rphId}:
+    patch:
+      summary: "[STEP 1 & 2] Upsert LRP — Input / Update Progres (OPERATOR / ADMIN)"
+      description: |
+        Endpoint utama untuk input dan update data produksi. Bersifat **upsert**:
+        - **Jika LRP belum ada** untuk RPH ini → **buat LRP baru** dengan `statusLrp: DRAFT`
+        - **Jika LRP sudah ada** → **update data qty** yang ada
+
+        Dapat dipanggil **kapan saja** selama shift: saat pertama input, saat istirahat,
+        atau berkala setiap jam. RPH **tidak pernah ditutup** di endpoint ini.
+
+        ---
+        ## Alur Lengkap LRP (Wajib Dibaca Frontend)
+
+        ```
+        [STEP 1 & 2] PATCH /lrp/rph/{rphId}  → Upsert LRP (kapan saja, berulang)
+                                                  • Pertama kali: buat LRP DRAFT baru
+                                                  • Berikutnya  : update data qty
+                                                  statusLrp: "DRAFT", RPH: tetap ACTIVE
+                                                  Mandor bisa pantau di dashboard real-time.
+                                                      │
+        [STEP 3]     POST /lrp/{lrpId}/submit → Simpan Final (di akhir shift)
+                                                  statusLrp: "SUBMITTED", RPH: → CLOSED
+                                                  Response mengandung `next_rph` jika ada
+                                                  RPH baru yang PLANNED untuk hari yang sama.
+        ```
+
+        ---
+        ## Rules Saat Pertama Kali (CREATE path)
+        - `noKanagata` **wajib** diisi
+        - `noLot` **wajib** diisi
+        - Field identitas (mesinId, shiftId, operatorId, tanggal, noReg) **di-derive otomatis dari RPH**
+          sehingga tidak perlu dikirim dari frontend.
+
+        ## Rules Update Berikutnya (UPDATE path)
+        - Semua field opsional, minimal 1 field harus diisi
+        - `noKanagata` dan `noLot` dapat diubah jika diperlukan
+
+        > **Guard:** LRP yang sudah `SUBMITTED` tidak dapat diubah. Return `400 Bad Request`.
       tags: [LRP]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: rphId
+          required: true
+          schema:
+            type: integer
+          description: ID Rencana Produksi Harian (RPH)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - rphId
-                - mesinId
-                - shiftId
-                - operatorId
-                - tanggal
-                - no_kanagata
-                - no_lot
-                - noReg
-                - qty_ok
+              description: |
+                Saat **pertama kali** (CREATE): `noKanagata` dan `noLot` wajib diisi.
+                Saat **update berikutnya**: semua opsional, minimal 1 field.
               properties:
-                rphId:
-                  type: integer
-                  description: "ID Rencana Produksi Harian (RPH) yang sedang ACTIVE"
-                  example: 1
-                mesinId:
-                  type: integer
-                  description: "ID Mesin"
-                  example: 3
-                shiftId:
-                  type: integer
-                  description: "ID Shift"
-                  example: 2
-                operatorId:
-                  type: integer
-                  description: "ID User operator PRODUKSI"
-                  example: 5
-                tanggal:
+                noKanagata:
                   type: string
-                  format: date
-                  description: "Tanggal produksi"
-                  example: "2026-02-23"
-                no_kanagata:
-                  type: string
-                  description: "Nomor kanagata / cetakan"
+                  description: "Nomor kanagata / cetakan. WAJIB saat pertama kali."
                   example: "K-2024-01"
-                no_lot:
+                noLot:
                   type: string
-                  description: "Nomor lot produksi"
+                  description: "Nomor lot produksi. WAJIB saat pertama kali."
                   example: "LOT-001"
-                noReg:
-                  type: string
-                  description: "Nomor registrasi operator"
-                  example: "REG-1234"
-                qty_ok:
+                qtyOk:
                   type: integer
-                  description: "Jumlah produk OK"
+                  minimum: 0
+                  description: "Jumlah produk OK (default 0 jika tidak diisi)"
                   example: 100
-                qty_ng_prev:
+                qtyNgPrev:
                   type: integer
-                  description: "Jumlah NG dari proses sebelumnya (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah NG dari proses sebelumnya (default 0)"
                   example: 0
-                qty_ng_proses:
+                qtyNgProses:
                   type: integer
-                  description: "Jumlah NG dalam proses ini (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah NG dalam proses ini (default 0)"
                   example: 2
-                qty_rework:
+                qtyRework:
                   type: integer
-                  description: "Jumlah produk rework (opsional, default 0)"
+                  minimum: 0
+                  description: "Jumlah produk rework (default 0)"
                   example: 1
-                counter_start:
+                counterStart:
                   type: integer
+                  minimum: 0
                   nullable: true
-                  description: "Counter mesin saat mulai produksi (opsional)"
+                  description: "Counter mesin saat mulai (opsional)"
                   example: 0
-                counter_end:
+                counterEnd:
                   type: integer
+                  minimum: 0
                   nullable: true
-                  description: "Counter mesin saat selesai produksi (opsional)"
+                  description: "Counter mesin saat update (opsional)"
                   example: 500
-            example:
-              rphId: 1
-              mesinId: 3
-              shiftId: 2
-              operatorId: 5
-              tanggal: "2026-02-23"
-              no_kanagata: "K-2024-01"
-              no_lot: "LOT-001"
-              noReg: "REG-1234"
-              qty_ok: 100
-              qty_ng_prev: 0
-              qty_ng_proses: 2
-              qty_rework: 1
-              counter_start: 0
-              counter_end: 500
+            examples:
+              pertama_kali:
+                summary: "Pertama kali input LRP (CREATE)"
+                value:
+                  noKanagata: "K-2024-01"
+                  noLot: "LOT-001"
+                  qtyOk: 100
+                  qtyNgPrev: 0
+                  qtyNgProses: 2
+                  qtyRework: 1
+                  counterStart: 0
+                  counterEnd: 103
+              update_progres:
+                summary: "Update progres di tengah shift (UPDATE)"
+                value:
+                  qtyOk: 250
+                  qtyNgPrev: 0
+                  qtyNgProses: 5
+                  qtyRework: 2
+                  counterEnd: 257
       responses:
         "201":
-          description: LRP berhasil dibuat
+          description: LRP Draft baru berhasil dibuat.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  id:
-                    type: integer
-                  noReg:
-                    type: string
-                  qty_ok:
-                    type: integer
-                  qty_total_prod:
-                    type: integer
-                  loading_time:
-                    type: number
-                  cycle_time:
-                    type: number
-                  statusLrp:
-                    type: string
-                    example: "SUBMITTED"
+                  id: { type: integer, example: 42 }
+                  rphId: { type: integer, example: 5 }
+                  statusLrp: { type: string, enum: [DRAFT], example: "DRAFT" }
+                  qtyOk: { type: integer, example: 100 }
+                  qtyTotalProd: { type: integer, example: 103 }
+                  loadingTime: { type: number, example: 120 }
+                  cycleTime: { type: number, example: 30 }
+                  noKanagata: { type: string, example: "K-2024-01" }
+                  noLot: { type: string, example: "LOT-001" }
+                  createdAt: { type: string, format: date-time }
+        "200":
+          description: Progres LRP berhasil diperbarui. RPH tetap ACTIVE.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, example: 42 }
+                  statusLrp: { type: string, enum: [DRAFT], example: "DRAFT" }
+                  qtyOk: { type: integer, example: 250 }
+                  qtyTotalProd: { type: integer, example: 257 }
+                  updatedAt: { type: string, format: date-time }
         "400":
-          description: Validasi gagal (noReg kosong, RPH tidak ditemukan, atau status RPH tidak valid)
-        "409":
-          description: LRP untuk RPH ini sudah pernah dibuat (1 RPH = 1 LRP)
+          description: |
+            - `noKanagata` atau `noLot` tidak diisi saat pertama kali
+            - LRP sudah `SUBMITTED` dan tidak dapat diubah
+            - RPH sudah `CLOSED`
+        "404":
+          description: RPH tidak ditemukan
 
+  # ─── GET LIST ──────────────────────────────────────────────────────────────
+  /lrp:
     get:
       summary: Get LRP List
       tags: [LRP]
@@ -2721,32 +2802,75 @@ paths:
       parameters:
         - in: query
           name: tanggal
-          schema:
-            type: string
-            format: date
+          schema: { type: string, format: date }
         - in: query
           name: shiftId
-          schema:
-            type: integer
+          schema: { type: integer }
         - in: query
-          name: no_kanagata
-          schema:
-            type: string
+          name: noKanagata
+          schema: { type: string }
         - in: query
           name: page
-          schema:
-            type: integer
-            default: 1
+          schema: { type: integer, default: 1 }
         - in: query
           name: limit
-          schema:
-            type: integer
-            default: 10
+          schema: { type: integer, default: 10 }
       responses:
         "200":
           description: Success
 
+  /lrp/operator-progress:
+    get:
+      summary: "Get Real-time Operator Progress List (MANDOR / ADMIN)"
+      description: |
+        Mengambil daftar progres produksi seluruh operator yang sedang aktif hari ini di plant yang sama.
+        Data ini mencakup nama operator, mesin, produk, pencapaian (qtyOk), dan target.
 
+        **Real-time Update:** Client (Mandor Dashboard) bisa mendengarkan event socket `operator-progress-updated`
+        untuk mengetahui kapan harus memanggil endpoint ini lagi (atau mengupdate UI).
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: tanggal
+          schema: { type: string, format: date }
+          description: Filter berdasarkan tanggal (Default hari ini WIB)
+        - in: query
+          name: line
+          schema: { type: string }
+          description: Filter berdasarkan line produksi (opsional)
+      responses:
+        "200":
+          description: Berhasil mengambil daftar progres operator
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    {
+                      type: string,
+                      example: "Operator progress retrieved successfully",
+                    }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rphId: { type: integer, example: 10 }
+                        operatorId: { type: integer, example: 5 }
+                        operatorName: { type: string, example: "Budi Santoso" }
+                        fotoProfile: { type: string, example: "https://..." }
+                        machineName: { type: string, example: "Mesin Extruder 01" }
+                        productName: { type: string, example: "Plastik HD 0.5" }
+                        qtyOk: { type: integer, example: 750 }
+                        targetQty: { type: integer, example: 1000 }
+                        percentage: { type: integer, example: 75 }
+                        status: { type: string, example: "ACTIVE" }
+                        lastUpdate: { type: string, format: date-time }
+
+  # ─── GET DETAIL & DELETE ───────────────────────────────────────────────────
   /lrp/{lrpId}:
     get:
       summary: Get LRP Detail
@@ -2757,36 +2881,11 @@ paths:
         - in: path
           name: lrpId
           required: true
-          schema:
-            type: integer
+          schema: { type: integer }
       responses:
         "200":
           description: Success
 
-    patch:
-      summary: Update LRP (Supervisor/Admin)
-      description: Edit LRP (biasanya oleh Supervisor/QC)
-      tags: [LRP]
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: lrpId
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                qty_ok: { type: integer }
-                qty_ng_proses: { type: integer }
-                status: { type: string, enum: [SUBMITTED, VERIFIED] }
-      responses:
-        "200":
-          description: Success Update
     delete:
       summary: Delete LRP (Supervisor/Admin)
       description: Hapus LRP dan re-sync OEE
@@ -2797,11 +2896,112 @@ paths:
         - in: path
           name: lrpId
           required: true
-          schema:
-            type: integer
+          schema: { type: integer }
       responses:
         "200":
           description: Success Delete LRP
+
+  # ─── SUBMIT FINAL ──────────────────────────────────────────────────────────
+  /lrp/{lrpId}/submit:
+    post:
+      summary: "[STEP 3] Simpan Final LRP — Selesai Shift (OPERATOR / ADMIN)"
+      description: |
+        Finalkan LRP di akhir shift. Ini adalah aksi **"Selesai Shift"** dari sisi operator.
+
+        **Yang terjadi di backend saat endpoint ini dipanggil:**
+        1. `statusLrp` LRP diubah dari `DRAFT` → `SUBMITTED`
+        2. Status RPH yang terkait diubah dari `ACTIVE` → `CLOSED`
+        3. Backend mengecek apakah ada RPH lain berstatus `PLANNED` untuk operator yang sama di hari yang sama.
+        4. OEE recalculation di-trigger secara asinkron.
+
+        **Response `next_rph`:**
+        - Jika `next_rph !== null`: Ada RPH baru. Frontend tampilkan notifikasi/dialog agar operator beralih ke tugas berikutnya.
+        - Jika `next_rph === null`: Tidak ada tugas berikutnya. Tampilkan pesan "Shift selesai!".
+
+        > ⚠️ **Guard:** Endpoint ini hanya bisa dipanggil sekali. Jika LRP sudah `SUBMITTED`, return `400 Bad Request`.
+      tags: [LRP]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: lrpId
+          required: true
+          schema: { type: integer }
+          description: ID LRP yang ingin di-submit
+      requestBody:
+        description: "Data update terakhir sebelum submit (opsional)."
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                noKanagata:   { type: string, example: "K-2024-01" }
+                noLot:        { type: string, example: "LOT-001" }
+                qtyOk:        { type: integer, example: 300 }
+                qtyNgPrev:    { type: integer, example: 0 }
+                qtyNgProses:  { type: integer, example: 5 }
+                qtyRework:    { type: integer, example: 2 }
+                counterStart: { type: integer, example: 0 }
+                counterEnd:   { type: integer, example: 1200 }
+      responses:
+        "200":
+          description: LRP berhasil disimpan final
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "LRP berhasil disimpan final" }
+                  data:
+                    type: object
+                    properties:
+                      lrp:
+                        type: object
+                        description: "Data LRP yang sudah SUBMITTED"
+                        properties:
+                          id: { type: integer, example: 42 }
+                          statusLrp: { type: string, enum: [SUBMITTED], example: "SUBMITTED" }
+                          qtyOk: { type: integer, example: 250 }
+                          qtyTotalProd: { type: integer, example: 257 }
+                          updatedAt: { type: string, format: date-time }
+                      next_rph:
+                        description: |
+                          RPH berikutnya yang PLANNED untuk operator yang sama hari ini.
+                          **`null`** jika tidak ada tugas produksi berikutnya.
+                        nullable: true
+                        oneOf:
+                          - type: object
+                            properties:
+                              id: { type: integer, example: 7 }
+                              mesin: { type: string, example: "FB1200B" }
+                              mesin_id: { type: integer, example: 4 }
+                              produk: { type: string, example: "Part B" }
+                              produk_id: { type: integer, example: 2 }
+                              shift: { type: string, example: "Shift 1" }
+                              jam: { type: string, example: "06:00 - 14:00" }
+                              total_target: { type: integer, example: 300 }
+                          - type: 'null'
+              examples:
+                ada_rph_baru:
+                  summary: "Operator punya tugas RPH baru"
+                  value:
+                    message: "LRP berhasil disimpan final"
+                    data:
+                      lrp: { id: 42, statusLrp: "SUBMITTED", qtyOk: 250, qtyTotalProd: 257, updatedAt: "2026-05-11T07:30:00.000Z" }
+                      next_rph: { id: 7, mesin: "FB1200B", mesin_id: 4, produk: "Part B", produk_id: 2, shift: "Shift 1", jam: "06:00 - 14:00", total_target: 300 }
+                tidak_ada_rph_baru:
+                  summary: "Tidak ada tugas berikutnya — shift selesai"
+                  value:
+                    message: "LRP berhasil disimpan final"
+                    data:
+                      lrp: { id: 42, statusLrp: "SUBMITTED", qtyOk: 250, qtyTotalProd: 257, updatedAt: "2026-05-11T07:30:00.000Z" }
+                      next_rph: null
+        "400":
+          description: LRP sudah pernah di-submit sebelumnya (double submit)
+        "404":
+          description: LRP tidak ditemukan
+
+
 
   /master/produk:
     get:
@@ -4040,3 +4240,930 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /documents:
+    get:
+      summary: Get Document List
+      description: |
+        Mengambil daftar dokumen PDF dengan fitur pencarian judul dan pagination.
+        Akses: Semua user terautentikasi.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Cari berdasarkan judul dokumen
+        - in: query
+          name: kategori
+          schema: { type: string }
+          description: Filter berdasarkan kategori
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+        - in: query
+          name: mesinId
+          schema: { type: integer }
+          description: Filter berdasarkan ID Mesin
+        - in: query
+          name: produkId
+          schema: { type: integer }
+          description: Filter berdasarkan ID Produk
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Document" }
+                  meta:
+                    type: object
+                    properties:
+                      totalItems: { type: integer }
+                      totalPages: { type: integer }
+                      currentPage: { type: integer }
+
+    post:
+      summary: Upload New PDF Document
+      description: |
+        Menambahkan dokumen PDF baru ke sistem.
+        Akses: `ADMIN` atau `SUPERVISOR`.
+        Format: `multipart/form-data`.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [judul, file]
+              properties:
+                judul: { type: string, example: "Manual Book Mesin B" }
+                deskripsi: { type: string, example: "Panduan operasional" }
+                kategori: { type: string, example: "PRODUKSI" }
+                mesinId: { type: integer, example: 1 }
+                produkId: { type: integer, example: 1 }
+                noSeri: { type: string, example: "SN-12345" }
+                file: { type: string, format: binary, description: "File PDF (Max 10MB)" }
+      responses:
+        "201":
+          description: Document uploaded successfully
+        "400":
+          description: Validation error / File not PDF
+
+  /documents/{id}:
+    get:
+      summary: Get Document Detail
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Document" }
+
+    patch:
+      summary: Update Document
+      description: |
+        Update metadata dokumen atau ganti file PDF-nya.
+        Akses: `ADMIN` atau `SUPERVISOR`.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                judul: { type: string }
+                deskripsi: { type: string }
+                kategori: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated successfully
+
+    delete:
+      summary: Delete Document
+      description: Menghapus dokumen dari database dan file fisik dari server.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted successfully
+
+  /documents/{id}/download:
+    get:
+      summary: Download/Preview PDF
+      description: |
+        Mengambil file fisik PDF.
+        Gunakan parameter `?inline=true` untuk membuka di tab baru browser.
+      tags: [Document]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: inline
+          schema: { type: boolean }
+          description: Set true untuk preview di browser
+      responses:
+        "200":
+          description: Success (PDF File)
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+  /master/kategori-mesin:
+    get:
+      summary: Get all machine categories
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Create new machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama]
+              properties:
+                nama: { type: string, example: "PRESS" }
+      responses:
+        "201":
+          description: Created
+
+  /master/kategori-mesin/{id}:
+    get:
+      summary: Get machine category by ID
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success
+    put:
+      summary: Update machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama]
+              properties:
+                nama: { type: string, example: "SECONDARY" }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete machine category
+      tags: [Master]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /mandor-tasks:
+    get:
+      summary: Get all mandor tasks
+      description: Get tasks assigned to current mandor or all tasks if Supervisor/Admin.
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Create new mandor task (Supervisor only)
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mandorId, judul, deskripsi]
+              properties:
+                mandorId: { type: integer }
+                judul: { type: string }
+                deskripsi: { type: string }
+                prioritas: { type: string, enum: [LOW, MEDIUM, HIGH], default: "LOW" }
+      responses:
+        "201":
+          description: Created
+
+  /mandor-tasks/{id}:
+    patch:
+      summary: Update mandor task (Status/Details)
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mandorId: { type: integer }
+                judul: { type: string }
+                deskripsi: { type: string }
+                prioritas: { type: string, enum: [LOW, MEDIUM, HIGH] }
+                status: { type: string, enum: [TODO, ON_PROGRESS, DONE] }
+                catatan: { type: string, description: "Catatan penyelesaian tugas dari mandor" }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete mandor task (Supervisor only)
+      tags: [Mandor Task]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements:
+    get:
+      summary: Get unread announcements for current operator
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+    post:
+      summary: Send private announcement to operator (Mandor only)
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operatorId, pesan]
+              properties:
+                operatorId: { type: integer }
+                pesan: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /announcements/broadcast:
+    post:
+      summary: Broadcast announcement to all operators (Mandor only)
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "201":
+          description: Success
+
+  /announcements/broadcast/{broadcastId}:
+    put:
+      summary: Update broadcast announcement group
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: broadcastId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete broadcast announcement group
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: broadcastId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements/{id}:
+    put:
+      summary: Update announcement content
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesan]
+              properties:
+                pesan: { type: string }
+      responses:
+        "200":
+          description: Success
+    delete:
+      summary: Delete announcement
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+
+  /announcements/{id}/read:
+    patch:
+      summary: Mark announcement as read
+      tags: [Announcement]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Success
+
+  # ─── HR ANALYTICS ────────────────────────────────────────────────────────────
+
+  /poin/hr/stats:
+    get:
+      summary: "[HR] Summary & Statistik Poin"
+      description: >
+        Mengembalikan ringkasan status karyawan (Aman, Teguran, SP1, SP2, SP3),
+        statistik per shift, top pelanggaran, pelanggaran per divisi, dan tren mingguan.
+        Dapat difilter berdasarkan bulan, role karyawan, dan plant.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan dalam format YYYY-MM.
+        - in: query
+          name: role
+          schema: { type: string, example: "OPERATOR" }
+          description: "Filter role karyawan (default: OPERATOR)."
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            example: "OPERATOR_OFFICE"
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
+        - in: query
+          name: plant
+          schema: { type: string, example: "1" }
+          description: Filter plant (opsional).
+      responses:
+        "200":
+          description: Data statistik HR berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        properties:
+                          totalEmployee: { type: integer, example: 120 }
+                          aman: { type: integer, example: 95 }
+                          teguran: { type: integer, example: 15 }
+                          sp1: { type: integer, example: 7 }
+                          sp2: { type: integer, example: 2 }
+                          sp3: { type: integer, example: 1 }
+                          totalPelanggaran: { type: integer, example: 48 }
+                          totalPenghargaan: { type: integer, example: 12 }
+                      shiftStats:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Shift 1 (PAGI)" }
+                            value: { type: integer, example: 20 }
+                      topViolations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            value: { type: integer }
+                      violationByDivisi:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            value: { type: integer }
+                      trendByWeek:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string, example: "Mgg 23" }
+                            pelanggaran: { type: integer }
+                            penghargaan: { type: integer }
+        "401":
+          description: Tidak terautentikasi.
+        "403":
+          description: Akses ditolak. Bukan HR atau Admin.
+
+  /poin/hr/rankings:
+    get:
+      summary: "[HR] Ranking Karyawan (Worst/Best) dengan Pagination"
+      description: >
+        Mengembalikan daftar karyawan diurutkan berdasarkan poin (terburuk atau terbaik)
+        dengan dukungan pagination. Filter tersedia berdasarkan bulan, role, dan plant.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan (YYYY-MM).
+        - in: query
+          name: role
+          schema: { type: string, example: "OPERATOR" }
+          description: "Filter role karyawan (default: OPERATOR)."
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
+        - in: query
+          name: plant
+          schema: { type: string }
+          description: Filter plant (opsional).
+        - in: query
+          name: type
+          schema: { type: string, enum: [worst, best], default: worst }
+          description: "'worst' = poin terendah, 'best' = poin tertinggi."
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Data ranking karyawan berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        nama: { type: string }
+                        noReg: { type: string }
+                        divisi: { type: string }
+                        plant: { type: string }
+                        poin: { type: integer }
+                        status: { type: string, example: "SP1" }
+                        totalPelanggaran: { type: integer }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+
+  /poin/hr/history:
+    get:
+      summary: "[HR] Riwayat Pelanggaran Lengkap (Extended Filter)"
+      description: >
+        Mengambil riwayat pelanggaran/penghargaan dengan filter yang lebih lengkap
+        dibanding endpoint supervisor. Response mencakup noReg, divisi, dan role karyawan.
+        Hanya bisa diakses oleh role **HR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter satu bulan penuh (YYYY-MM). Prioritas atas startDate/endDate.
+        - in: query
+          name: startDate
+          schema: { type: string, example: "2026-06-01" }
+          description: Tanggal awal custom range.
+        - in: query
+          name: endDate
+          schema: { type: string, example: "2026-06-30" }
+          description: Tanggal akhir custom range.
+        - in: query
+          name: role
+          schema: { type: string }
+          description: Filter role karyawan.
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: [OPERATOR_OFFICE, OPERATOR_LAPANGAN]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+            Nilai yang tersedia: `OPERATOR_OFFICE` atau `OPERATOR_LAPANGAN`.
+        - in: query
+          name: plant
+          schema: { type: string }
+        - in: query
+          name: divisiId
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Riwayat pelanggaran berhasil diambil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        tanggal: { type: string, format: date-time }
+                        noReg: { type: string }
+                        nama: { type: string }
+                        divisi: { type: string }
+                        plant: { type: string }
+                        role: { type: string }
+                        shift: { type: string }
+                        tipe: { type: string }
+                        kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+                        poinBerubah: { type: integer }
+                        statusLevel: { type: string }
+                        keterangan: { type: string }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+
+  /poin/hr/history/{id}:
+    patch:
+      summary: "[HR / Supervisor] Edit Data Riwayat Poin"
+      description: >
+        Memperbarui data riwayat pelanggaran/penghargaan berdasarkan ID.
+        Minimal satu field harus dikirim di body request.
+        Saat `poinBerubah` berubah, `currentPoint` operator akan dihitung ulang secara otomatis
+        beserta `statusLevel`-nya. Jika status memburuk ke SP1/SP2, masa suspend operator
+        dapat diperpanjang 6 bulan. Hanya bisa diakses oleh role **HR** dan **SUPERVISOR**.
+      tags: [HR Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+          description: ID riwayat poin disiplin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                tipeDisiplinId:
+                  type: integer
+                  description: >
+                    Ubah tipe pelanggaran/penghargaan. Nilai `poinBerubah` akan dihitung ulang
+                    otomatis dari master tipe disiplin.
+                shiftId:
+                  type: integer
+                  description: Ubah shift terkait riwayat poin.
+                keterangan:
+                  type: string
+                  description: Ubah keterangan/catatan.
+                tanggal:
+                  type: string
+                  format: date-time
+                  description: Ubah tanggal kejadian.
+                poinBerubah:
+                  type: integer
+                  description: >
+                    Override nilai perubahan poin secara manual (mis. koreksi HR).
+                    Jika dikirim bersamaan dengan `tipeDisiplinId`, nilai ini yang diprioritaskan.
+      responses:
+        "200":
+          description: Data poin berhasil diperbarui.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  message: { type: string, example: "Data poin berhasil diperbarui" }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      tanggal: { type: string, format: date-time }
+                      noReg: { type: string }
+                      nama: { type: string }
+                      divisi: { type: string }
+                      plant: { type: string }
+                      role: { type: string }
+                      shift: { type: string }
+                      tipe: { type: string }
+                      kategori: { type: string, enum: [PELANGGARAN, PENGHARGAAN] }
+                      poinBerubah: { type: integer }
+                      statusLevel: { type: string, example: "TEGURAN" }
+                      keterangan: { type: string }
+                      operatorCurrentPoint: { type: integer, example: 90 }
+        "400":
+          description: Body request kosong atau tidak valid.
+        "401":
+          description: Tidak terautentikasi.
+        "403":
+          description: Akses ditolak. Bukan HR atau Supervisor.
+        "404":
+          description: Data poin, tipe disiplin, atau shift tidak ditemukan.
+
+  /poin/hr/export-excel:
+    get:
+      summary: "[HR] Export Riwayat Pelanggaran ke Excel"
+      description: >
+        Mengunduh file Excel (.xlsx) berisi riwayat pelanggaran/penghargaan lengkap
+        dengan format yang rapi (header berwarna, baris selang-seling, teks status berwarna).
+        Mendukung filter yang sama dengan `/poin/hr/history`.
+        Hanya bisa diakses oleh role **HR**.
+      tags: ["HR Analytics"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+        - in: query
+          name: startDate
+          schema: { type: string, example: "2026-06-01" }
+        - in: query
+          name: endDate
+          schema: { type: string, example: "2026-06-30" }
+        - in: query
+          name: role
+          schema: { type: string }
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: ["OPERATOR_OFFICE", "OPERATOR_LAPANGAN"]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+        - in: query
+          name: plant
+          schema: { type: string }
+      responses:
+        "200":
+          description: File Excel berhasil di-generate.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
+  /poin/hr/export-excel/rankings:
+    get:
+      summary: "[HR] Export Ranking Karyawan ke Excel"
+      description: >
+        Mengunduh file Excel (.xlsx) berisi ranking karyawan berdasarkan poin.
+        Gunakan parameter `type` untuk memilih: `worst` (poin terendah) atau `best` (poin tertinggi).
+        Header sheet menyesuaikan warna: merah untuk worst, hijau untuk best.
+        Hanya bisa diakses oleh role **HR**.
+      tags: ["HR Analytics"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: ["worst", "best"], default: "worst" }
+          description: "Pilih tipe ranking yang ingin di-export: 'worst' atau 'best'."
+        - in: query
+          name: month
+          schema: { type: string, example: "2026-06" }
+          description: Filter bulan (YYYY-MM).
+        - in: query
+          name: role
+          schema: { type: string, example: "OPERATOR" }
+        - in: query
+          name: tipeOperator
+          schema:
+            type: string
+            enum: ["OPERATOR_OFFICE", "OPERATOR_LAPANGAN"]
+          description: >
+            Filter tipe operator (opsional). Jika tidak diisi, semua tipe operator akan ditampilkan.
+        - in: query
+          name: plant
+          schema: { type: string }
+      responses:
+        "200":
+          description: File Excel ranking berhasil di-generate.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
+  /branding/background:
+    get:
+      summary: Get Branding Background
+      description: Retrieve the current branding background image URL.
+      tags: [Branding]
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backgroundImageUrl:
+                    type: string
+                    example: "http://localhost:4001/uploads/branding-images/bg.jpg"
+    post:
+      summary: Upload Branding Background
+      description: Upload a new background image. Only for ADMIN.
+      tags: [Branding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                background:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Background image berhasil diperbarui"
+                  backgroundImageUrl:
+                    type: string
+                    example: "http://localhost:4001/uploads/branding-images/bg-new.jpg"
+    delete:
+      summary: Delete Branding Background
+      description: Remove the current branding background image and delete physical file. Only for ADMIN.
+      tags: [Branding]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Background image berhasil dihapus" }
+        "404":
+          description: Not Found - Background image does not exist.
+

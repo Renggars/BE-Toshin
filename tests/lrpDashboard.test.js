@@ -43,7 +43,7 @@ global.__LRPD_MOCKS__ = {
     get: jest.fn(),
     set: jest.fn(),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 
@@ -358,8 +358,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(lrpDashboardService.getUnifiedDashboardData).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
 
       const res = await request(app).get("/lrp-dashboard/summary");
 
@@ -514,8 +514,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(lrpDashboardService.getLrpDetail).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/lrp-dashboard/1");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -704,8 +704,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(lrpService.updateLrpById).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).patch("/lrp-dashboard/1").send({ statusLrp: "SUBMITTED" });
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -854,8 +854,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(lrpService.deleteLrpById).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).delete("/lrp-dashboard/1");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -993,8 +993,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(exportQueue.add).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).post("/lrp-dashboard/export/request");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -1119,8 +1119,8 @@ describe("LRP Dashboard Controller - Comprehensive Unit Tests", () => {
       expect(exportQueue.getJob).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/lrp-dashboard/export/status/job-123");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });

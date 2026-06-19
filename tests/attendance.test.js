@@ -31,7 +31,7 @@ global.__ATTD_MOCKS__ = {
         }
     ),
   },
-  mockUser: { id: 1, role: "ADMIN", email: "admin@test.com" },
+  mockUser: { id: 1, role: "ADMIN", noReg: "REG123" },
   isLoggedIn: true,
 };
 
@@ -291,8 +291,8 @@ describe("Attendance Controller - Comprehensive Unit Tests", () => {
       expect(attendanceService.getScheduledUsers).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
 
       const res = await request(app).get("/attendance/scheduled");
 
@@ -550,8 +550,8 @@ describe("Attendance Controller - Comprehensive Unit Tests", () => {
       expect(attendanceService.getPresentUsers).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
       const res = await request(app).get("/attendance/present");
       expect(res.status).toBe(httpStatus.FORBIDDEN);
     });
@@ -810,8 +810,8 @@ describe("Attendance Controller - Comprehensive Unit Tests", () => {
       expect(attendanceService.updateAttendanceManual).not.toHaveBeenCalled();
     });
 
-    test("❌ should return 403 if role is PRODUKSI", async () => {
-      setRole("PRODUKSI");
+    test("❌ should return 403 if role is OPERATOR", async () => {
+      setRole("OPERATOR");
 
       const res = await request(app)
         .put("/attendance/update")

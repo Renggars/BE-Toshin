@@ -1,19 +1,27 @@
 {
   "android": {
-    "version": "1.0.0",
+    "version": "2.0",
     "buildNumber": 1,
-    "releaseDate": "2026-03-30",
-    "downloadUrl": "/app-releases/toshin.apk",
-    "releaseNotes": "Initial Android release",
+    "releaseDate": "2026-06-15",
+    "downloadUrl": "/app-releases/toshin-android-1781497705002-975798305.apk",
+    "releaseNotes": "",
     "forceUpdate": false,
     "minVersion": "1.0.0"
   },
   "windows": {
+<<<<<<< HEAD
     "version": "1.0.0",
     "buildNumber": 1,
     "releaseDate": "2026-03-30",
     "downloadUrl": "/app-releases/toshin.exe",
     "releaseNotes": "Initial Windows release",
+=======
+    "version": "1.0.2",
+    "buildNumber": 3,
+    "releaseDate": "2026-04-27",
+    "downloadUrl": "/app-releases/toshin.exe",
+    "releaseNotes": "Update aplikasi untuk Windows",
+>>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
     "forceUpdate": false,
     "minVersion": "1.0.0"
   }

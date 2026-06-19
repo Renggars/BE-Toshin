@@ -8,8 +8,24 @@ import {
 } from "../config/socket.js";
 import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
+import tcpService from "./tcp.service.js";
+
+
+// TODO JIKA DIVISI BUKAN HANYA MTC BISA DIUBAH DI KODE INI
+const getHardwareDivisi = (divisiStr) => {
+  if (!divisiStr) return "MTC";
+  const upper = divisiStr.toUpperCase();
+  if (upper.includes("MAINTENANCE") || upper === "MTC") return "MTC";
+  if (upper.includes("QUALITY") || upper === "QC") return "QC";
+  if (upper.includes("DIE_MAINT") || upper.includes("DIE")) return "DM";
+  if (upper.includes("PRODUKSI") || upper.includes("PROD")) return "PRD";
+
+  
+  return "MTC"; // fallbck MTC
+};
 
 const TZ = "Asia/Jakarta";
+import { nowWIB } from "../utils/dateWIB.js";
 
 /**
  * Helper: Determine Shift & Operational Date based on time (WIB)
@@ -51,7 +67,7 @@ const getShiftInfo = async (time) => {
 
 const createCall = async (payload) => {
   const { mesinId, operatorId, targetDivisi } = payload;
-  const currentTime = new Date();
+  const currentTime = nowWIB();
 
   // Check if there's already a WAITING call or ACTIVE/IN_REPAIR event for this machine
   const activeCall = await prisma.andonCall.findFirst({
@@ -94,7 +110,7 @@ const createCall = async (payload) => {
   const targetDivisiRecord = await prisma.divisi.findFirst({
     where: {
       namaDivisi: {
-        contains: targetDivisi.replace("_", " "), // Still helpful if db names have spaces but enum doesn't
+        contains: targetDivisi, // Still helpful if db names have spaces but enum doesn't
       },
     },
   });
@@ -131,6 +147,11 @@ const createCall = async (payload) => {
   const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
+
+  // Trigger Hardware TCP
+  const hwMesin = newCall.mesin?.namaMesin || "UNKNOWN";
+  const hwDivisi = getHardwareDivisi(targetDivisi);
+  tcpService.broadcastCommand(`ANDON;${hwMesin};${hwDivisi};CALL`);
 
   // Send notification to supervisors of the TARGET division
   const supervisors = await prisma.user.findMany({

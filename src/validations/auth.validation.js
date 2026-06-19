@@ -4,12 +4,12 @@ import { password } from "./custom.validation.js";
 const register = {
   body: Joi.object().keys({
     nama: Joi.string().required(),
-    email: Joi.string().email().required(),
+    noReg: Joi.string().required(),
     password: Joi.string().custom(password).required(),
     divisiId: Joi.number().integer().required(),
     role: Joi.string()
       .valid(
-        "PRODUKSI",
+        "OPERATOR",
         "QUALITY",
         "MAINTENANCE",
         "DIE_MAINT",
@@ -26,20 +26,20 @@ const register = {
         "ACCOUNTING",
         "FINANCE",
         "SUPERVISOR",
+        "MANDOR",
         "ADMIN",
       )
       .required(),
     fotoProfile: Joi.string().uri().allow(null, ""),
     plant: Joi.string().valid("1", "2", "3").required(),
     line: Joi.string().required(),
-    noReg: Joi.string().optional().allow(null, ""),
   }),
 };
 
 const login = {
   body: Joi.object().keys({
     uidNfc: Joi.string(),
-    email: Joi.string().email(),
+    noReg: Joi.string(),
     password: Joi.string(),
   }),
 };
