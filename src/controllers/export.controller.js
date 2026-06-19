@@ -1,17 +1,13 @@
 import catchAsync from "../utils/catchAsync.js";
-<<<<<<< HEAD
 import ApiError from "../utils/ApiError.js";
-import { exportQueue } from "../queues/exportQueue.js";
 import lrpDashboardService from "../services/lrpDashboard.service.js"; // Import tambahan
 import fs from "fs";                                                 // Import tambahan
 import path from "path";                                             // Import tambahan
 import { v4 as uuidv4 } from "uuid";                                 // Import tambahan
-=======
 import poinService from "../services/poin.service.js";
 import moment from "moment";
 import XlsxStyle from "xlsx-js-style";
 import { toWIB } from "../utils/dateWIB.js";
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,41 +86,8 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
     endDate: req.query.endDate,
   };
 
-<<<<<<< HEAD
-  // [Fallback Tanpa Redis] Jika exportQueue disabled (null), generate file secara sinkron
-  if (!exportQueue) {
-    try {
-      const buffer = await lrpDashboardService.exportData(filter);
-      
-      const exportsDir = path.join(process.cwd(), "public", "exports");
-      if (!fs.existsSync(exportsDir)) {
-        fs.mkdirSync(exportsDir, { recursive: true });
-      }
-      
-      const uid = uuidv4();
-      const fileName = `lrp_export_${userId}_${uid}.xlsx`;
-      const filePath = path.join(exportsDir, fileName);
-      fs.writeFileSync(filePath, buffer);
-      
-      return res.status(httpStatus.ACCEPTED).json({
-        status: "success",
-        message: "Request export berhasil secara sinkron.",
-        jobId: "sync_" + fileName,
-      });
-    } catch (err) {
-      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Gagal membuat export secara sinkron: " + err.message);
-    }
-  }
-
-  // 1. Cek apakah user memiliki tugas yang sedang aktif/menunggu untuk Export di Redis
-  const activeJobs = await exportQueue.getJobs(["active", "waiting"]);
-  const userHasActiveJob = activeJobs.find(
-    (job) => job.name === "export-data" && job.data.userId === userId,
-  );
-=======
   const result = await poinService.getHRHistory(filter, { page: 1, limit: 10000 });
   const data = result.data;
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
   // Sheet setup
   const ws = {};
@@ -200,30 +163,8 @@ const exportHRPoinExcel = catchAsync(async (req, res) => {
 
 // ─── Export Ranking Karyawan ───────────────────────────────────────────────────
 
-<<<<<<< HEAD
-  // [Fallback Tanpa Redis] Jika jobId berawalan 'sync_', file telah selesai digenerate seketika
-  if (jobId.startsWith("sync_")) {
-    const fileName = jobId.replace("sync_", "");
-    const downloadUrl = `/exports/${fileName}`;
-    return res.status(httpStatus.OK).json({
-      status: "completed",
-      message: "Data berhasil diexport.",
-      downloadUrl,
-    });
-  }
-
-  if (!exportQueue) {
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, "Job async tidak valid namun redis tidak berjalan.");
-  }
-
-  const job = await exportQueue.getJob(jobId);
-  if (!job) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Job tidak ditemukan.");
-  }
-=======
 const exportHRRankingsExcel = catchAsync(async (req, res) => {
   const { month, role, tipeOperator, plant, type = "worst" } = req.query;
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
   const result = await poinService.getHRRankings(month, role || null, tipeOperator, plant, type, 1, 1000);
   const periodLabel = month ? moment(month, "YYYY-MM").format("MMMM YYYY") : "Seluruh Waktu";

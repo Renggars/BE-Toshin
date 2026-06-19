@@ -633,19 +633,11 @@ const getWeeklyTrend = async (filterTanggal) => {
     };
   }
 
-<<<<<<< HEAD
-  // Aggregate target
-  weeklyData.forEach((rph) => {
-    const dateKey = moment(rph.tanggal).format("YYYY-MM-DD");
-    if (trendByDate[dateKey]) {
-      trendByDate[dateKey].target_achievement += rph.target?.totalTarget || 0;
-=======
   // 5. Agregasi target dari RPH
   weeklyRph.forEach((r) => {
     const dateKey = moment(r.tanggal).format("YYYY-MM-DD");
     if (trendMap[dateKey]) {
       trendMap[dateKey].totalTarget += r.targetOverride ?? r.target?.totalTarget ?? 0;
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
     }
   });
 
@@ -657,16 +649,6 @@ const getWeeklyTrend = async (filterTanggal) => {
     }
   });
 
-<<<<<<< HEAD
-  // Calculate percentage
-  Object.keys(trendByDate).forEach((key) => {
-    const data = trendByDate[key];
-    if (data.target_achievement > 0) {
-      data.percentage = parseFloat(
-        ((data.total_production / data.target_achievement) * 100).toFixed(1),
-      );
-    }
-=======
   // 7. Hitung persentase
   const results = Object.values(trendMap).map((item) => {
     return {
@@ -675,7 +657,6 @@ const getWeeklyTrend = async (filterTanggal) => {
         ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
         : 0,
     };
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
   });
 
   return Object.values(trendByDate);

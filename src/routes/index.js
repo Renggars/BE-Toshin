@@ -15,15 +15,11 @@ import notificationRoute from "./notification.route.js";
 import healthRoute from "./health.route.js";
 import metricsRoute from "./metrics.route.js";
 import hardwareRoute from "./hardware.route.js";
-<<<<<<< HEAD
 import appVersionRoute from "./appVersion.route.js";
-=======
 import documentRoute from "./document.route.js";
-import appVersionRoute from "./appVersion.route.js";
 import mandorTaskRoute from "./mandorTask.route.js";
 import announcementRoute from "./announcement.route.js";
 import brandingRoute from "./branding.route.js";
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 
 const router = express.Router();
 
@@ -93,11 +89,10 @@ const defaultRoutes = [
     route: hardwareRoute,
   },
   {
-<<<<<<< HEAD
     path: "/app-version",
     route: appVersionRoute,
   },
-=======
+  {
     path: "/documents",
     route: documentRoute,
   },
@@ -117,7 +112,6 @@ const defaultRoutes = [
     path: "/branding",
     route: brandingRoute,
   },
->>>>>>> 3b88b6c17010218edfcee82527cb3dc03fedf0b9
 ];
 
 defaultRoutes.forEach((route) => {
