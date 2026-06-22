@@ -102,7 +102,7 @@ const createRencanaProduksi = async (payload) => {
       userId: userId,
       tipe: "RPH_ASSIGNED",
       judul: "RPH Baru Ditugaskan",
-      pesan: `RPH baru telah ditambahkan pada ${moment().format(
+      pesan: `RPH baru telah ditambahkan pada ${moment().tz("Asia/Jakarta").format(
         "DD-MM-YYYY HH:mm",
       )}`,
     });
@@ -156,22 +156,17 @@ const getRencanaProduksiHarian = async (userId, tanggalStr) => {
     orderBy: { id: "asc" },
   });
 
-  // ✅ Fallback: Jika tidak ada RPH hari ini, cek kemarin (siapa tahu shift malam belum selesai)
+  // ✅ Fallback: Jika tidak ada RPH hari ini, cek kemarin (shift malam)
   if (allRphs.length === 0) {
-    const yesterdayStart = moment(tanggalStr)
-      .subtract(1, "days")
-      .startOf("day")
-      .toDate();
-    const yesterdayEnd = moment(tanggalStr)
-      .subtract(1, "days")
-      .endOf("day")
-      .toDate();
+    const yesterdayStart = moment(operationalDate).subtract(1, "days").startOf("day").toDate();
+    const yesterdayEnd = moment(operationalDate).subtract(1, "days").endOf("day").toDate();
 
     allRphs = await prisma.rencanaProduksi.findMany({
       where: {
         userId: userId,
         tanggal: { gte: yesterdayStart, lte: yesterdayEnd },
-        status: { in: ["ACTIVE", "PLANNED"] }, // Hanya ambil yang masih relevan
+        status: { in: ["ACTIVE", "PLANNED"] },
+        ...(mesinId ? { mesinId: Number(mesinId) } : {}),
       },
       include: includeQuery,
       orderBy: { id: "asc" },
@@ -634,10 +629,10 @@ const getWeeklyTrend = async (filterTanggal) => {
   }
 
   // 5. Agregasi target dari RPH
-  weeklyRph.forEach((r) => {
+  weeklyData.forEach((r) => {
     const dateKey = moment(r.tanggal).format("YYYY-MM-DD");
-    if (trendMap[dateKey]) {
-      trendMap[dateKey].totalTarget += r.targetOverride ?? r.target?.totalTarget ?? 0;
+    if (trendByDate[dateKey]) {
+      trendByDate[dateKey].target_achievement += r.targetOverride ?? r.target?.totalTarget ?? 0;
     }
   });
 
@@ -649,17 +644,15 @@ const getWeeklyTrend = async (filterTanggal) => {
     }
   });
 
-  // 7. Hitung persentase
-  const results = Object.values(trendMap).map((item) => {
+  // 7. Hitung persentase dan kembalikan array
+  return Object.values(trendByDate).map((item) => {
     return {
       ...item,
-      percentage: item.totalTarget > 0
-        ? parseFloat(((item.totalProduction / item.totalTarget) * 100).toFixed(1))
+      percentage: item.target_achievement > 0
+        ? parseFloat(((item.total_production / item.target_achievement) * 100).toFixed(1))
         : 0,
     };
   });
-
-  return Object.values(trendByDate);
 };
 
 const searchOperator = async (query) => {
@@ -767,7 +760,7 @@ const updateRencanaProduksi = async (rphId, payload) => {
         userId: payload.userId,
         tipe: "RPH_ASSIGNED",
         judul: "RPH Baru Ditugaskan",
-        pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().format(
+        pesan: `RPH baru telah ditugaskan kepada Anda pada ${moment().tz("Asia/Jakarta").format(
           "DD-MM-YYYY HH:mm",
         )} (Update)`,
       });
@@ -974,6 +967,7 @@ const activateRph = async (rphId) => {
     );
   }
 
+  console.log(`[RPH] Activating RPH ${rphId} for user ${rph.userId} on machine ${rph.mesinId}`);
   const updatedRph = await prisma.rencanaProduksi.update({
     where: { id: rphId },
     data: {

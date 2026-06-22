@@ -5,6 +5,7 @@ const trigger = {
     mesinId: Joi.number().required(),
     masalahId: Joi.number().required(),
     operatorId: Joi.number().optional(),
+    nextRphId: Joi.number().optional(),
   }),
 };
 

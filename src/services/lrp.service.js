@@ -305,15 +305,8 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
       },
     });
 
-    // 2. Tutup RPH yang terkait: ACTIVE → CLOSED
-    await tx.rencanaProduksi.update({
-      where: { id: submittedLrp.rphId },
-      data: { status: "CLOSED", endTime: nowWIB() },
-    });
-
     // 3. Cek apakah ada RPH PLANNED berikutnya untuk operator yang sama
-    //    pada hari yang sama. Ini memberitahu Frontend untuk mengarahkan
-    //    operator ke tugas produksi berikutnya.
+    //    pada hari yang sama. 
     const nextRph = await tx.rencanaProduksi.findFirst({
       where: {
         userId: submittedLrp.operatorId,
@@ -330,10 +323,29 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
       orderBy: { id: "asc" },
     });
 
+    // 2. [REFACTORED] Tutup RPH yang baru saja disubmit
+    await tx.rencanaProduksi.update({
+      where: { id: submittedLrp.rphId },
+      data: { status: "CLOSED", endTime: nowWIB() },
+    });
+
+    // 3. [NEW] Aktifkan RPH berikutnya jika berada di mesin yang sama
+    // Ini agar dashboard operator langsung pindah ke data RPH baru.
+    if (nextRph && nextRph.mesin.id === submittedLrp.mesinId) {
+      await tx.rencanaProduksi.update({
+        where: { id: nextRph.id },
+        data: {
+          status: "ACTIVE",
+          startTime: nowWIB(),
+        },
+      });
+      console.log(`[LRP Service] Auto-activated next RPH ${nextRph.id} (Same Machine)`);
+    }
+
     return { lrp: submittedLrp, nextRph };
   });
 
-  // 4. Trigger OEE recalc setelah transaksi selesai (non-blocking)
+  // 4. Trigger OEE recalc untuk RPH yang baru ditutup
   await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
 
   // Real-time progress update for Mandor

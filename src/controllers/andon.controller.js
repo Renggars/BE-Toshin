@@ -59,7 +59,7 @@ const getTriggerMasterData = catchAsync(async (req, res) => {
 });
 
 const getPersonalHistory = catchAsync(async (req, res) => {
-  const result = await andonService.getPersonalHistory(req.user.id);
+  const result = await andonService.getPersonalHistory(req.user.id, req.query);
   responseApiSuccess(res, "Success get personal history", result);
 });
 
