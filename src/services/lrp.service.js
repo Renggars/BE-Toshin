@@ -299,13 +299,15 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    const now = nowWIB(); // ← panggil SEKALI di sini
+    
     // 1. Update data terakhir & Finalkan LRP: status -> SUBMITTED
     const submittedLrp = await tx.laporanRealisasiProduksi.update({
       where: { id: lrpId },
       data: {
         ...finalData,
         statusLrp: "SUBMITTED",
-        updatedAt: nowWIB(),
+        updatedAt: now,
       },
     });
 
@@ -330,20 +332,20 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
     // 2. [REFACTORED] Tutup RPH yang baru saja disubmit
     await tx.rencanaProduksi.update({
       where: { id: submittedLrp.rphId },
-      data: { status: "CLOSED", endTime: nowWIB() },
+      data: { status: "CLOSED", endTime: now },
     });
 
     // 3. [NEW] Aktifkan RPH berikutnya jika berada di mesin yang sama
     // Ini agar dashboard operator langsung pindah ke data RPH baru.
+     // startTime = now (sama dengan endTime RPH sebelumnya, tidak ada gap)
     if (nextRph && nextRph.mesin.id === submittedLrp.mesinId) {
       await tx.rencanaProduksi.update({
         where: { id: nextRph.id },
         data: {
           status: "ACTIVE",
-          startTime: nowWIB(),
+          startTime: now,
         },
       });
-      console.log(`[LRP Service] Auto-activated next RPH ${nextRph.id} (Same Machine)`);
     }
 
     return { lrp: submittedLrp, nextRph };
