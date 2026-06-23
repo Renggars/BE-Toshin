@@ -56,6 +56,12 @@ router.get(
   poinController.getUserByNfc,
 );
 
+router.get(
+  "/user/by-noreg/:noReg",
+  auth("SUPERVISOR"),
+  poinController.getUserByNoReg,
+);
+
 // ─── HR ENDPOINTS ──────────────────────────────────────────────────────────────
 router.get("/hr/stats", hrRoles, poinController.getHRStats);
 router.get("/hr/rankings", hrRoles, poinController.getHRRankings);

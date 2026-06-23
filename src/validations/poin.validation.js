@@ -1,5 +1,17 @@
 import Joi from "joi";
 
+const fotoFileSchema = Joi.object()
+  .keys({
+    mimetype: Joi.string()
+      .valid("image/jpeg", "image/jpg", "image/png", "image/webp")
+      .required(),
+    size: Joi.number()
+      .max(5 * 1024 * 1024)  // 5MB
+      .required(),
+  })
+  .unknown(true)
+  .optional();
+
 const createPelanggaran = {
   body: Joi.object()
     .keys({
@@ -12,17 +24,7 @@ const createPelanggaran = {
     })
     .or("uidNfc", "operatorId") // At least one must be present
     .unknown(true), // Allow "foto" and other multipart fields
-  file: Joi.object()
-    .keys({
-      mimetype: Joi.string()
-        .valid("image/jpeg", "image/jpg", "image/png", "image/webp")
-        .required(),
-      size: Joi.number()
-        .max(1024 * 1024)
-        .required(), // 1MB
-    })
-    .unknown(true)
-    .optional(),
+  file: fotoFileSchema,
 };
 
 const createPelanggaranByNfc = {
@@ -32,17 +34,7 @@ const createPelanggaranByNfc = {
     shiftId: Joi.number().integer().required(), // Reverted to required
     keterangan: Joi.string().optional(),
   }).unknown(true), // Allow extra fields
-  file: Joi.object()
-    .keys({
-      mimetype: Joi.string()
-        .valid("image/jpeg", "image/jpg", "image/png", "image/webp")
-        .required(),
-      size: Joi.number()
-        .max(1024 * 1024)
-        .required(), // 1MB
-    })
-    .unknown(true)
-    .optional(),
+  file: fotoFileSchema,
 };
 
 const getHistory = {

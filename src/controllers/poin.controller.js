@@ -92,6 +92,12 @@ const getUserByNfc = catchAsync(async (req, res) => {
   res.send({ status: true, data: user });
 });
 
+const getUserByNoReg = catchAsync(async (req, res) => {
+  const { noReg } = req.params;
+  const user = await poinService.getUserByNoReg(noReg);
+  res.send({ status: true, data: user });
+});
+
 const resetPoints = catchAsync(async (req, res) => {
   await poinService.resetAllUsersPoints();
   res.send({ status: true, message: "Poin semua user berhasil direset ke 100" });
@@ -152,6 +158,7 @@ export default {
   getWeeklyStats,
   getMonthlyStats,
   getUserByNfc,
+  getUserByNoReg,
   resetPoints,
   getHRStats,
   getHRRankings,

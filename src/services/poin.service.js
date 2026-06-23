@@ -778,6 +778,48 @@ const getUserByNfc = async (uidNfc) => {
   return safeUser;
 };
 
+const getUserByNoReg = async (noReg) => {
+  const user = await prisma.user.findUnique({
+    where: { noReg },
+    include: {
+      divisi: {
+        select: {
+          id: true,
+          namaDivisi: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "User dengan No. Registrasi tersebut tidak ditemukan",
+    );
+  }
+
+  if (user.role !== "OPERATOR") {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Hanya Operator yang dapat dikenakan poin disiplin",
+    );
+  }
+
+  if (user.status !== "active") {
+    throw new ApiError(httpStatus.BAD_REQUEST, "User tidak aktif");
+  }
+
+  if (user.suspendedUntil && new Date(user.suspendedUntil) > new Date()) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `User sedang di-suspend hingga ${user.suspendedUntil.toLocaleString()}`,
+    );
+  }
+
+  const { password, ...safeUser } = user;
+  return safeUser;
+};
+
 const createPelanggaranByNfc = async (payload, staffId) => {
   const { uidNfc, tipeDisiplinId, shiftId, keterangan } = payload;
 
@@ -1281,6 +1323,7 @@ export default {
   getMonthlyStats,
   resetAllUsersPoints,
   getUserByNfc,
+  getUserByNoReg,
   createPelanggaranByNfc,
   getHRDashboardStats,
   getHRRankings,
