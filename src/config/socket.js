@@ -90,21 +90,25 @@ export const initSocket = (httpServer) => {
     }
 
     // Emit notifikasi baru ke client spesifik
-    socket.on("join", ({ userId, role }) => {
+    socket.on("join", ({ userId, role, mesinId }) => {
       // Guard: Cek jika sudah pernah join untuk menghindari redundansi log & metrik
       if (socket.hasJoined) return;
 
       socket.join(`user:${userId}`);
+      logger.info(`Socket ${socket.id} joined room user:${userId}, role:${role}`);
+      
+      if (mesinId) {
+        socket.join(`machine:${mesinId}`);
+        logger.info(`Socket ${socket.id} joined room machine:${mesinId}`);
+      }
+
+      const roomSize = io.sockets.adapter.rooms.get(`user:${userId}`)?.size ?? 0;
+      logger.info(`Room user:${userId} now has ${roomSize} socket(s)`);
+
       if (role) {
         socket.join(`role:${role}`);
         socket.role = role; // Store role for disconnect tracking
         socketOnlineUsersByRole.inc({ role });
-
-        logger.info(
-          `Socket ${socket.id} joined rooms user: ${userId}, role: ${role}`,
-        );
-      } else {
-        logger.info(`Socket ${socket.id} joined room user: ${userId}`);
       }
       
       socket.hasJoined = true;
@@ -134,7 +138,7 @@ export const getIo = () => {
 };
 
 /**
- * Emit event real-time update untuk Andon system
+ * Emit event real-time update untuk Andon system (LEGACY - Global)
  * @param {Object} data Andon event data
  */
 export const emitAndonUpdate = (data) => {
@@ -143,6 +147,93 @@ export const emitAndonUpdate = (data) => {
     ioInstance.emit("update-monitor", data);
   } catch (error) {
     logger.error("Failed to emit Andon update", error);
+  }
+};
+
+/**
+ * Emit event ketika Andon baru di-trigger (WebSocket-First)
+ */
+export const emitAndonTriggered = (machineId, data) => {
+  try {
+    const ioInstance = getIo();
+    const room = machineId ? `machine:${machineId}` : null;
+    if (room) {
+      ioInstance.to(room).emit("andon_triggered", data);
+      logger.info(`WS-First: andon_triggered emitted to ${room}`);
+    } else {
+      ioInstance.emit("andon_triggered", data);
+      logger.info("WS-First: andon_triggered emitted globally");
+    }
+  } catch (error) {
+    logger.error("Failed to emit andon_triggered", error);
+  }
+};
+
+/**
+ * Emit event ketika ada panggilan baru / WAITING (WebSocket-First)
+ */
+export const emitAndonWaiting = (machineId, data) => {
+  try {
+    const ioInstance = getIo();
+    const room = machineId ? `machine:${machineId}` : null;
+    if (room) {
+      ioInstance.to(room).emit("andon_waiting", data);
+    } else {
+      ioInstance.emit("andon_waiting", data);
+    }
+  } catch (error) {
+    logger.error("Failed to emit andon_waiting", error);
+  }
+};
+
+/**
+ * Emit event ketika perbaikan dimulai / IN_REPAIR (WebSocket-First)
+ */
+export const emitAndonStarted = (machineId, data) => {
+  try {
+    const ioInstance = getIo();
+    const room = machineId ? `machine:${machineId}` : null;
+    if (room) {
+      ioInstance.to(room).emit("andon_started", data);
+    } else {
+      ioInstance.emit("andon_started", data);
+    }
+  } catch (error) {
+    logger.error("Failed to emit andon_started", error);
+  }
+};
+
+/**
+ * Emit event ketika Andon di-resolve / RESOLVED (WebSocket-First)
+ */
+export const emitAndonResolvedWS = (machineId, data) => {
+  try {
+    const ioInstance = getIo();
+    const room = machineId ? `machine:${machineId}` : null;
+    if (room) {
+      ioInstance.to(room).emit("andon_resolved", data);
+    } else {
+      ioInstance.emit("andon_resolved", data);
+    }
+  } catch (error) {
+    logger.error("Failed to emit andon_resolved", error);
+  }
+};
+
+/**
+ * Emit event ketika Andon dibatalkan / CANCELLED (WebSocket-First)
+ */
+export const emitAndonCancelled = (machineId, data) => {
+  try {
+    const ioInstance = getIo();
+    const room = machineId ? `machine:${machineId}` : null;
+    if (room) {
+      ioInstance.to(room).emit("andon_cancelled", data);
+    } else {
+      ioInstance.emit("andon_cancelled", data);
+    }
+  } catch (error) {
+    logger.error("Failed to emit andon_cancelled", error);
   }
 };
 
@@ -289,6 +380,10 @@ export const emitAndonRepairStarted = (data) => {
 export const emitNotification = (userId, notification) => {
   try {
     const ioInstance = getIo();
+    
+    const roomSize = ioInstance.sockets.adapter.rooms.get(`user:${userId}`)?.size ?? 0;
+    logger.info(`Emitting to user:${userId} — room has ${roomSize} socket(s)`);
+
     ioInstance.to(`user:${userId}`).emit("notification", notification);
     logger.info(`Notification emitted to user: ${userId}`);
   } catch (error) {

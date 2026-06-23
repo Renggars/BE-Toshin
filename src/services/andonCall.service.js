@@ -5,6 +5,7 @@ import moment from "moment-timezone";
 import {
   emitAndonCallCreated,
   emitAndonSummaryUpdated,
+  emitAndonWaiting,
 } from "../config/socket.js";
 import andonService from "./andon.service.js";
 import notificationService from "./notification.service.js";
@@ -144,6 +145,7 @@ const createCall = async (payload) => {
 
   // Emit WebSocket events
   emitAndonCallCreated(newCall);
+  emitAndonWaiting(mesinId, newCall);
   const plantFilter = newCall.plant ? { plant: newCall.plant } : {};
   const summary = await andonService.calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);

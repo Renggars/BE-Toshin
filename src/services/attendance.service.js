@@ -47,11 +47,10 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
     },
   });
 
-  return result
+  const mapped = result
     .filter((r) => r.operator)
     .map((r) => {
       const attendance = r.attendance.length > 0 ? r.attendance[0] : null;
-
       return {
         rph_id: r.id,
         operator_id: r.operator.id,
@@ -61,6 +60,38 @@ const getScheduledUsers = async ({ tanggal, shiftId, divisiId }) => {
         jam_tap: attendance ? attendance.jamTap : null,
       };
     });
+
+  // Dedup by operator_id: 1 operator = 1 row
+  // Jika operator punya 2+ RPH hari itu, merge:
+  //   - Status HADIR jika ada minimal 1 RPH yang sudah tap
+  //   - jam_tap = tap paling awal (pertama masuk)
+  const rowsMap = new Map();
+  for (const row of mapped) {
+    const existing = rowsMap.get(row.operator_id);
+    if (!existing) {
+      rowsMap.set(row.operator_id, { ...row });
+    } else {
+      // Jika row ini sudah Hadir, merge statusnya ke existing
+      if (row.statusAbsen === "Hadir") {
+        if (existing.statusAbsen !== "Hadir") {
+          // Existing belum hadir — ambil data dari row ini
+          existing.statusAbsen = "Hadir";
+          existing.is_terlambat = row.is_terlambat;
+          existing.rph_id = row.rph_id;
+          existing.jam_tap = row.jam_tap;
+        } else if (row.jam_tap && existing.jam_tap) {
+          // Keduanya hadir — pilih jam_tap paling awal
+          if (new Date(row.jam_tap) < new Date(existing.jam_tap)) {
+            existing.jam_tap = row.jam_tap;
+            existing.is_terlambat = row.is_terlambat;
+            existing.rph_id = row.rph_id;
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(rowsMap.values());
 };
 
 /**

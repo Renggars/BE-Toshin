@@ -214,22 +214,20 @@ CREATE TABLE `notification` (
 CREATE TABLE `oee` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `fk_id_mesin` INTEGER NOT NULL,
-    `fk_id_shift` INTEGER NULL,
     `availability` DOUBLE NOT NULL DEFAULT 0,
     `performance` DOUBLE NOT NULL DEFAULT 0,
     `quality` DOUBLE NOT NULL DEFAULT 0,
     `oee_score` DOUBLE NOT NULL DEFAULT 0,
     `loading_time` DOUBLE NOT NULL,
     `downtime` DOUBLE NOT NULL DEFAULT 0,
+    `ideal_cycle_time` DOUBLE NULL,
     `total_output` INTEGER NOT NULL DEFAULT 0,
     `total_ok` INTEGER NOT NULL DEFAULT 0,
     `tanggal` DATE NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `ideal_cycle_time` DOUBLE NULL,
 
-    INDEX `oee_fk_id_shift_fkey`(`fk_id_shift`),
-    UNIQUE INDEX `oee_fk_id_mesin_tanggal_fk_id_shift_key`(`fk_id_mesin`, `tanggal`, `fk_id_shift`),
+    UNIQUE INDEX `oee_fk_id_mesin_tanggal_key`(`fk_id_mesin`, `tanggal`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -506,9 +504,6 @@ ALTER TABLE `notification` ADD CONSTRAINT `notification_fk_id_user_fkey` FOREIGN
 
 -- AddForeignKey
 ALTER TABLE `oee` ADD CONSTRAINT `oee_fk_id_mesin_fkey` FOREIGN KEY (`fk_id_mesin`) REFERENCES `mesin`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `oee` ADD CONSTRAINT `oee_fk_id_shift_fkey` FOREIGN KEY (`fk_id_shift`) REFERENCES `shift`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `poin_disiplin` ADD CONSTRAINT `poin_disiplin_fk_id_operator_fkey` FOREIGN KEY (`fk_id_operator`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

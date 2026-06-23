@@ -50,6 +50,15 @@ const getDowntimeHistory = catchAsync(async (req, res) => {
   });
 });
 
+const getEventDetail = catchAsync(async (req, res) => {
+  const { tanggal = moment().format("YYYY-MM-DD") } = req.query;
+  const result = await oeeService.getOeeEventDetail(req.params.mesinId, tanggal);
+  res.status(httpStatus.OK).send({
+    status: true,
+    data: result,
+  });
+});
+
 const getMachineDetail = catchAsync(async (req, res) => {
   const { tanggal = moment().format("YYYY-MM-DD"), plant = "3" } = req.query;
   const result = await oeeService.getMachineDetail(tanggal, plant);
@@ -67,4 +76,5 @@ export default {
   getOEETrend,
   getDowntimeHistory,
   getMachineDetail,
+  getEventDetail,
 };

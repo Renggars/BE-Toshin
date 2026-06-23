@@ -86,15 +86,17 @@ const upsertLrpByRphId = async (rphId, data) => {
       },
     });
 
-    // OEE recalc — Mandor bisa pantau progress real-time di dashboard
-    await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
-
-    // Real-time progress update for Mandor
-    emitOperatorProgressUpdate({
-      mesinId: updatedLrp.mesinId,
-      shiftId: updatedLrp.shiftId,
-      tanggal: updatedLrp.tanggal,
-    });
+    // OEE recalc & progress update — Only if status is not final (DRAFT)
+    // Mandor can monitor real-time progress on the dashboard
+    const isFinal = ["SUBMITTED", "VERIFIED"].includes(updatedLrp.statusLrp);
+    if (!isFinal) {
+      await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+      emitOperatorProgressUpdate({
+        mesinId: updatedLrp.mesinId,
+        shiftId: updatedLrp.shiftId,
+        tanggal: updatedLrp.tanggal,
+      });
+    }
 
     return updatedLrp;
   }
@@ -137,7 +139,9 @@ const upsertLrpByRphId = async (rphId, data) => {
     const firstActivity = rph.attendance?.[0]?.jamTap || rph.startTime;
     
     if (firstActivity) {
-      loadingTime = Math.ceil((nowWIB() - new Date(firstActivity)) / 60000);
+      loadingTime = Number(
+        ((nowWIB() - new Date(firstActivity)) / 60000).toFixed(1),
+      );
     }
 
     const qtyOk      = Number(data.qtyOk      || 0);
@@ -481,15 +485,16 @@ const updateLrpById = async (lrpId, updateBody) => {
     },
   });
 
-  // Enqueue OEE recalc karena data LRP berubah
-  await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
-
-  // Real-time progress update for Mandor
-  emitOperatorProgressUpdate({
-    mesinId: updatedLrp.mesinId,
-    shiftId: updatedLrp.shiftId,
-    tanggal: updatedLrp.tanggal,
-  });
+  // Enqueue OEE recalc & progress update — Only if status is not final (DRAFT)
+  const isFinal = ["SUBMITTED", "VERIFIED"].includes(updatedLrp.statusLrp);
+  if (!isFinal) {
+    await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
+    emitOperatorProgressUpdate({
+      mesinId: updatedLrp.mesinId,
+      shiftId: updatedLrp.shiftId,
+      tanggal: updatedLrp.tanggal,
+    });
+  }
 
   return updatedLrp;
 };

@@ -5,197 +5,184 @@ import { nowWIB } from "../utils/dateWIB.js";
 import { emitOeeUpdate } from "../config/socket.js";
 
 const recalculateByMesin = async (mesinId, date = new Date()) => {
-  const shifts = await prisma.shift.findMany();
   const dateStr = moment(date).format("YYYY-MM-DD");
   const targetDate = new Date(`${dateStr}T00:00:00.000Z`);
 
-  for (const shift of shifts) {
-    // 1. Get Downtime Data with Andon Category
-    const downtimeData = await prisma.andonDowntimeShift.findMany({
-      where: {
-        mesinId,
-        shiftId: shift.id,
-        tanggal: targetDate,
+  // 1. Get ALL Downtime Data for the machine and date (across all shifts)
+  const downtimeData = await prisma.andonDowntimeShift.findMany({
+    where: { 
+      mesinId: Number(mesinId), 
+      tanggal: targetDate 
+    },
+    include: {
+      andonEvent: {
+        include: { masterMasalahAndon: true },
       },
-      include: {
-        andonEvent: {
-          include: { masterMasalahAndon: true },
-        },
-      },
-    });
+    },
+  });
 
-    let plannedDowntime = 0;
-    let unplannedDowntime = 0;
+  let plannedDowntime = 0;
+  let unplannedDowntime = 0;
 
-    downtimeData.forEach((d) => {
-      if (d.andonEvent?.masterMasalahAndon?.kategori === "PLAN_DOWNTIME") {
-        plannedDowntime += d.durasiMenit;
-      } else {
-        unplannedDowntime += d.durasiMenit;
-      }
-    });
-
-    // 2. Get Production Data (Sum from LRP)
-    // ... (rest of production data logic remains same)
-    const lrpData = await prisma.laporanRealisasiProduksi.findMany({
-      where: {
-        mesinId: mesinId,
-        shiftId: shift.id,
-        tanggal: targetDate,
-      },
-      include: { rencanaProduksi: true },
-    });
-
-    let totalOk = 0;
-    let totalOutput = 0;
-    let idealCycleTime = 0;
-
-    lrpData.forEach((l) => {
-      totalOk += l.qtyOk;
-      totalOutput += l.qtyTotalProd;
-      if (l.cycleTime > 0) idealCycleTime = l.cycleTime;
-    });
-
-    // 3. Dynamic Loading Time based on Attendance & LRP
-    const attendanceRecords = await prisma.attendance.findMany({
-      where: {
-        rencanaProduksi: {
-          mesinId: mesinId,
-          shiftId: shift.id,
-          tanggal: targetDate,
-        },
-      },
-      orderBy: { jamTap: "asc" },
-    });
-
-    const lrpUpdates = lrpData.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
-
-    // 3. Filter by RencanaProduksi (RPH) - Only process if discovery shows it's relevant
-    // If no LRP and no Downtime, we skip this machine/shift
-    if (lrpData.length === 0 && downtimeData.length === 0) {
-      continue;
+  downtimeData.forEach((d) => {
+    // Categorization: PLAN_DOWNTIME vs All others
+    if (d.andonEvent?.masterMasalahAndon?.kategori === "PLAN_DOWNTIME") {
+      plannedDowntime += d.durasiMenit || 0;
+    } else {
+      unplannedDowntime += d.durasiMenit || 0;
     }
+  });
 
-    const now = moment(nowWIB()); // Use consistent WIB time as moment object
-    
-   // Start of operating time: Absolut menggunakan jam tap absensi
-    const attendanceTap = attendanceRecords.length > 0 
-      ? moment(attendanceRecords[0].jamTap)
-      : null;
+  // 2. Get ALL Production Data (LRP) for the machine and date
+  const lrpData = await prisma.laporanRealisasiProduksi.findMany({
+    where: {
+      mesinId: Number(mesinId),
+      tanggal: targetDate,
+    },
+    include: { rencanaProduksi: true },
+  });
 
-    // Fallback: Gunakan startTime dari Rencana Produksi (RPH) jika tidak ada jam tap
-    const rphStartTimes = lrpData
-      .map(l => l.rencanaProduksi?.startTime)
-      .filter(st => st != null)
-      .map(st => moment(st));
-    
-    const earliestRphStart = rphStartTimes.length > 0
-      ? moment.min(rphStartTimes)
-      : null;
-
-    const firstActivity = attendanceTap || earliestRphStart;
-
-    if (!firstActivity) continue; 
-
-    // CASE: Check if ANY RPH for this machine/shift/date is still ACTIVE
-    // If ACTIVE, window goes until 'now'. If all are CLOSED, window goes until the last LRP update.
-    const isAnyActive = lrpData.some(l => l.rencanaProduksi?.status === "ACTIVE" || l.rencanaProduksi?.status === "PLANNED");
-
-    // End of operating window: Last LRP update or Now
-    const lastActivity = (isAnyActive || lrpUpdates.length === 0)
-      ? now 
-      : moment(lrpUpdates[lrpUpdates.length - 1].updatedAt);
-
-    // Measurement window duration (use float diff for precision)
-    const dynamicLoadingMinutes = Math.max(0, lastActivity.diff(firstActivity, "minutes", true));
-
-    // Calculation according to user request:
-    // 1. Total Time = jam tap - jam submit ltp (window of activity)
-    const totalTime = dynamicLoadingMinutes;
-
-    // 2. Planned Production Time = Total Time - Planned Downtime
-    const loadingTime = Number(Math.max(0, totalTime - plannedDowntime).toFixed(1));
-
-    // 3. Operating Time (Run Time) = Planned Production Time - Unplanned Downtime
-    const downtime = Number(unplannedDowntime.toFixed(1));
-    const runtime = Math.max(0, loadingTime - downtime);
-
-    // 4. Calculate OEE Components
-    const availability = loadingTime > 0 ? (runtime / loadingTime) * 100 : 0;
-
-    const expectedTimeMinutes = (idealCycleTime || 0) * totalOutput;
-    const performanceRaw = runtime > 0 ? (expectedTimeMinutes / runtime) * 100 : 0;
-    const performance = Math.min(100, performanceRaw);
-
-    const quality = totalOutput > 0 ? (totalOk / totalOutput) * 100 : 0;
-
-    // OEE Score
-    const oeeScore =
-      (availability / 100) * (performance / 100) * (quality / 100) * 100;
-
-    // DEBUG LOGS
-    // console.log(`[OEE DEBUG] Mesin: ${mesinId}, Shift: ${shift.id}, Tanggal: ${dateStr}`);
-    // console.log(`  > Activity: ${firstActivity.format("HH:mm:ss")} - ${lastActivity.format("HH:mm:ss")} ${isAnyActive ? '(ACTIVE)' : '(CLOSED)'}`);
-    // console.log(`  > Total Time: ${totalTime.toFixed(2)}m | PlannedDt: ${plannedDowntime.toFixed(2)}m`);
-    // console.log(`  > Loading Time (Planned Prod Time): ${loadingTime.toFixed(2)}m`);
-    // console.log(`  > Unplanned Downtime: ${downtime.toFixed(2)}m | Runtime (Operating Time): ${runtime.toFixed(2)}m`);
-    // console.log(`  > Ideal CT: ${idealCycleTime}m | Output: ${totalOutput} | Expected Time: ${expectedTimeMinutes.toFixed(2)}m`);
-    // console.log(`  > Performance: ${performanceRaw.toFixed(2)}% (Capped to ${performance.toFixed(2)}%)`);
-    // console.log(`  > Availability: ${availability.toFixed(2)}% | Quality: ${quality.toFixed(2)}% | OEEScore: ${oeeScore.toFixed(2)}%`);
-
-
-    // 5. Upsert OEE Record
-    const oeeRecord = await prisma.oee.upsert({
-      where: {
-        mesinId_tanggal_shiftId: {
-          mesinId: mesinId,
-          tanggal: targetDate,
-          shiftId: shift.id,
-        },
-      },
-      update: {
-        availability: Number(availability.toFixed(1)),
-        performance: Number(performance.toFixed(1)),
-        quality: Number(quality.toFixed(1)),
-        oeeScore: Number(oeeScore.toFixed(1)),
-        loadingTime,
-        downtime,
-        totalOutput: totalOutput,
-        totalOk: totalOk,
-        idealCycleTime: idealCycleTime,
-      },
-      create: {
-        mesinId: mesinId,
-        shiftId: shift.id,
-        tanggal: targetDate,
-        availability: Number(availability.toFixed(1)),
-        performance: Number(performance.toFixed(1)),
-        quality: Number(quality.toFixed(1)),
-        oeeScore: Number(oeeScore.toFixed(1)),
-        loadingTime,
-        downtime,
-        totalOutput: totalOutput,
-        totalOk: totalOk,
-        idealCycleTime: idealCycleTime,
-        createdAt: nowWIB(),
-      },
-    });
-
-    // 6. Emit Socket Update
-    emitOeeUpdate({
-      mesinId,
-      shiftId: shift.id,
-      tanggal: dateStr,
-      oee: oeeRecord,
-    });
+  // If no activity at all, verify if we should skip
+  if (lrpData.length === 0 && downtimeData.length === 0) {
+    return;
   }
+
+  let totalOk = 0;
+  let totalOutput = 0;
+  let expectedProductionTime = 0;
+
+  lrpData.forEach((l) => {
+    // Validation & Safety: handle null/zero/negative
+    const qtyTotal = Number(l.qtyTotalProd) || 0;
+    const qtyOk = Number(l.qtyOk) || 0;
+    const cycleTime = Number(l.cycleTime) || 0;
+
+    if (qtyTotal > 0 && cycleTime > 0) {
+      totalOk += qtyOk;
+      totalOutput += qtyTotal;
+      // Requirement 3: expectedProductionTime = Σ (lrp.cycleTime * lrp.qtyTotalProd)
+      expectedProductionTime += cycleTime * qtyTotal;
+    }
+  });
+
+  // Requirement 3: weightedCycleTime = expectedProductionTime / totalOutput
+  const weightedCycleTime =
+    totalOutput > 0 ? expectedProductionTime / totalOutput : null;
+
+  // 3. Activity Window Logic
+  const attendanceRecords = await prisma.attendance.findMany({
+    where: {
+      rencanaProduksi: {
+        mesinId: Number(mesinId),
+        tanggal: targetDate,
+      },
+    },
+    orderBy: { jamTap: "asc" },
+  });
+
+  // Requirement 5: earliestAttendance || earliestRphStart
+  const earliestAttendance = attendanceRecords.length > 0 
+    ? moment(attendanceRecords[0].jamTap)
+    : null;
+
+  const rphStartTimes = lrpData
+    .map(l => l.rencanaProduksi?.startTime)
+    .filter(st => st != null)
+    .map(st => moment(st));
+  
+  const earliestRphStart = rphStartTimes.length > 0
+    ? moment.min(rphStartTimes)
+    : null;
+
+  const firstActivity = earliestAttendance || earliestRphStart;
+
+  // Requirement 5: Fallback skip
+  if (!firstActivity) return; 
+
+  // Requirement 5: lastActivity logic
+  const isAnyActive = lrpData.some(l => 
+    l.rencanaProduksi?.status === "ACTIVE" || l.rencanaProduksi?.status === "PLANNED"
+  );
+  
+  const lrpUpdates = lrpData
+    .map(l => l.updatedAt)
+    .filter(d => d != null)
+    .sort((a, b) => new Date(a) - new Date(b));
+
+  const now = moment(nowWIB());
+  const lastActivity = isAnyActive 
+    ? now 
+    : (lrpUpdates.length > 0 ? moment(lrpUpdates[lrpUpdates.length - 1]) : firstActivity);
+
+  // Requirement 2: Formula calculation
+  // A. Total Time
+  const totalTimeMinutes = Math.max(0, lastActivity.diff(firstActivity, "minutes", true));
+
+  // B. Planned Production Time
+  const loadingTime = Number(Math.max(0, totalTimeMinutes - plannedDowntime).toFixed(1));
+  
+  // C. Runtime / Operating Time (Clamp minimum to 0)
+  const downtime = Number(unplannedDowntime.toFixed(1));
+  const runtime = Math.max(0, loadingTime - downtime);
+
+  // D. Availability = runtime / loadingTime * 100
+  const availability = loadingTime > 0 ? (runtime / loadingTime) * 100 : 0;
+  
+  // E. Performance = expectedProductionTime / runtime * 100 (MUST NOT BE CAPPED at 100)
+  const performance = runtime > 0 ? (expectedProductionTime / runtime) * 100 : 0;
+  
+  // F. Quality = totalOk / totalOutput * 100
+  const quality = totalOutput > 0 ? (totalOk / totalOutput) * 100 : 0;
+  
+  // G. OEE = availability * performance * quality / 100^2
+  const oeeScore = (availability / 100) * (performance / 100) * (quality / 100) * 100;
+
+  // Requirement 2: Rounding to 1 decimal place
+  const payload = {
+    availability: Number(availability.toFixed(1)),
+    performance: Number(performance.toFixed(1)),
+    quality: Number(quality.toFixed(1)),
+    oeeScore: Number(oeeScore.toFixed(1)),
+    loadingTime,
+    downtime,
+    totalOutput,
+    totalOk,
+    idealCycleTime: weightedCycleTime ? Number(weightedCycleTime.toFixed(3)) : null, // Weighted avg cycle time
+  };
+
+  // 4. Upsert OEE Record (Requirement 7: unique by mesinId + tanggal)
+  const oeeRecord = await prisma.oee.upsert({
+    where: {
+      mesinId_tanggal: {
+        mesinId: Number(mesinId),
+        tanggal: targetDate,
+      },
+    },
+    update: payload,
+    create: {
+      ...payload,
+      mesinId: Number(mesinId),
+      tanggal: targetDate,
+      createdAt: nowWIB(),
+    },
+  });
+
+  // Requirement 8: Socket emit
+  emitOeeUpdate({
+    mesinId,
+    tanggal: dateStr,
+    oee: oeeRecord,
+  });
 };
 
 const getOEEByMesin = (mesinId) =>
   prisma.oee.findMany({ where: { mesinId: Number(mesinId) } });
 
-const getOEEByShift = (shiftId) =>
-  prisma.oee.findMany({ where: { shiftId: Number(shiftId) } });
+const getOEEByShift = () => {
+  // OEE is now per machine per day (aggregated across shifts).
+  // This function is no longer relevant for specific shift filtering in the Oee table.
+  return [];
+};
 
 const getPlantOEE = () =>
   prisma.oee.aggregate({
@@ -233,7 +220,7 @@ const getOEESummary = async (tanggal, plant) => {
     
     where.OR = plantRphs.map((r) => ({
       mesinId: r.mesinId,
-      shiftId: r.shiftId,
+      tanggal: targetDate, // Already filtered by tanggal in 'where', but OEE record is per mesin+tanggal
     }));
   }
 
@@ -305,21 +292,16 @@ const getOEETrend = async (tanggal, shiftIds, plant) => {
 
     where.OR = plantRphs.map((r) => ({
       mesinId: r.mesinId,
-      shiftId: r.shiftId,
       tanggal: r.tanggal,
     }));
   }
 
-  if (shiftIds && shiftIds.length > 0) {
-    const ids = Array.isArray(shiftIds)
-      ? shiftIds.map(Number)
-      : [Number(shiftIds)];
-    where.shiftId = { in: ids };
-  }
+  // Note: shiftId filtering is removed as OEE is now daily aggregated.
+  // if (shiftIds && shiftIds.length > 0) { ... }
 
   const oeeRecords = await prisma.oee.findMany({
     where,
-    select: { shiftId: true, oeeScore: true, tanggal: true },
+    select: { oeeScore: true, tanggal: true },
     orderBy: { tanggal: "asc" },
   });
 
@@ -413,7 +395,6 @@ const getMachineDetail = async (tanggal, plant) => {
         where: { 
           tanggal: targetDate, 
           mesinId: { in: machineIds },
-          ...(plant ? { OR: plantPairs } : {})
         },
       }),
       prisma.laporanRealisasiProduksi.findMany({
@@ -488,6 +469,103 @@ const getMachineDetail = async (tanggal, plant) => {
   });
 };
 
+/**
+ * New Service: Detail Analytics Per RPH/Event logic (On-the-fly calculation)
+ */
+const getOeeEventDetail = async (mesinId, tanggal) => {
+  const dateStr = moment(tanggal).format("YYYY-MM-DD");
+  const targetDate = new Date(`${dateStr}T00:00:00.000Z`);
+
+  // 1. Get all RPHs for this machine and date
+  const rphs = await prisma.rencanaProduksi.findMany({
+    where: { mesinId: Number(mesinId), tanggal: targetDate },
+    include: {
+      produk: true,
+      shift: true,
+      laporanRealisasiProduksi: true,
+      attendance: { orderBy: { jamTap: "asc" }, take: 1 },
+    },
+    orderBy: { id: "asc" },
+  });
+
+  // 2. Get all Downtime for this machine and date
+  const downtimeData = await prisma.andonDowntimeShift.findMany({
+    where: { mesinId: Number(mesinId), tanggal: targetDate },
+    include: {
+      andonEvent: { include: { masterMasalahAndon: true } },
+    },
+  });
+
+  const now = moment(nowWIB());
+
+  // 3. Process each RPH event
+  const events = rphs.map((rph) => {
+    const lrp = rph.laporanRealisasiProduksi;
+    if (!lrp) return null;
+
+    // Window boundaries
+    const start = rph.attendance?.[0]?.jamTap || rph.startTime;
+    const end = rph.endTime || (rph.status === "ACTIVE" ? nowWIB() : lrp.updatedAt);
+
+    if (!start || !end) return null;
+
+    const startMoment = moment(start);
+    const endMoment = moment(end);
+    const totalMinutes = Math.max(0, endMoment.diff(startMoment, "minutes", true));
+
+    // Filter downtime that occurred within this RPH window
+    // (In our system, andonDowntimeShift already has startTime/endTime)
+    // Note: This is an approximation if downtime spans across RPH transitions.
+    const rphDowntime = downtimeData.filter(d => {
+      const dStart = moment(d.startTime);
+      return dStart.isSameOrAfter(startMoment) && dStart.isBefore(endMoment);
+    });
+
+    let plannedDt = 0;
+    let unplannedDt = 0;
+    rphDowntime.forEach(d => {
+      if (d.andonEvent?.masterMasalahAndon?.kategori === "PLAN_DOWNTIME") {
+        plannedDt += d.durasiMenit;
+      } else {
+        unplannedDt += d.durasiMenit;
+      }
+    });
+
+    const loadingTime = Math.max(0, totalMinutes - plannedDt);
+    const runtime = Math.max(0, loadingTime - unplannedDt);
+
+    const qtyOk = lrp.qtyOk || 0;
+    const qtyTotal = lrp.qtyTotalProd || 0;
+    const cycleTime = lrp.cycleTime || 0;
+    const expectedTime = cycleTime * qtyTotal;
+
+    const availability = loadingTime > 0 ? (runtime / loadingTime) * 100 : 0;
+    const performance = runtime > 0 ? (expectedTime / runtime) * 100 : 0;
+    const quality = qtyTotal > 0 ? (qtyOk / qtyTotal) * 100 : 0;
+
+    return {
+      rphId: rph.id,
+      produk: rph.produk.namaProduk,
+      shift: rph.shift?.namaShift,
+      startTime: startMoment.toISOString(),
+      endTime: endMoment.toISOString(),
+      duration: Number(totalMinutes.toFixed(1)),
+      qtyOk,
+      qtyNg: qtyTotal - qtyOk,
+      downtime: Number(unplannedDt.toFixed(1)),
+      plannedDowntime: Number(plannedDt.toFixed(1)),
+      oee: {
+        availability: Number(availability.toFixed(1)),
+        performance: Number(performance.toFixed(1)),
+        quality: Number(quality.toFixed(1)),
+        oeeScore: Number(((availability / 100) * (performance / 100) * (quality / 100) * 100).toFixed(1)),
+      }
+    };
+  }).filter(e => e !== null);
+
+  return events;
+};
+
 export default {
   recalculateByMesin,
   getOEEByMesin,
@@ -497,4 +575,5 @@ export default {
   getOEETrend,
   getDowntimeHistory,
   getMachineDetail,
+  getOeeEventDetail,
 };

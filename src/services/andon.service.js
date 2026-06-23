@@ -11,6 +11,10 @@ import {
   emitAndonRepairStarted,
   emitAndonSummaryUpdated,
   emitAndonMetricChanged,
+  emitAndonTriggered,
+  emitAndonStarted,
+  emitAndonResolvedWS,
+  emitAndonCancelled,
 } from "../config/socket.js";
 
 import {
@@ -557,7 +561,8 @@ const triggerAndon = async (payload) => {
 
   // ✅ NEW: Emit specific WebSocket events following contract
   // Event 1: andon-created
-  emitAndonCreated({
+  const machineId = newEvent.mesinId;
+  const eventPayload = {
     andonId: newEvent.id,
     machineId: newEvent.mesinId,
     machineName: newEvent.mesin?.namaMesin || "Unknown",
@@ -568,7 +573,10 @@ const triggerAndon = async (payload) => {
     plant: newEvent.plant || "Unknown",
     operator: newEvent.operator?.nama || "-",
     shift: newEvent.shift?.namaShift || "-",
-  });
+  };
+
+  emitAndonCreated(eventPayload);
+  emitAndonTriggered(machineId, eventPayload);
 
   // Event 2: andon-summary-updated
   const plantFilter = plantName ? { plant: plantName } : {};
@@ -716,6 +724,7 @@ const startRepairAndon = async (id, data) => {
     };
 
     emitAndonRepairStarted(formattedEvent);
+    emitAndonStarted(newEvent.mesinId, formattedEvent);
     const plantFilter = newEvent.plant ? { plant: newEvent.plant } : {};
     const summary = await calculateAndonSummary(plantFilter);
     emitAndonSummaryUpdated(summary);
@@ -841,6 +850,7 @@ const startRepairAndon = async (id, data) => {
   };
 
   emitAndonRepairStarted(formattedEvent);
+  emitAndonStarted(updated.mesinId, formattedEvent);
   const plantFilter = updated.plant ? { plant: updated.plant } : {};
   const summary = await calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
@@ -1048,7 +1058,6 @@ const resolveAndon = async (id, data) => {
     Array.from(machinesToRecalc).map((mId) => enqueueOeeRecalc(mId, event.tanggal))
   );
 
-  // ✅ WebSocket Events
   emitAndonResolved({
     andonId: updatedEvent.id,
     tanggal: updatedEvent.waktuTrigger,
@@ -1065,6 +1074,12 @@ const resolveAndon = async (id, data) => {
     estimasiMenit: updatedEvent.masterMasalahAndon?.waktuPerbaikanMenit || 0,
     waktuResolved: resolvedAt,
     responStatus: responStatus,
+  });
+
+  emitAndonResolvedWS(event.mesinId, {
+    andonId: updatedEvent.id,
+    status: "RESOLVED",
+    mesinId: event.mesinId,
   });
 
   const plantFilter = event.plant ? { plant: event.plant } : {};
@@ -1296,12 +1311,9 @@ const getPersonalHistory = async (userId, query = {}) => {
   const operationalDateStart = moment(opDateStr).startOf("day").toDate();
   const operationalDateEnd = moment(opDateStr).endOf("day").toDate();
 
-  console.log(`[Andon History] User: ${userId}, Mesin: ${mesinId}, rphId: ${rphId}, OpDate: ${opDateStr}`);
-
   let historyWhere = {};
 
   if (rphId && !Number.isNaN(Number(rphId))) {
-    console.log(`[Andon History] Filtering strictly by rphId: ${rphId}`);
     historyWhere = { rphId: Number(rphId) };
   } else {
     // 2. Fetch User's Current Active RPH (Only if rphId not provided)
@@ -1316,10 +1328,8 @@ const getPersonalHistory = async (userId, query = {}) => {
     });
 
     if (activeRph) {
-      console.log(`[Andon History] FOUND ACTIVE RPH: ${activeRph.id} on machine ${activeRph.mesinId}`);
       historyWhere = { rphId: activeRph.id };
     } else {
-      console.log(`[Andon History] No rphId provided and no active RPH found, falling back to broad today filter`);
       historyWhere = {
         tanggal: { gte: operationalDateStart, lte: operationalDateEnd },
         ...(mesinId && !Number.isNaN(Number(mesinId)) ? { mesinId: Number(mesinId) } : {}),
@@ -1330,8 +1340,6 @@ const getPersonalHistory = async (userId, query = {}) => {
       };
     }
   }
-
-  console.log("[Andon History] historyWhere:", JSON.stringify(historyWhere, null, 2));
 
   const events = await prisma.andonEvent.findMany({
     where: historyWhere,
@@ -1344,13 +1352,6 @@ const getPersonalHistory = async (userId, query = {}) => {
   });
 
   // LOG AFTER
-  console.log("[Andon History] events returned:", events.map(e => ({
-    id: e.id,
-    rphId: e.rphId,
-    masalah: e.masterMasalahAndon?.namaMasalah,
-    trigger: e.waktuTrigger,
-  })));
-
   // 3. Helper: Shift Duration
   let totalShiftMenit = 480; // Default fallback (8 hours)
   let shiftName = "-";

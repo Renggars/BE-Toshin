@@ -579,13 +579,14 @@ const getWeeklyTrend = async (filterTanggal) => {
   const weekEnd = targetDate.clone().endOf("day").toDate();
 
   // 1. Ambil target dari Rencana Produksi (RPH)
+  // Note: Include semua status (PLANNED, ACTIVE, CLOSED) agar hari ini
+  // yang masih PLANNED tetap terhitung di chart trend mingguan.
   const weeklyData = await prisma.rencanaProduksi.findMany({
     where: {
       tanggal: {
         gte: weekStart,
         lte: weekEnd,
       },
-      status: { not: "PLANNED" }, // Opsi: hanya menghitung target yang sudah/sedang aktif
     },
     select: {
       tanggal: true,

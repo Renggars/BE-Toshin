@@ -36,4 +36,10 @@ router.get(
   oeeController.getMachineDetail,
 );
 
+router.get(
+  "/:mesinId/events",
+  auth("ADMIN", "SUPERVISOR", "OPERATOR"),
+  oeeController.getEventDetail,
+);
+
 export default router;
