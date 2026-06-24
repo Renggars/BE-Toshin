@@ -8,6 +8,7 @@ import { nowWIB } from "../utils/dateWIB.js";
 import oeeService from "./oee.service.js";
 import { emitOperatorProgressUpdate } from "../config/socket.js";
 import moment from "moment";
+import oeeRphService from "./oeeRph.service.js";
 
 
 /**
@@ -90,7 +91,6 @@ const upsertLrpByRphId = async (rphId, data) => {
     // Mandor can monitor real-time progress on the dashboard
     const isFinal = ["SUBMITTED", "VERIFIED"].includes(updatedLrp.statusLrp);
     if (!isFinal) {
-      await enqueueOeeRecalc(updatedLrp.mesinId, updatedLrp.tanggal);
       emitOperatorProgressUpdate({
         mesinId: updatedLrp.mesinId,
         shiftId: updatedLrp.shiftId,
@@ -179,10 +179,7 @@ const upsertLrpByRphId = async (rphId, data) => {
     return lrp;
   });
 
-  // OEE recalc non-blocking setelah transaksi selesai
-  await enqueueOeeRecalc(result.mesinId, result.tanggal);
 
-  // Real-time progress update for Mandor
   emitOperatorProgressUpdate({
     mesinId: result.mesinId,
     shiftId: result.shiftId,
@@ -298,6 +295,8 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
     finalData.qtyTotalProd = qtyOk + qtyNgProses + qtyRework + qtyNgPrev;
   }
 
+  const rphId = lrp.rencanaProduksi.id;
+
   const result = await prisma.$transaction(async (tx) => {
     const now = nowWIB(); // ← panggil SEKALI di sini
     
@@ -318,7 +317,7 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
         userId: submittedLrp.operatorId,
         status: "PLANNED",
         tanggal: submittedLrp.tanggal,
-        id: { not: submittedLrp.rphId },
+        id: { not: rphId },
       },
       include: {
         mesin: { select: { id: true, namaMesin: true } },
@@ -331,7 +330,7 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
 
     // 2. [REFACTORED] Tutup RPH yang baru saja disubmit
     await tx.rencanaProduksi.update({
-      where: { id: submittedLrp.rphId },
+      where: { id: rphId },
       data: { status: "CLOSED", endTime: now },
     });
 
@@ -351,8 +350,14 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
     return { lrp: submittedLrp, nextRph };
   });
 
-  // 4. Trigger OEE recalc untuk RPH yang baru ditutup
-  await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
+  const oeeRph = await oeeRphService.recalculateByRph(rphId);
+
+  if (oeeRph) {
+    await enqueueOeeRecalc(oeeRph.mesinId, oeeRph.tanggal);
+  } else {
+    // Fallback jika oeeRph gagal (misal window null), tetap trigger aggregate
+    await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
+  }
 
   // Real-time progress update for Mandor
   emitOperatorProgressUpdate({

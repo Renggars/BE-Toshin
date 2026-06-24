@@ -375,41 +375,61 @@ const triggerAndon = async (payload) => {
 
     let nextPlannedRph = null;
     if (manualNextRphId) {
+      // Gunakan manualNextRphId langsung — jangan di-overwrite dengan query fallback.
+      // Frontend sudah mengirimkan nextRphId yang valid (dari fetchMyRph setelah submit LRP).
       nextPlannedRph = await prisma.rencanaProduksi.findUnique({
         where: { id: Number(manualNextRphId) },
-        include: { shift: true }
+        include: { shift: true },
       });
 
-      // Validation PATCH #3/2: Rigorous nextRph check
-      if (!nextPlannedRph || (nextPlannedRph.status !== "PLANNED" && nextPlannedRph.status !== "ACTIVE")) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "RPH berikutnya tidak valid atau statusnya tidak sesuai (PLANNED/ACTIVE).");
+      if (!nextPlannedRph) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          `RPH berikutnya (id=${manualNextRphId}) tidak ditemukan.`
+        );
       }
-      if (currentActiveRph && nextPlannedRph.userId !== currentActiveRph.userId) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "RPH berikutnya milik operator yang berbeda dengan operator aktif saat ini.");
+      if (nextPlannedRph.status !== "PLANNED" && nextPlannedRph.status !== "ACTIVE") {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          `RPH berikutnya (id=${manualNextRphId}) statusnya "${nextPlannedRph.status}", harus PLANNED atau ACTIVE.`
+        );
       }
-      if (!currentActiveRph && nextPlannedRph.userId !== detectedOperator) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "RPH berikutnya milik operator yang berbeda dengan Anda.");
+
+      const expectedUserId = currentActiveRph?.userId ?? detectedOperator;
+      if (nextPlannedRph.userId !== expectedUserId) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          "RPH berikutnya milik operator yang berbeda."
+        );
       }
+
       if (moment(nextPlannedRph.tanggal).format("YYYY-MM-DD") !== opDateStr) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "RPH berikutnya harus pada tanggal operasional yang sama.");
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          "RPH berikutnya harus pada tanggal operasional yang sama."
+        );
       }
-      // Fallback: Temukan RPH berikutnya yang statusnya PLANNED atau ACTIVE 
+
+      if (currentActiveRph && nextPlannedRph.id === currentActiveRph.id) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          "RPH berikutnya tidak boleh sama dengan RPH yang sedang aktif."
+        );
+      }
+
+      // nextPlannedRph sudah final — tidak ada re-query lagi
+    } else {
+      // Tidak ada manualNextRphId: fallback cari PLANNED RPH di mesin yang sama
       nextPlannedRph = await prisma.rencanaProduksi.findFirst({
-        where: { 
-          mesinId, 
-          status: { in: ["PLANNED", "ACTIVE"] }, 
+        where: {
+          mesinId,
+          status: "PLANNED",
           tanggal: operationalDate,
           userId: detectedOperator || undefined,
-          id: { not: currentActiveRph?.id || 0 }, // Hindari switch ke dirinya sendiri
+          id: { not: currentActiveRph?.id || 0 },
         },
         orderBy: { id: "asc" },
       });
-
-      // Jika masih tidak ketemu, dan currentActiveRph ada, gunakan currentActiveRph 
-      // (asumsi: ini adalah RPH yang baru saja di-aktifkan otomatis oleh LRP submit)
-      if (!nextPlannedRph && currentActiveRph) {
-        nextPlannedRph = currentActiveRph;
-      }
     }
 
     if (!nextPlannedRph) {
@@ -965,25 +985,6 @@ const resolveAndon = async (id, data) => {
 
   // Use Transaction for Atomicity
   const [updatedEvent] = await prisma.$transaction(async (tx) => {
-    // 🔒 Idempotency Audit PART 1: Handle RPH Transitions if Switch Andon
-    if (isRphSwitch) {
-      if (event.rphClosedId) {
-        // Atomic Closure: Only close if still ACTIVE
-        await tx.rencanaProduksi.updateMany({
-          where: { id: event.rphClosedId, status: "ACTIVE" },
-          data: { status: "CLOSED", endTime: resolvedAt }
-        });
-      }
-
-      if (event.rphOpenedId) {
-        // Atomic Activation: Only open if still PLANNED
-        await tx.rencanaProduksi.updateMany({
-          where: { id: event.rphOpenedId, status: "PLANNED" },
-          data: { status: "ACTIVE", startTime: resolvedAt }
-        });
-      }
-    }
-
     // 🔒 Idempotency Audit PART 2: Atomic resolve for AndonEvent
     const allowedStatuses = isPlanDowntime ? ["ACTIVE"] : ["IN_REPAIR"];
     const resolved = await tx.andonEvent.updateMany({
@@ -1321,7 +1322,7 @@ const getPersonalHistory = async (userId, query = {}) => {
       where: {
         userId: Number(userId),
         status: "ACTIVE",
-        ...(mesinId && !Number.isNaN(Number(mesinId)) ? { mesinId: Number(mesinId) } : {}),
+        ...(mesinId ? { mesinId: Number(mesinId) } : {}), 
         tanggal: { gte: operationalDateStart, lte: operationalDateEnd },
       },
       orderBy: { id: "desc" },

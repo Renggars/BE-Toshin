@@ -1,21 +1,11 @@
-/**
- * oee.worker.js
- *
- * BullMQ Worker yang memproses job 'oee-recalc' dari oeeQueue.
- * Berjalan di proses yang sama dengan Express (single-process setup),
- * sehingga bisa langsung menggunakan Socket.io instance yang sudah ada.
- *
- * Setiap job berisi: { mesinId, tanggal }
- * Worker akan memanggil recalculateByMesin() yang di dalamnya sudah
- * termasuk emit Socket.io "oee-updated" ke semua client.
- */
-
 import { Worker } from "bullmq";
 import config from "../config/config.js";
 import oeeService from "../services/oee.service.js";
+import oeeRphService from "../services/oeeRph.service.js";
 import logger from "../config/logger.js";
 import {
   redisConnection,
+  oeeQueue,
   oeeJobSuccessTotal,
   oeeJobFailedTotal,
   oeeJobDurationSeconds,
@@ -23,50 +13,101 @@ import {
 
 let oeeWorker = null;
 
+// ── Handler lama: aggregate daily dari oee_rph ───────────────────────────────
+const handleOeeRecalc = async (job) => {
+  const { mesinId, tanggal } = job.data;
+  await oeeService.recalculateByMesin(mesinId, new Date(tanggal));
+  logger.info(
+    `[OEE Worker] Daily aggregated — mesin: ${mesinId}, tanggal: ${tanggal}`
+  );
+};
+
+// ── Handler baru: hitung per-RPH → trigger daily ─────────────────────────────
+const handleOeeRphRecalc = async (job) => {
+  const { rphId } = job.data;
+
+  const oeeRph = await oeeRphService.recalculateByRph(rphId);
+
+  if (!oeeRph) {
+    logger.warn(`[OEE Worker] recalculateByRph null — rphId: ${rphId}, skip.`);
+    return;
+  }
+
+  logger.info(
+    `[OEE Worker] RPH recalculated — rphId: ${rphId}, oeeScore: ${oeeRph.oeeScore}`
+  );
+
+  // Setelah oee_rph tersimpan, trigger daily aggregate
+  // jobId sama untuk mesin+tanggal → BullMQ deduplicate otomatis
+  const tanggalStr = oeeRph.tanggal.toISOString().split("T")[0];
+
+  await oeeQueue.add(
+    "oee-recalc",
+    { mesinId: oeeRph.mesinId, tanggal: tanggalStr },
+    {
+      jobId:            `oee-${oeeRph.mesinId}-${tanggalStr}`,
+      delay:            3000,
+      attempts:         3,
+      backoff:          { type: "exponential", delay: 2000 },
+      removeOnComplete: 100,
+      removeOnFail:     50,
+    }
+  );
+
+  logger.info(
+    `[OEE Worker] Daily job queued — mesin: ${oeeRph.mesinId}, tanggal: ${tanggalStr}`
+  );
+};
+
 export const initOeeWorker = () => {
   if (!config.redis.enabled) {
     logger.info("[OEE Worker] Redis disabled, worker not initialized.");
     return null;
   }
+
   oeeWorker = new Worker(
     "oee-recalc",
     async (job) => {
-      const { mesinId, tanggal } = job.data;
       const end = oeeJobDurationSeconds.startTimer();
 
       logger.info(
-        `[OEE Worker] Processing job ${job.id} — mesin: ${mesinId}, tanggal: ${tanggal}`,
+        `[OEE Worker] Processing job ${job.id} (${job.name}) — data: ${JSON.stringify(job.data)}`
       );
 
       try {
-        await oeeService.recalculateByMesin(mesinId, new Date(tanggal));
-        end(); // Record duration
-        oeeJobSuccessTotal.inc(); // Track success
+        // Routing berdasarkan job.name
+        if (job.name === "oee-rph-recalc") {
+          await handleOeeRphRecalc(job);
+        } else {
+          // "oee-recalc" — daily aggregate, handler lama
+          await handleOeeRecalc(job);
+        }
+
+        end();
+        oeeJobSuccessTotal.inc();
       } catch (err) {
-        end(); // Record duration even if failed
-        throw err; // Re-throw to be caught by BullMQ 'failed' event
+        end();
+        throw err;
       }
 
       logger.info(
-        `[OEE Worker] Job ${job.id} selesai — mesin: ${mesinId}, tanggal: ${tanggal}`,
+        `[OEE Worker] Job ${job.id} (${job.name}) selesai.`
       );
     },
     {
-      connection: redisConnection,
-      // Batasi concurrency worker agar tidak membebani MySQL
-      // saat banyak job masuk bersamaan (misal: 50 mesin x 3 shift)
+      connection:  redisConnection,
       concurrency: 3,
-    },
+    }
   );
 
   oeeWorker.on("completed", (job) => {
-    logger.info(`[OEE Worker] Job selesai: ${job.id}`);
+    logger.info(`[OEE Worker] Completed: ${job.id} (${job.name})`);
   });
 
   oeeWorker.on("failed", (job, err) => {
-    oeeJobFailedTotal.inc(); // Track failures
+    oeeJobFailedTotal.inc();
     logger.error(
-      `[OEE Worker] Job gagal: ${job?.id} (attempt ${job?.attemptsMade}) — ${err.message}`,
+      `[OEE Worker] Failed: ${job?.id} (${job?.name}) attempt ${job?.attemptsMade} — ${err.message}`
     );
   });
 
@@ -75,7 +116,6 @@ export const initOeeWorker = () => {
   });
 
   logger.info("[OEE Worker] Worker initialized (concurrency: 3)");
-
   return oeeWorker;
 };
 

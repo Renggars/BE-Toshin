@@ -232,6 +232,37 @@ CREATE TABLE `oee` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `oee_rph` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `fk_id_rph` INTEGER NOT NULL,
+    `fk_id_mesin` INTEGER NOT NULL,
+    `fk_id_shift` INTEGER NULL,
+    `tanggal` DATE NOT NULL,
+    `availability` DOUBLE NOT NULL DEFAULT 0,
+    `performance` DOUBLE NOT NULL DEFAULT 0,
+    `quality` DOUBLE NOT NULL DEFAULT 0,
+    `oee_score` DOUBLE NOT NULL DEFAULT 0,
+    `loading_time` DOUBLE NOT NULL DEFAULT 0,
+    `downtime` DOUBLE NOT NULL DEFAULT 0,
+    `planned_downtime` DOUBLE NOT NULL DEFAULT 0,
+    `expected_time` DOUBLE NOT NULL DEFAULT 0,
+    `total_output` INTEGER NOT NULL DEFAULT 0,
+    `total_ok` INTEGER NOT NULL DEFAULT 0,
+    `ideal_cycle_time` DOUBLE NULL,
+    `window_start` DATETIME(3) NULL,
+    `window_end` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `oee_rph_fk_id_rph_key`(`fk_id_rph`),
+    INDEX `oee_rph_fk_id_mesin_idx`(`fk_id_mesin`),
+    INDEX `oee_rph_tanggal_idx`(`tanggal`),
+    INDEX `oee_rph_fk_id_shift_idx`(`fk_id_shift`),
+    INDEX `oee_rph_fk_id_mesin_tanggal_idx`(`fk_id_mesin`, `tanggal`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `poin_disiplin` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `poin_berubah` INTEGER NOT NULL,
@@ -504,6 +535,15 @@ ALTER TABLE `notification` ADD CONSTRAINT `notification_fk_id_user_fkey` FOREIGN
 
 -- AddForeignKey
 ALTER TABLE `oee` ADD CONSTRAINT `oee_fk_id_mesin_fkey` FOREIGN KEY (`fk_id_mesin`) REFERENCES `mesin`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `oee_rph` ADD CONSTRAINT `oee_rph_fk_id_rph_fkey` FOREIGN KEY (`fk_id_rph`) REFERENCES `rencana_produksi`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `oee_rph` ADD CONSTRAINT `oee_rph_fk_id_mesin_fkey` FOREIGN KEY (`fk_id_mesin`) REFERENCES `mesin`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `oee_rph` ADD CONSTRAINT `oee_rph_fk_id_shift_fkey` FOREIGN KEY (`fk_id_shift`) REFERENCES `shift`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `poin_disiplin` ADD CONSTRAINT `poin_disiplin_fk_id_operator_fkey` FOREIGN KEY (`fk_id_operator`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

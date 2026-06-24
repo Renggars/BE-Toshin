@@ -197,6 +197,7 @@ model Mesin {
   rencanaProduksi          RencanaProduksi[]
   documents                Document[]
   kategori                 KategoriMesin?             @relation(fields: [kategoriId], references: [id])
+  oeeRphs                  OeeRph[]
 
   @@map("mesin")
 }
@@ -264,6 +265,43 @@ model Oee {
   @@map("oee")
 }
 
+model OeeRph {
+  id      Int      @id @default(autoincrement())
+  rphId   Int      @unique @map("fk_id_rph")
+  mesinId Int      @map("fk_id_mesin")
+  shiftId Int?     @map("fk_id_shift")
+  tanggal DateTime @db.Date
+
+  availability Float @default(0)
+  performance  Float @default(0)
+  quality      Float @default(0)
+  oeeScore     Float @default(0) @map("oee_score")
+
+  loadingTime     Float  @default(0) @map("loading_time")
+  downtime        Float  @default(0)
+  plannedDowntime Float  @default(0) @map("planned_downtime")
+  expectedTime    Float  @default(0) @map("expected_time")
+  totalOutput     Int    @default(0) @map("total_output")
+  totalOk         Int    @default(0) @map("total_ok")
+  idealCycleTime  Float? @map("ideal_cycle_time")
+
+  windowStart DateTime? @map("window_start")
+  windowEnd   DateTime? @map("window_end")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  rencanaProduksi RencanaProduksi @relation(fields: [rphId], references: [id])
+  mesin           Mesin           @relation(fields: [mesinId], references: [id])
+  shift           Shift?          @relation(fields: [shiftId], references: [id])
+
+  @@index([mesinId])
+  @@index([tanggal])
+  @@index([shiftId])
+  @@index([mesinId, tanggal])
+  @@map("oee_rph")
+}
+
 model PoinDisiplin {
   id             Int          @id @default(autoincrement())
   poinBerubah    Int          @map("poin_berubah")
@@ -321,6 +359,7 @@ model RencanaProduksi {
   target                   Target                    @relation(fields: [targetId], references: [id])
   operator                 User                      @relation(fields: [userId], references: [id])
   andonEvents              AndonEvent[]
+  oeeRph                   OeeRph?
 
   @@index([jenisPekerjaanId], map: "rencana_produksi_fk_id_jenis_pekerjaan_fkey")
   @@index([mesinId], map: "rencana_produksi_fk_id_mesin_fkey")
@@ -343,6 +382,7 @@ model Shift {
   laporanRealisasiProduksi LaporanRealisasiProduksi[]
   poinDisiplin             PoinDisiplin[]
   rencanaProduksi          RencanaProduksi[]
+  oeeRphs                  OeeRph[]
 
   @@map("shift")
 }
