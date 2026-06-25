@@ -162,6 +162,7 @@ const clockIn = async (user, req) => {
     where: {
       userId: user.id,
       tanggal: new Date(dateStr),
+      status: { in: ["PLANNED", "ACTIVE"] },
     },
     include: { shift: true },
   });
@@ -256,7 +257,7 @@ const clockIn = async (user, req) => {
         where: { id: rph.id },
         data: {
           status: "ACTIVE",
-          startTime: now, // Catat waktu mulai kerja yang sesungguhnya
+          ...(!rph.startTime && { startTime: now }),
         },
       });
     }

@@ -6,7 +6,14 @@ import ApiError from "../utils/ApiError.js";
 import { oeeQueue } from "../queues/oeeQueue.js";
 import { nowWIB } from "../utils/dateWIB.js";
 import oeeService from "./oee.service.js";
-import { emitOperatorProgressUpdate } from "../config/socket.js";
+import {
+  emitOperatorProgressUpdate,
+  emitAndonCreated,
+  emitAndonResolved,
+  emitAndonTriggered,
+  emitAndonUpdate,
+  emitAndonDashboardUpdate,
+} from "../config/socket.js";
 import moment from "moment";
 import oeeRphService from "./oeeRph.service.js";
 
@@ -35,6 +42,18 @@ const enqueueOeeRecalc = async (mesinId, tanggal) => {
       delay: 3000, // tunggu 3 detik (window dedup)
     },
   );
+};
+
+// ─── Helper: tentukan nama masalah switch berdasarkan kombinasi perubahan ───
+const getSwitchMasalahNama = (mesinChanged, produkChanged, jenisChanged) => {
+  if (mesinChanged && produkChanged && jenisChanged) return "Pindah Mesin, Produk & Jenis Pekerjaan";
+  if (mesinChanged && produkChanged)                 return "Pindah Mesin & Produk";
+  if (mesinChanged && jenisChanged)                  return "Pindah Mesin & Jenis Pekerjaan";
+  if (produkChanged && jenisChanged)                 return "Pindah Produk & Jenis Pekerjaan";
+  if (mesinChanged)                                  return "Pindah Mesin";
+  if (produkChanged)                                 return "Pindah Produk";
+  if (jenisChanged)                                  return "Pindah Jenis Pekerjaan";
+  return null; // tidak ada perubahan
 };
 
 /**
@@ -136,8 +155,8 @@ const upsertLrpByRphId = async (rphId, data) => {
 
     // Hitung loading time dari Attendance tap atau startTime RPH
     let loadingTime = 0;
+
     const firstActivity = rph.attendance?.[0]?.jamTap || rph.startTime;
-    
     if (firstActivity) {
       loadingTime = Number(
         ((nowWIB() - new Date(firstActivity)) / 60000).toFixed(1),
@@ -297,10 +316,16 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
 
   const rphId = lrp.rencanaProduksi.id;
 
+   // Ambil data RPH lama (produk & jenis pekerjaan) untuk deteksi kombinasi switch
+  const oldRph = await prisma.rencanaProduksi.findUnique({
+    where: { id: rphId },
+    select: { mesinId: true, produkId: true, jenisPekerjaanId: true, tanggal: true },
+  });
+
   const result = await prisma.$transaction(async (tx) => {
-    const now = nowWIB(); // ← panggil SEKALI di sini
+    const now = nowWIB(); 
     
-    // 1. Update data terakhir & Finalkan LRP: status -> SUBMITTED
+    // ── 1. Finalkan LRP
     const submittedLrp = await tx.laporanRealisasiProduksi.update({
       where: { id: lrpId },
       data: {
@@ -310,8 +335,7 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
       },
     });
 
-    // 3. Cek apakah ada RPH PLANNED berikutnya untuk operator yang sama
-    //    pada hari yang sama. 
+     // ── 2. Cari RPH berikutnya
     const nextRph = await tx.rencanaProduksi.findFirst({
       where: {
         userId: submittedLrp.operatorId,
@@ -322,44 +346,174 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
       include: {
         mesin: { select: { id: true, namaMesin: true } },
         produk: { select: { id: true, namaProduk: true } },
+        jenisPekerjaan: { select: { id: true } },
         shift: { select: { id: true, namaShift: true, jamMasuk: true, jamKeluar: true } },
         target: { select: { totalTarget: true } },
       },
       orderBy: { id: "asc" },
     });
 
-    // 2. [REFACTORED] Tutup RPH yang baru saja disubmit
+    // ── 3. Hitung switchNama SETELAH nextRph diketahui
+    let switchNama = null;
+    if (nextRph && oldRph) {
+      const mesinChanged  = nextRph.mesin.id          !== oldRph.mesinId;
+      const produkChanged = nextRph.produk.id         !== oldRph.produkId;
+      const jenisChanged  = nextRph.jenisPekerjaan.id !== oldRph.jenisPekerjaanId;
+      switchNama = getSwitchMasalahNama(mesinChanged, produkChanged, jenisChanged);
+    }
+
+    // ── 4. Tutup RPH lama
     await tx.rencanaProduksi.update({
       where: { id: rphId },
       data: { status: "CLOSED", endTime: now },
     });
 
-    // 3. [NEW] Aktifkan RPH berikutnya jika berada di mesin yang sama
-    // Ini agar dashboard operator langsung pindah ke data RPH baru.
-     // startTime = now (sama dengan endTime RPH sebelumnya, tidak ada gap)
-    if (nextRph && nextRph.mesin.id === submittedLrp.mesinId) {
-      await tx.rencanaProduksi.update({
-        where: { id: nextRph.id },
+    // ── 5. Resolve andon "Ngisi Laporan" yang masih ACTIVE ──────────────────
+    //    waktuResolved = now → sama persis dengan endTime RPH lama
+    const reportAndon = await tx.andonEvent.findFirst({
+      where: {
+        mesinId: submittedLrp.mesinId,
+        status:  { in: ["ACTIVE", "IN_REPAIR"] },
+        masterMasalahAndon: { namaMasalah: "Ngisi Laporan" },
+      },
+      include: { masterMasalahAndon: true },
+      orderBy: { waktuTrigger: "desc" },
+    });
+
+    if (reportAndon) {
+      const diffMs   = now - new Date(reportAndon.waktuTrigger);
+      const duration = Number((diffMs / 60000).toFixed(2));
+      const stdMins  = reportAndon.masterMasalahAndon?.waktuPerbaikanMenit || 0;
+      const lateMins = Number(Math.max(0, duration - stdMins).toFixed(2));
+
+      await tx.andonEvent.update({
+        where: { id: reportAndon.id },
         data: {
-          status: "ACTIVE",
-          startTime: now,
+          status:            "RESOLVED",
+          waktuResolved:     now,           
+          totalDurationMenit: duration,
+          durasiDowntime:    duration,
+          lateMenit:         lateMins,
+          isLate:            lateMins > 0,
+          responStatus:      lateMins > 0 ? "OVER_TIME" : "ON_TIME",
+          resolvedById:      submittedLrp.operatorId,
+          catatan:           "Auto-resolved saat submit LRP",
+          rphId:             rphId,
+        },
+      });
+
+      // Buat AndonDowntimeShift untuk "Ngisi Laporan"
+      await tx.andonDowntimeShift.create({
+        data: {
+          andonEventId: reportAndon.id,
+          shiftId:      submittedLrp.shiftId,
+          mesinId:      submittedLrp.mesinId,
+          rphId:        rphId,
+          waktuStart:   reportAndon.waktuTrigger,
+          waktuEnd:     now,
+          durasiMenit:  duration,
+          tanggal:      submittedLrp.tanggal,
+          createdAt:    now,
         },
       });
     }
 
-    return { lrp: submittedLrp, nextRph };
+    // ── 5. Set startTime RPH baru & trigger andon switch ────────────────────
+    let switchAndonEvent = null;
+    if (nextRph) {
+    await tx.rencanaProduksi.update({
+      where: { id: nextRph.id },
+      data: {
+        status: "ACTIVE",
+        startTime: now,
+      },
+    });
+
+    if (switchNama) {
+        const switchMasalah = await tx.masterMasalahAndon.findFirst({
+          where: { namaMasalah: switchNama, kategori: "PLAN_DOWNTIME" },
+        });
+
+        if (switchMasalah) {
+          const operator = await tx.user.findUnique({
+            where: { id: submittedLrp.operatorId },
+            select: { plant: true },
+          });
+
+          switchAndonEvent = await tx.andonEvent.create({
+            data: {
+              mesinId:    nextRph.mesin.id,
+              masalahId:  switchMasalah.id,
+              operatorId: submittedLrp.operatorId,
+              shiftId:    submittedLrp.shiftId,
+              tanggal:    submittedLrp.tanggal,
+              plant:      operator?.plant || null,
+              kategori:   "PLAN_DOWNTIME",
+              status:     "ACTIVE",
+              waktuTrigger: now,
+              rphId:        nextRph.id,
+              rphClosedId:  rphId,
+              rphOpenedId:  nextRph.id,
+            },
+            include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
+          });
+        } else {
+          console.warn(`[LRP Submit] Master masalah "${switchNama}" tidak ditemukan di DB`);
+        }
+      }
+    }
+
+    return { lrp: submittedLrp, nextRph, reportAndon, switchAndonEvent };
   });
 
+  // ── Post-transaction: OEE recalc
   const oeeRph = await oeeRphService.recalculateByRph(rphId);
-
   if (oeeRph) {
     await enqueueOeeRecalc(oeeRph.mesinId, oeeRph.tanggal);
   } else {
     // Fallback jika oeeRph gagal (misal window null), tetap trigger aggregate
     await enqueueOeeRecalc(result.lrp.mesinId, result.lrp.tanggal);
   }
+  
+  // ── Post-transaction: WebSocket emit resolve "Ngisi Laporan"
+  if (result.reportAndon) {
+    emitAndonResolved({
+      andonId:      result.reportAndon.id,
+      mesinId:      result.lrp.mesinId,
+      status:       "RESOLVED",
+      masalah:      "Ngisi Laporan",
+      kategori:     "PLAN_DOWNTIME",
+      waktuResolved: result.lrp.updatedAt,
+    });
+  }
 
-  // Real-time progress update for Mandor
+  // ── Post-transaction: WebSocket emit andon switch
+  if (result.switchAndonEvent) {
+    const e = result.switchAndonEvent;
+    const eventPayload = {
+      andonId:     e.id,
+      machineId:   e.mesinId,
+      machineName: e.mesin?.namaMesin || "Unknown",
+      type:        "PLAN_DOWNTIME",
+      problemName: e.masterMasalahAndon?.namaMasalah || "Unknown",
+      startTime:   e.waktuTrigger,
+      status:      "ACTIVE",
+      plant:       e.plant || "Unknown",
+      operator:    e.operator?.nama || "-",
+      shift:       e.shift?.namaShift || "-",
+    };
+
+    emitAndonCreated(eventPayload);
+    emitAndonTriggered(e.mesinId, eventPayload);
+    emitAndonUpdate({ type: "ANDON_TRIGGERED", data: e });
+    emitAndonDashboardUpdate({
+      type:    "REFRESH_ANDON_DASHBOARD",
+      mesinId: e.mesinId,
+      plant:   e.plant,
+      tanggal: moment(e.tanggal).format("YYYY-MM-DD"),
+    });
+  }
+
   emitOperatorProgressUpdate({
     mesinId: result.lrp.mesinId,
     shiftId: result.lrp.shiftId,
@@ -378,6 +532,13 @@ const submitLrpById = async (lrpId, updateBody = {}) => {
           shift: result.nextRph.shift.namaShift,
           jam: `${result.nextRph.shift.jamMasuk} - ${result.nextRph.shift.jamKeluar}`,
           total_target: result.nextRph.target.totalTarget,
+        }
+      : null,
+    switch_andon: result.switchAndonEvent
+      ? {
+          id:       result.switchAndonEvent.id,
+          masalah:  result.switchAndonEvent.masterMasalahAndon?.namaMasalah,
+          waktu:    result.switchAndonEvent.masterMasalahAndon?.waktuPerbaikanMenit,
         }
       : null,
   };

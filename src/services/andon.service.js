@@ -235,37 +235,36 @@ const calculateAndonSummary = async (plantFilter = {}) => {
  * Smart Trigger: Auto-detect Operator & Shift from RPH
  */
 const triggerAndon = async (payload) => {
-  console.log("[Andon] Trigger Payload:", JSON.stringify(payload, null, 2));
   const {
     mesinId: rawMesinId,
     masalahId: masalahId,
     operatorId: manualOperator,
-    nextRphId: manualNextRphId, // Explicitly passed from frontend
   } = payload;
   const mesinId = Number(rawMesinId);
   const currentTime = nowWIB();
 
-  // 1. Fetch Masalah to check for RPH behavior early
+  // 1. Fetch Masalah
   const masalah = await prisma.masterMasalahAndon.findUnique({
     where: { id: masalahId },
   });
   if (!masalah)
     throw new ApiError(httpStatus.NOT_FOUND, "Masalah tidak ditemukan");
 
-  const RPH_SWITCH_NAMES = [
-    "Pindah Mesin",
-    "Pindah Produk",
-    "Pindah Jenis Pekerjaan",
-  ];
-  const isRphSwitch = RPH_SWITCH_NAMES.includes(masalah.namaMasalah);
+   // Flow Checklist: only PLAN_DOWNTIME can bypass Call phase
+  if (masalah.kategori !== "PLAN_DOWNTIME") {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `Kategori ${masalah.kategori} harus melalui flow Call (POST /andon/call) terlebih dahulu`,
+    );
+  }
   
-  // 1.5 NEW: Idempotency check (prevent double trigger within 3s)
+  // 2. Idempotency check (prevent double trigger within 5s)
   const recentEvent = await prisma.andonEvent.findFirst({
     where: {
       mesinId,
       masalahId,
       waktuTrigger: {
-        gte: new Date(currentTime.getTime() - 3000), // 3s cooldown
+        gte: new Date(currentTime.getTime() - 5000), // 5s cooldown
       },
     },
   });
@@ -277,61 +276,43 @@ const triggerAndon = async (payload) => {
     );
   }
 
-  // 2. Check for existing active andon
+  // 3. Check for existing active andon
   const activeEvent = await prisma.andonEvent.findFirst({
     where: { mesinId, status: "ACTIVE" },
     include: { masterMasalahAndon: true },
   });
 
   if (activeEvent) {
-    const isActiveReport =
-      activeEvent.masterMasalahAndon?.namaMasalah === "Ngisi Laporan";
-
-    // If it's a switch, we ONLY allow if current active is "Ngisi Laporan" (Back-to-Back)
-    // If it's NOT a switch, we never allow new andon if one is already active
-    if (!isRphSwitch || !isActiveReport) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        `Masih ada Andon ACTIVE (${activeEvent.masterMasalahAndon?.namaMasalah}) di mesin ini`,
-      );
-    }
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `Masih ada Andon ACTIVE (${activeEvent.masterMasalahAndon?.namaMasalah}) di mesin ini`,
+    );
   }
 
-  // 3. Get Shift Info & Operational Date
+  // 4. Get Shift Info & Operational Date
   const { shiftId, operationalDate: opDateStr } = await getShiftInfo(
     currentTime,
   );
   const operationalDate = new Date(`${opDateStr}T00:00:00.000Z`);
 
-  // 2. Fetch RPH Candidates for this machine on this operational date
+  // 5. Detect Operator dari RPH
   const rphCandidates = await prisma.rencanaProduksi.findMany({
-    where: {
-      mesinId,
-      tanggal: operationalDate,
-    },
+    where: { mesinId, tanggal: operationalDate },
     include: { shift: true },
   });
 
   let detectedOperator = manualOperator || null;
   let detectedShift = shiftId;
 
-  // 3. Find Exact Match (Machine + Shift + Date)
   const exactMatch = rphCandidates.find((r) => r.shiftId === shiftId);
   if (exactMatch) {
     detectedOperator = exactMatch.userId;
-  }
-  // 4. Fallback: If no exact shift match, but there are RPHs today (Smart Detect)
-  else if (!detectedOperator && rphCandidates.length > 0) {
-    // Pick the first available assignment for this machine today
+  } else if (!detectedOperator && rphCandidates.length > 0) {
     detectedOperator = rphCandidates[0].userId;
-    // If we didn't have a shiftId yet, take it from RPH
     if (!detectedShift) detectedShift = rphCandidates[0].shiftId;
   }
 
-  // 5. Final Fallback: detectedShift is already set from getShiftInfo(currentTime)
-  // which handles any time of day, even if not an exact RPH match.
-
-  // Get Plant from Operator if possible
+  // 6. Get Plant dari Operator
   let plantName = null;
   if (detectedOperator) {
     const op = await prisma.user.findUnique({
@@ -341,278 +322,71 @@ const triggerAndon = async (payload) => {
     plantName = op?.plant;
   }
 
-  // Flow Checklist: only PLAN_DOWNTIME can bypass Call phase
-  if (masalah.kategori !== "PLAN_DOWNTIME") {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      `Kategori ${masalah.kategori} harus melalui flow Call (POST /andon/call) terlebih dahulu`,
-    );
-  }
-
-  let newEvent;
-  let activeRphId = null;
-  let openedRphId = null;
-
-  // Find the current active RPH on this machine for THIS operator
+  // 7. Cari RPH aktif untuk link rphId
   const currentActiveRph = await prisma.rencanaProduksi.findFirst({
-    where: { 
-      mesinId, 
+    where: {
+      mesinId,
       status: "ACTIVE",
       userId: detectedOperator || undefined,
     },
     orderBy: { startTime: "desc" },
   });
 
-  if (isRphSwitch) {
-    // 7. Handle RPH Switch (Audit Proposal: Don't close/open yet, just identify)
-    // Jika tidak ada active RPH, kita masih bisa switch kalau targetnya jelas (manualNextRphId)
-    if (!currentActiveRph && !manualNextRphId) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        "Gagal trigger switch: Tidak ada RPH ACTIVE dan target RPH tidak ditentukan."
-      );
-    }
-
-    let nextPlannedRph = null;
-    if (manualNextRphId) {
-      // Gunakan manualNextRphId langsung — jangan di-overwrite dengan query fallback.
-      // Frontend sudah mengirimkan nextRphId yang valid (dari fetchMyRph setelah submit LRP).
-      nextPlannedRph = await prisma.rencanaProduksi.findUnique({
-        where: { id: Number(manualNextRphId) },
-        include: { shift: true },
-      });
-
-      if (!nextPlannedRph) {
-        throw new ApiError(
-          httpStatus.BAD_REQUEST,
-          `RPH berikutnya (id=${manualNextRphId}) tidak ditemukan.`
-        );
-      }
-      if (nextPlannedRph.status !== "PLANNED" && nextPlannedRph.status !== "ACTIVE") {
-        throw new ApiError(
-          httpStatus.BAD_REQUEST,
-          `RPH berikutnya (id=${manualNextRphId}) statusnya "${nextPlannedRph.status}", harus PLANNED atau ACTIVE.`
-        );
-      }
-
-      const expectedUserId = currentActiveRph?.userId ?? detectedOperator;
-      if (nextPlannedRph.userId !== expectedUserId) {
-        throw new ApiError(
-          httpStatus.BAD_REQUEST,
-          "RPH berikutnya milik operator yang berbeda."
-        );
-      }
-
-      if (moment(nextPlannedRph.tanggal).format("YYYY-MM-DD") !== opDateStr) {
-        throw new ApiError(
-          httpStatus.BAD_REQUEST,
-          "RPH berikutnya harus pada tanggal operasional yang sama."
-        );
-      }
-
-      if (currentActiveRph && nextPlannedRph.id === currentActiveRph.id) {
-        throw new ApiError(
-          httpStatus.BAD_REQUEST,
-          "RPH berikutnya tidak boleh sama dengan RPH yang sedang aktif."
-        );
-      }
-
-      // nextPlannedRph sudah final — tidak ada re-query lagi
-    } else {
-      // Tidak ada manualNextRphId: fallback cari PLANNED RPH di mesin yang sama
-      nextPlannedRph = await prisma.rencanaProduksi.findFirst({
-        where: {
-          mesinId,
-          status: "PLANNED",
-          tanggal: operationalDate,
-          userId: detectedOperator || undefined,
-          id: { not: currentActiveRph?.id || 0 },
-        },
-        orderBy: { id: "asc" },
-      });
-    }
-
-    if (!nextPlannedRph) {
-      throw new ApiError(
-        httpStatus.BAD_REQUEST,
-        "Tidak ada RPH berikutnya (PLANNED/ACTIVE) untuk dialihkan",
-      );
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // Logic Audit: RPH stays ACTIVE during switch. Status updates moved to resolveAndon.
-      activeRphId = currentActiveRph?.id || null;
-      openedRphId = nextPlannedRph.id;
-
-       // 🔍 NEW: Auto-Resolve "Ngisi Laporan" if still active
-      let reportAndon = await tx.andonEvent.findFirst({
-        where: {
-          mesinId,
-          status: { in: ["ACTIVE", "IN_REPAIR"] },
-          masterMasalahAndon: { namaMasalah: "Ngisi Laporan" },
-        },
-        include: { masterMasalahAndon: true }, // Required for standardMinutes calculation
-        orderBy: { waktuTrigger: "desc" },
-      });
-
-      if (reportAndon) {
-        const waktuTrigger = new Date(reportAndon.waktuTrigger);
-        const diffMs = currentTime - waktuTrigger;
-        const duration = Number((diffMs / 60000).toFixed(2));
-
-        const standardMinutes = reportAndon.masterMasalahAndon?.waktuPerbaikanMenit || 0;
-        const lateMinutes = Number(Math.max(0, duration - standardMinutes).toFixed(2));
-        const isLate = lateMinutes > 0;
-        const responStatus = isLate ? "OVER_TIME" : "ON_TIME";
-
-        const resolved = await tx.andonEvent.updateMany({
-          where: {
-            id: reportAndon.id,
-            status: { in: ["ACTIVE", "IN_REPAIR"] },
-          },
-          data: {
-            status: "RESOLVED",
-            waktuResolved: currentTime,
-            totalDurationMenit: duration,
-            durasiDowntime: duration,
-            lateMenit: lateMinutes,
-            isLate: isLate,
-            responStatus: responStatus,
-            resolvedById: reportAndon.operatorId,
-            catatan: "Auto-resolved by RPH switch",
-            rphId: activeRphId || reportAndon.rphId,
-          },
-        });
-
-        if (resolved.count === 0) {
-          // Siapa cepat dia dapat, jika sudah di-resolve proses lain (e.g. double trigger),
-          // maka kita set reportAndon ke null agar tidak kirim websocket ganda.
-          reportAndon = null;
-        }
-      }
-
-      businessTaskCreatedTotal.inc({ type: "andon_event" });
-      return {
-        newEvent: await tx.andonEvent.create({
-          data: {
-            mesinId,
-            masalahId: masalahId,
-            operatorId: detectedOperator,
-            shiftId: detectedShift,
-            tanggal: operationalDate,
-            plant: plantName,
-            kategori: masalah.kategori,
-            status: "ACTIVE",
-            waktuTrigger: currentTime,
-            rphId: openedRphId, // Link downtime to NEW RPH (target)
-            rphClosedId: activeRphId,
-            rphOpenedId: openedRphId,
-          },
-          include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
-        }),
-        resolvedReportAndon: reportAndon
-          ? await tx.andonEvent.findUnique({
-            where: { id: reportAndon.id },
-            include: {
-              mesin: true,
-              masterMasalahAndon: true,
-              operator: true,
-              shift: true,
-            },
-          })
-          : null,
-      };
+  // 8. Untuk "Ngisi Laporan" yang trigger setelah RPH ditutup,
+  // fallback ke RPH terakhir yang CLOSED hari ini
+  let effectiveRphId = currentActiveRph?.id || null;
+  if (!effectiveRphId && masalah.namaMasalah === "Ngisi Laporan") {
+    const lastClosedRph = await prisma.rencanaProduksi.findFirst({
+      where: { mesinId, status: "CLOSED", tanggal: operationalDate },
+      orderBy: { endTime: "desc" },
     });
-
-    newEvent = result.newEvent;
-
-    // Emit WebSocket for auto-resolved "Ngisi Laporan" Andon
-    if (result.resolvedReportAndon) {
-      const e = result.resolvedReportAndon;
-      emitAndonResolved({
-        andonId: e.id,
-        tanggal: e.waktuTrigger,
-        mesin: e.mesin?.namaMesin || "Unknown",
-        plant: e.plant || "Unknown",
-        shift: e.shift?.namaShift || "Unknown",
-        masalah: e.masterMasalahAndon?.namaMasalah || "Unknown",
-        kategori: e.masterMasalahAndon?.kategori || "UNKNOWN",
-        operator: e.operator?.nama || "-",
-        resolver: e.operator?.nama || "-",
-        downtime: e.durasiDowntime,
-        realDowntime: e.totalDurationMenit,
-        status: "RESOLVED",
-        estimasiMenit: e.masterMasalahAndon?.waktuPerbaikanMenit || 0,
-        waktuResolved: e.waktuResolved,
-        responStatus: e.responStatus, // Standardized: use responStatus instead of respStatus
-      });
-    }
-  } else {
-    // 8. Normal PLAN_DOWNTIME (Ngisi Laporan, Kamar Mandi, dll)
-    // 🔥 FIX: If "Ngisi Laporan" triggered after RPH closed (by LRP), 
-    // try to find the most recently closed RPH for this machine today.
-    let effectiveRphId = currentActiveRph?.id || null;
-    if (!effectiveRphId && masalah.namaMasalah === "Ngisi Laporan") {
-      const lastClosedRph = await prisma.rencanaProduksi.findFirst({
-        where: { mesinId, status: "CLOSED", tanggal: operationalDate },
-        orderBy: { endTime: "desc" },
-      });
-      effectiveRphId = lastClosedRph?.id || null;
-    }
-
-    newEvent = await prisma.andonEvent.create({
-      data: {
-        mesinId,
-        masalahId: masalahId,
-        operatorId: detectedOperator,
-        shiftId: detectedShift,
-        tanggal: operationalDate,
-        plant: plantName,
-        kategori: masalah.kategori,
-        status: "ACTIVE",
-        waktuTrigger: currentTime,
-        rphId: effectiveRphId,
-        rphClosedId: effectiveRphId,
-      },
-      include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
-    });
-    businessTaskCreatedTotal.inc({ type: "andon_event" });
+    effectiveRphId = lastClosedRph?.id || null;
   }
 
-  // ✅ NEW: Emit specific WebSocket events following contract
-  // Event 1: andon-created
-  const machineId = newEvent.mesinId;
+  // 9. Buat AndonEvent
+  const newEvent = await prisma.andonEvent.create({
+    data: {
+      mesinId,
+      masalahId,
+      operatorId: detectedOperator,
+      shiftId:    detectedShift,
+      tanggal:    operationalDate,
+      plant:      plantName,
+      kategori:   masalah.kategori,
+      status:     "ACTIVE",
+      waktuTrigger: currentTime,
+      rphId:        effectiveRphId,
+      rphClosedId:  effectiveRphId,
+    },
+    include: { mesin: true, masterMasalahAndon: true, operator: true, shift: true },
+  });
+  businessTaskCreatedTotal.inc({ type: "andon_event" });
+ // 10. WebSocket emit
   const eventPayload = {
-    andonId: newEvent.id,
-    machineId: newEvent.mesinId,
+    andonId:     newEvent.id,
+    machineId:   newEvent.mesinId,
     machineName: newEvent.mesin?.namaMesin || "Unknown",
-    type: newEvent.masterMasalahAndon?.kategori || "UNKNOWN",
+    type:        newEvent.masterMasalahAndon?.kategori || "UNKNOWN",
     problemName: newEvent.masterMasalahAndon?.namaMasalah || "Unknown Problem",
-    startTime: newEvent.waktuTrigger,
-    status: "ACTIVE",
-    plant: newEvent.plant || "Unknown",
-    operator: newEvent.operator?.nama || "-",
-    shift: newEvent.shift?.namaShift || "-",
+    startTime:   newEvent.waktuTrigger,
+    status:      "ACTIVE",
+    plant:       newEvent.plant || "Unknown",
+    operator:    newEvent.operator?.nama || "-",
+    shift:       newEvent.shift?.namaShift || "-",
   };
 
   emitAndonCreated(eventPayload);
-  emitAndonTriggered(machineId, eventPayload);
+  emitAndonTriggered(newEvent.mesinId, eventPayload);
 
-  // Event 2: andon-summary-updated
   const plantFilter = plantName ? { plant: plantName } : {};
   const summary = await calculateAndonSummary(plantFilter);
   emitAndonSummaryUpdated(summary);
 
-  // Keep old events for backward compatibility
-  emitAndonUpdate({
-    type: "ANDON_TRIGGERED",
-    data: newEvent,
-  });
-
+  emitAndonUpdate({ type: "ANDON_TRIGGERED", data: newEvent });
   emitAndonDashboardUpdate({
-    type: "REFRESH_ANDON_DASHBOARD",
+    type:    "REFRESH_ANDON_DASHBOARD",
     mesinId: mesinId,
-    plant: plantName,
+    plant:   plantName,
     tanggal: opDateStr,
   });
 
@@ -921,7 +695,6 @@ const resolveAndon = async (id, data) => {
       );
     }
   } else {
-    // RULE: For Breakdowns, Resolver can be different as long as they are in the same Division/Role.
     const roleMapping = {
       MAINTENANCE: "MAINTENANCE",
       QUALITY: "QUALITY",
@@ -972,20 +745,8 @@ const resolveAndon = async (id, data) => {
   const isLate = lateMinutes > 0;
   const responStatus = isLate ? "OVER_TIME" : "ON_TIME";
 
-  // No changes needed here as we moved logic up
 
-  const RPH_SWITCH_NAMES = [
-    "Pindah Mesin",
-    "Pindah Produk",
-    "Pindah Jenis Pekerjaan",
-  ];
-  const isRphSwitch =
-    event.masterMasalahAndon?.kategori === "PLAN_DOWNTIME" &&
-    RPH_SWITCH_NAMES.includes(event.masterMasalahAndon?.namaMasalah);
-
-  // Use Transaction for Atomicity
   const [updatedEvent] = await prisma.$transaction(async (tx) => {
-    // 🔒 Idempotency Audit PART 2: Atomic resolve for AndonEvent
     const allowedStatuses = isPlanDowntime ? ["ACTIVE"] : ["IN_REPAIR"];
     const resolved = await tx.andonEvent.updateMany({
       where: {
@@ -1045,36 +806,24 @@ const resolveAndon = async (id, data) => {
     return [updated];
   });
 
-  // 🔄 Multi-Machine OEE Recalc (Old and New)
-  const machinesToRecalc = new Set([event.mesinId]);
-  if (isRphSwitch && event.rphOpenedId) {
-    const openedRph = await prisma.rencanaProduksi.findUnique({
-      where: { id: event.rphOpenedId },
-      select: { mesinId: true }
-    });
-    if (openedRph) machinesToRecalc.add(openedRph.mesinId);
-  }
-
-  await Promise.all(
-    Array.from(machinesToRecalc).map((mId) => enqueueOeeRecalc(mId, event.tanggal))
-  );
+  await enqueueOeeRecalc(event.mesinId, event.tanggal);
 
   emitAndonResolved({
-    andonId: updatedEvent.id,
-    tanggal: updatedEvent.waktuTrigger,
-    mesin: updatedEvent.mesin?.namaMesin || "Unknown",
-    plant: updatedEvent.plant || "Unknown",
-    shift: updatedEvent.shift?.namaShift || "Unknown",
-    masalah: updatedEvent.masterMasalahAndon?.namaMasalah || "Unknown",
-    kategori: updatedEvent.masterMasalahAndon?.kategori || "UNKNOWN",
-    operator: updatedEvent.operator?.nama || "-",
-    resolver: resolverUser?.nama || "-",
-    downtime: repairDurationMinutes,
+    andonId:      updatedEvent.id,
+    tanggal:      updatedEvent.waktuTrigger,
+    mesin:        updatedEvent.mesin?.namaMesin || "Unknown",
+    plant:        updatedEvent.plant || "Unknown",
+    shift:        updatedEvent.shift?.namaShift || "Unknown",
+    masalah:      updatedEvent.masterMasalahAndon?.namaMasalah || "Unknown",
+    kategori:     updatedEvent.masterMasalahAndon?.kategori || "UNKNOWN",
+    operator:     updatedEvent.operator?.nama || "-",
+    resolver:     resolverUser?.nama || "-",
+    downtime:     repairDurationMinutes,
     realDowntime: realDurationMinutes,
-    status: "RESOLVED",
+    status:       "RESOLVED",
     estimasiMenit: updatedEvent.masterMasalahAndon?.waktuPerbaikanMenit || 0,
     waktuResolved: resolvedAt,
-    responStatus: responStatus,
+    responStatus:  responStatus,
   });
 
   emitAndonResolvedWS(event.mesinId, {

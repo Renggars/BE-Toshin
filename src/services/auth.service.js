@@ -54,7 +54,27 @@ const loginWithNoReg = async (noReg, password, req) => {
   return userService.getUserByNoReg(noReg);
 };
 
+/**
+ * Login dengan No Registrasi saja (tanpa password) — untuk andon
+ * @param {string} noReg
+ * @returns {Promise<User>}
+ */
+const loginWithNoRegOnly = async (noReg, req) => {
+  const user = await userService.getUserByNoReg(noReg);
+
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "No Registrasi tidak dikenal");
+  }
+
+  if (user.status === "suspended") {
+    throw new ApiError(httpStatus.FORBIDDEN, "Akun Anda sedang ditangguhkan");
+  }
+
+  return userService.getUserByNoReg(noReg);
+};
+
 export default {
   loginWithNfc,
   loginWithNoReg,
+  loginWithNoRegOnly,
 };

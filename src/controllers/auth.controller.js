@@ -39,10 +39,12 @@ const login = catchAsync(async (req, res) => {
     } else if (req.body.noReg && req.body.password) {
       // Login dengan NoReg & Password
       user = await authService.loginWithNoReg(req.body.noReg, req.body.password, req);
+    } else if (req.body.noReg) {
+      user = await authService.loginWithNoRegOnly(req.body.noReg, req);
     } else {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        "Harus menyertakan uidNfc atau (noReg dan password)",
+        "Harus menyertakan uidNfc atau NoReg",
       );
     }
     businessLoginTotal.inc({ status: "success" });

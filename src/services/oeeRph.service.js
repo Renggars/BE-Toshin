@@ -1,4 +1,4 @@
-import moment from "moment";
+import moment from "moment-timezone";
 import prisma from "../../prisma/index.js";
 import { nowWIB } from "../utils/dateWIB.js";
 import { emitOeeUpdate } from "../config/socket.js";
@@ -8,12 +8,11 @@ import { emitOeeUpdate } from "../config/socket.js";
  * Menghitung OEE untuk satu RPH spesifik dan menyimpannya ke oee_rph.
  */
 const recalculateByRph = async (rphId) => {
-  // 1. Load RPH beserta relasi yang dibutuhkan
+  // 1. Load RPH beserta relasi
   const rph = await prisma.rencanaProduksi.findUnique({
     where: { id: Number(rphId) },
     include: {
       laporanRealisasiProduksi: true,
-      attendance: { orderBy: { jamTap: "asc" }, take: 1 },
       shift: true,
     },
   });
@@ -26,30 +25,47 @@ const recalculateByRph = async (rphId) => {
   const dateStr = moment(rph.tanggal).format("YYYY-MM-DD");
   const targetDate = new Date(`${dateStr}T00:00:00.000Z`);
 
-  // 2. Tentukan window waktu RPH ini
-  const windowStart = rph.attendance?.[0]?.jamTap || rph.startTime;
-  const windowEnd   = rph.endTime
-    || (rph.status === "ACTIVE" ? nowWIB() : lrp.updatedAt);
+  // Re-fetch untuk pastikan endTime sudah committed (solve timing issue)
+  const freshRph = await prisma.rencanaProduksi.findUnique({
+    where: { id: Number(rphId) },
+    select: { status: true, endTime: true, startTime: true },
+  });
+
+  // Re-fetch attendance secara fresh
+  const freshAttendance = await prisma.attendance.findFirst({
+    where: { rphId: Number(rphId) },
+    orderBy: { jamTap: "asc" },
+  });
+
+  //  Tentukan window waktu RPH ini
+  // Pakai yang paling awal antara attendance dan startTime
+  const windowStart = freshAttendance?.jamTap && freshRph.startTime
+    ? new Date(Math.min(
+        new Date(freshAttendance.jamTap).getTime(),
+        new Date(freshRph.startTime).getTime()
+      ))
+    : freshAttendance?.jamTap || freshRph.startTime;
+  const windowEnd = freshRph.endTime
+    || (freshRph.status === "ACTIVE" ? nowWIB() : lrp.updatedAt);
 
   if (!windowStart || !windowEnd) return null;
 
-  const startMoment = moment(windowStart);
-  const endMoment   = moment(windowEnd);
+  const TZ = "Asia/Jakarta";
+  const startMoment = moment(windowStart).tz(TZ);
+  const endMoment   = moment(windowEnd).tz(TZ);
 
   const totalTimeMinutes = Math.max(
     0,
     endMoment.diff(startMoment, "minutes", true)
   );
 
-  // 3. Ambil downtime yang jatuh dalam window RPH ini
+  // 3. Ambil downtime dalam window RPH ini
   const downtimeData = await prisma.andonDowntimeShift.findMany({
     where: {
       mesinId: rph.mesinId,
       tanggal: targetDate,
-      waktuStart: {
-        gte: startMoment.toDate(),
-        lt: endMoment.toDate(),
-      },
+      waktuStart: { lt: endMoment.toDate() },   // start sebelum window end
+      waktuEnd:   { gt: startMoment.toDate() },  // end setelah window start
     },
     include: {
       andonEvent: { include: { masterMasalahAndon: true } },
@@ -60,10 +76,19 @@ const recalculateByRph = async (rphId) => {
   let unplannedDowntime = 0;
 
   downtimeData.forEach((d) => {
+    const dStart     = new Date(d.waktuStart).getTime();
+    const dEnd       = new Date(d.waktuEnd).getTime();
+    const wStartMs   = startMoment.toDate().getTime();
+    const wEndMs     = endMoment.toDate().getTime();
+
+    const clippedStart = Math.max(dStart, wStartMs);
+    const clippedEnd   = Math.min(dEnd,   wEndMs);
+    const clippedMin   = Math.max(0, (clippedEnd - clippedStart) / 60000);
+
     if (d.andonEvent?.masterMasalahAndon?.kategori === "PLAN_DOWNTIME") {
-      plannedDowntime += d.durasiMenit || 0;
+      plannedDowntime += clippedMin; ;
     } else {
-      unplannedDowntime += d.durasiMenit || 0;
+      unplannedDowntime += clippedMin; ;
     }
   });
 
@@ -92,9 +117,9 @@ const recalculateByRph = async (rphId) => {
     performance:    Number(performance.toFixed(1)),
     quality:        Number(quality.toFixed(1)),
     oeeScore:       Number(oeeScore.toFixed(1)),
-    loadingTime:    Number(loadingTime.toFixed(1)),
-    downtime:       Number(downtime.toFixed(1)),
-    plannedDowntime: Number(plannedDowntime.toFixed(1)),
+    loadingTime:    Number(loadingTime.toFixed(4)),
+    downtime:       Number(downtime.toFixed(4)),
+    plannedDowntime: Number(plannedDowntime.toFixed(4)),
     expectedTime:    Number(expectedProductionTime.toFixed(4)),
     totalOutput:    qtyTotal,
     totalOk:        qtyOk,
