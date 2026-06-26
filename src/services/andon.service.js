@@ -707,7 +707,7 @@ const resolveAndon = async (id, data) => {
     if (
       resolverUser.role !== requiredRole &&
       resolverUser.role !== "SUPERVISOR" &&
-      resolverUser.role !== "ADMIN"
+      resolverUser.role !== "MANDOR"
     ) {
       throw new ApiError(
         httpStatus.FORBIDDEN,
